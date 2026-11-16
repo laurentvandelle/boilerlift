@@ -29,6 +29,8 @@ export interface N8nWorkflowSummary {
   id: string;
   name: string;
   tags: N8nTag[];
+  /** A workflow deleted in the editor is only archived: it stays listed and keeps its tags. */
+  isArchived: boolean;
 }
 
 /** A workflow as `GET /api/v1/workflows/{id}` returns it: the top-level fields are the current draft. */
@@ -51,13 +53,17 @@ export interface N8nClient {
   checkHealth(): Promise<ProbeResult>;
   /** `GET /api/v1/workflows?limit=1` with `X-N8N-API-KEY`: does the public API accept the key? */
   checkApiKey(): Promise<ProbeResult>;
-  /** Every workflow on the instance, following `nextCursor`. */
+  /** `GET /api/v1/openapi.yml`, without the API key: the public API spec the instance serves, as text. */
+  readApiSpec(): Promise<ApiResult<string>>;
+  /** Every workflow on the instance, archived ones included, following `nextCursor`. */
   listWorkflows(): Promise<ApiResult<N8nWorkflowSummary[]>>;
   getWorkflow(id: string): Promise<ApiResult<N8nWorkflow>>;
   /** `POST /api/v1/workflows`: the new workflow is never published. */
   createWorkflow(body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflow>>;
   /** `PUT /api/v1/workflows/{id}?publishIfActive=false`: the change lands as a draft. */
   updateWorkflow(id: string, body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflow>>;
+  /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
+  unarchiveWorkflow(id: string): Promise<ApiResult<N8nWorkflow>>;
   /** Every tag on the instance, following `nextCursor`. */
   listTags(): Promise<ApiResult<N8nTag[]>>;
   createTag(name: string): Promise<ApiResult<N8nTag>>;

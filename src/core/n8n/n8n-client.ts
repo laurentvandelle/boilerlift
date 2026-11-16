@@ -10,6 +10,7 @@ import {
 
 export const HEALTH_PATH = '/healthz';
 export const API_KEY_PATH = '/api/v1/workflows?limit=1';
+export const SPEC_PATH = '/api/v1/openapi.yml';
 
 const API = '/api/v1';
 const PAGE_LIMIT = 250;
@@ -94,15 +95,31 @@ export function createN8nClient({
   return {
     checkHealth: () => probe(HEALTH_PATH, false),
     checkApiKey: () => probe(API_KEY_PATH, true),
+    readApiSpec: async (): Promise<ApiResult<string>> => {
+      const result = await request<unknown>('GET', SPEC_PATH, { auth: false });
+      if (result.kind !== 'ok') {
+        return result;
+      }
+      const { body } = result;
+      return { ...result, body: typeof body === 'string' ? body : (JSON.stringify(body) ?? '') };
+    },
     listWorkflows: async (): Promise<ApiResult<N8nWorkflowSummary[]>> => {
       const result = await listAll<N8nWorkflowSummary>(`${API}/workflows?excludePinnedData=true`);
-      return result.kind === 'ok'
-        ? { ...result, body: result.body.map(({ id, name, tags }) => ({ id, name, tags: tags ?? [] })) }
-        : result;
+      if (result.kind !== 'ok') {
+        return result;
+      }
+      const body = result.body.map(({ id, name, tags, isArchived }) => ({
+        id,
+        name,
+        tags: tags ?? [],
+        isArchived: isArchived ?? false,
+      }));
+      return { ...result, body };
     },
     getWorkflow: (id) => request<N8nWorkflow>('GET', workflowPath(id)),
     createWorkflow: (body) => request<N8nWorkflow>('POST', `${API}/workflows`, { body }),
     updateWorkflow: (id, body) => request<N8nWorkflow>('PUT', `${workflowPath(id)}?publishIfActive=false`, { body }),
+    unarchiveWorkflow: (id) => request<N8nWorkflow>('POST', `${workflowPath(id)}/unarchive`),
     listTags: () => listAll<N8nTag>(`${API}/tags`),
     createTag: (name) => request<N8nTag>('POST', `${API}/tags`, { body: { name } }),
     setWorkflowTags: (id, tagIds) =>
