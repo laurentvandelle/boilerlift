@@ -115,10 +115,57 @@ describe('createN8nClient public API calls', () => {
     return new Response(JSON.stringify(body), { status });
   }
 
+  test('Should read the API spec as text without the API key', async () => {
+    // Given
+    const spec = 'openapi: 3.0.0\npaths: {}\n';
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response(spec, { status: 200 })));
+    const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
+
+    // When
+    const result = await client.readApiSpec();
+
+    // Then
+    expect(result).toEqual({ kind: 'ok', status: 200, body: spec });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/openapi.yml');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.headers).not.toHaveProperty('X-N8N-API-KEY');
+  });
+
+  test('Should report a missing API spec as an http-error', async () => {
+    // Given
+    const { fetch } = fakeFetch(() => Promise.resolve(new Response('Not Found', { status: 404 })));
+    const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
+
+    // When
+    const result = await client.readApiSpec();
+
+    // Then
+    expect(result).toEqual({ kind: 'http-error', call: 'GET /api/v1/openapi.yml', status: 404 });
+  });
+
+  test('Should unarchive a workflow with POST and the API key', async () => {
+    // Given
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', isArchived: false })));
+    const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
+
+    // When
+    const result = await client.unarchiveWorkflow('abc');
+
+    // Then
+    expect(result).toMatchObject({ kind: 'ok', body: { id: 'abc', isArchived: false } });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/unarchive');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
   test('Should follow nextCursor when listing workflows', async () => {
     // Given
     const pages = [
-      json({ data: [{ id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], nodes: [] }], nextCursor: 'next=1' }),
+      json({
+        data: [{ id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], nodes: [], isArchived: true }],
+        nextCursor: 'next=1',
+      }),
       json({ data: [{ id: '2', name: 'B' }], nextCursor: null }),
     ];
     const { fetch, calls } = fakeFetch(() => Promise.resolve(pages.shift() ?? json({ data: [] })));
@@ -132,8 +179,8 @@ describe('createN8nClient public API calls', () => {
       kind: 'ok',
       status: 200,
       body: [
-        { id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }] },
-        { id: '2', name: 'B', tags: [] },
+        { id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], isArchived: true },
+        { id: '2', name: 'B', tags: [], isArchived: false },
       ],
     });
     expect(calls.map((call) => call.url)).toEqual([

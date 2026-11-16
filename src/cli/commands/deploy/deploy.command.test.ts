@@ -14,10 +14,15 @@ interface Stored {
   connections: Record<string, unknown>;
   settings: Record<string, unknown>;
   tags: { id: string; name: string }[];
+  isArchived?: boolean;
 }
 
+const DRAFT_SPEC = 'paths:\n  /workflows/{id}:\n    put:\n      parameters:\n        - name: publishIfActive\n';
+
 /** A `fetch` that answers like the n8n public API, backed by an in-memory instance. */
-function fakeN8n(options: { workflows?: Stored[]; failOn?: { call: string; status: number } } = {}): {
+function fakeN8n(
+  options: { workflows?: Stored[]; failOn?: { call: string; status: number }; spec?: string | { status: number } } = {},
+): {
   fetch: typeof fetch;
   calls: string[];
   workflows: Stored[];
@@ -38,6 +43,12 @@ function fakeN8n(options: { workflows?: Stored[]; failOn?: { call: string; statu
     }
     const body = init?.body === undefined ? undefined : (JSON.parse(init.body as string) as Record<string, unknown>);
     const [, , , resource, id, sub] = url.pathname.split('/');
+    if (resource === 'openapi.yml') {
+      const spec = options.spec ?? DRAFT_SPEC;
+      return typeof spec === 'string'
+        ? Promise.resolve(new Response(spec, { status: 200 }))
+        : json({ message: 'not found' }, spec.status);
+    }
     const find = (): Stored | undefined => workflows.find((workflow) => workflow.id === id);
     if (resource === 'tags') {
       if (method === 'GET') return json({ data: tags, nextCursor: null });
@@ -53,6 +64,10 @@ function fakeN8n(options: { workflows?: Stored[]; failOn?: { call: string; statu
     }
     const workflow = find();
     if (workflow === undefined) return json({ message: 'not found' }, 404);
+    if (sub === 'unarchive') {
+      workflow.isArchived = false;
+      return json(workflow);
+    }
     if (sub === 'tags') {
       workflow.tags = (body as unknown as { id: string }[]).map(({ id: tagId }) => tags.find((t) => t.id === tagId)!);
       return json(workflow.tags);
@@ -109,11 +124,12 @@ describe('deployCommand', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toBe(`n8nlift deploy → https://n8n.example.com
-~ updated  crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= skipped  daily-report   unchanged
-+ created  invoice-sync   workflows/invoice-sync.workflow.ts
-1 created, 1 updated, 1 skipped. Drafts are not live until you publish them.
+~ updated       crm-import     workflows/crm/crm-import.json (draft; published version still running)
+= skipped       daily-report   unchanged
++ created       invoice-sync   workflows/invoice-sync.workflow.ts
+1 created, 1 updated, 0 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
 `);
+    expect(n8n.calls).toContain('GET /api/v1/openapi.yml');
     expect(n8n.calls).toContain('PUT /api/v1/workflows/crm1?publishIfActive=false');
     expect(n8n.calls).not.toContain('PUT /api/v1/workflows/rep1?publishIfActive=false');
     expect(n8n.calls).toContain('POST /api/v1/workflows');
@@ -133,7 +149,7 @@ describe('deployCommand', () => {
     const result = await deployCommand.run(TEXT, ctx);
 
     // Then
-    expect(result.stdout).toContain('0 created, 0 updated, 3 skipped.\n');
+    expect(result.stdout).toContain('0 created, 0 updated, 0 restored, 3 skipped, 0 failed.\n');
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
 
@@ -154,14 +170,19 @@ describe('deployCommand', () => {
         { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'skipped', id: 'rep1', name: 'Daily report' },
         { stableName: 'new', path: 'workflows/new.json', action: 'created', id: 'w100', name: 'New' },
       ],
-      summary: { created: 1, updated: 0, skipped: 1 },
+      summary: { created: 1, updated: 0, restored: 0, skipped: 1, failed: 0, notProcessed: 0 },
+      warnings: [],
       error: null,
+      exitCode: 0,
     });
   });
 
-  test('Should stop at the first failure, name the workflow and the call, and keep the exit code in JSON', async () => {
+  test('Should keep going after one failed workflow, show its hint in place, recap it and exit 5', async () => {
     // Given
-    const n8n = fakeN8n({ failOn: { call: 'POST /api/v1/workflows', status: 500 } });
+    const n8n = fakeN8n({
+      workflows: [stored('crm1', 'crm-import', 'CRM import (old)')],
+      failOn: { call: 'PUT /api/v1/workflows/crm1', status: 500 },
+    });
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
 
     // When
@@ -169,20 +190,123 @@ describe('deployCommand', () => {
     const json = await deployCommand.run(JSON_INPUT, ctx);
 
     // Then
-    expect(text.exitCode).toBe(3);
-    expect(text.stdout).toBe('n8nlift deploy → https://n8n.example.com\n');
-    expect(text.stderr).toBe(`✗ failed   crm-import   POST /api/v1/workflows → HTTP 500: boom
-           → Check the workflow file and the n8n instance (n8n 2.35.0 or later), then run deploy again
-Stopped: 3 workflows not processed.
+    expect(text.exitCode).toBe(5);
+    expect(text.stdout).toBe(`n8nlift deploy → https://n8n.example.com
+✗ failed        crm-import     PUT /api/v1/workflows/crm1 → HTTP 500: boom
+                → Check the workflow file and the n8n instance (n8n 2.35.0 or later), then run deploy again
++ created       daily-report   workflows/daily-report.json
++ created       invoice-sync   workflows/invoice-sync.workflow.ts
+2 created, 0 updated, 0 restored, 0 skipped, 1 failed. Drafts are not live until you publish them.
 `);
-    expect(json.exitCode).toBe(3);
+    expect(text.stderr).toBe(`Failed: crm-import.
+Next: fix each failure with the hint under its line, then run deploy again.
+`);
+    expect(json.exitCode).toBe(5);
     expect(JSON.parse(json.stdout)).toMatchObject({
-      results: [],
-      error: { stableName: 'crm-import', call: 'POST /api/v1/workflows', detail: 'HTTP 500: boom', exitCode: 3 },
+      results: [
+        {
+          stableName: 'crm-import',
+          action: 'failed',
+          id: 'crm1',
+          error: {
+            call: 'PUT /api/v1/workflows/crm1',
+            detail: 'HTTP 500: boom',
+            hint: 'Check the workflow file and the n8n instance (n8n 2.35.0 or later), then run deploy again',
+          },
+        },
+        { stableName: 'daily-report', action: 'skipped' },
+        { stableName: 'invoice-sync', action: 'skipped' },
+      ],
+      summary: { failed: 1, skipped: 2 },
+      error: null,
+      exitCode: 5,
     });
   });
 
-  test('Should exit 4 when the API key is rejected', async () => {
+  test('Should list the workflows not processed and exit 4 when the key is rejected mid-run', async () => {
+    // Given
+    const n8n = fakeN8n({ failOn: { call: 'POST /api/v1/workflows', status: 401 } });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
+
+    // When
+    const text = await deployCommand.run(TEXT, ctx);
+    const json = await deployCommand.run(JSON_INPUT, ctx);
+
+    // Then
+    expect(text.exitCode).toBe(4);
+    expect(text.stdout).toBe(`n8nlift deploy → https://n8n.example.com
+✗ failed        crm-import     POST /api/v1/workflows → HTTP 401: boom
+                → Create a key in n8n → Settings → n8n API, then set N8N_API_KEY in .env
+- not-processed daily-report   not processed
+- not-processed invoice-sync   not processed
+0 created, 0 updated, 0 restored, 0 skipped, 1 failed.
+`);
+    expect(text.stderr).toBe(`Failed: crm-import.
+Stopped: POST /api/v1/workflows → HTTP 401: boom
+Not processed: daily-report, invoice-sync.
+Next: Create a key in n8n → Settings → n8n API, then set N8N_API_KEY in .env.
+`);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      summary: { failed: 1, notProcessed: 2 },
+      error: { call: 'POST /api/v1/workflows', detail: 'HTTP 401: boom' },
+      exitCode: 4,
+    });
+  });
+
+  test('Should write nothing, name n8n 2.35.0 and exit 6 when the instance cannot save drafts', async () => {
+    // Given
+    const n8n = fakeN8n({ workflows: [stored('crm1', 'crm-import', 'CRM import (old)')], spec: { status: 404 } });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
+
+    // When
+    const text = await deployCommand.run(TEXT, ctx);
+    const json = await deployCommand.run(JSON_INPUT, ctx);
+
+    // Then
+    expect(text.exitCode).toBe(6);
+    expect(text.stdout).toBe('n8nlift deploy → https://n8n.example.com\n');
+    expect(text.stderr).toBe(`✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required
+  → Upgrade the instance to n8n 2.35.0 or later, then run deploy again
+Nothing was written to n8n.
+`);
+    expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(JSON.parse(json.stdout)).toEqual({
+      instance: 'https://n8n.example.com',
+      results: [],
+      summary: { created: 0, updated: 0, restored: 0, skipped: 0, failed: 0, notProcessed: 0 },
+      warnings: [],
+      error: {
+        call: 'GET /api/v1/openapi.yml',
+        detail: 'HTTP 404: n8n 2.35.0 or later is required',
+        hint: 'Upgrade the instance to n8n 2.35.0 or later, then run deploy again',
+      },
+      exitCode: 6,
+    });
+  });
+
+  test('Should restore an archived workflow as a draft and warn about it', async () => {
+    // Given
+    const n8n = fakeN8n({ workflows: [stored('rep1', 'daily-report', 'Daily report (old)', { isArchived: true })] });
+    const files = [file('workflows/daily-report.json', 'Daily report')];
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(files) });
+
+    // When
+    const text = await deployCommand.run(TEXT, ctx);
+
+    // Then
+    expect(text.exitCode).toBe(0);
+    expect(text.stdout).toBe(`n8nlift deploy → https://n8n.example.com
+! restored      daily-report   workflows/daily-report.json (unpublished draft)
+⚠ daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
+0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
+`);
+    expect(text.stderr).toBe('');
+    expect(n8n.calls).toContain('POST /api/v1/workflows/rep1/unarchive');
+    expect(n8n.calls).toContain('PUT /api/v1/workflows/rep1?publishIfActive=false');
+    expect(n8n.workflows[0]?.isArchived).toBe(false);
+  });
+
+  test('Should exit 4 and write nothing when the API key is rejected on the first call', async () => {
     // Given
     const n8n = fakeN8n({ failOn: { call: 'GET /api/v1/workflows', status: 401 } });
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
@@ -192,8 +316,9 @@ Stopped: 3 workflows not processed.
 
     // Then
     expect(result.exitCode).toBe(4);
-    expect(result.stderr).toContain('✗ failed   GET /api/v1/workflows → HTTP 401: boom');
+    expect(result.stderr).toContain('✗ GET /api/v1/workflows → HTTP 401: boom');
     expect(result.stderr).toContain('→ Create a key in n8n → Settings → n8n API');
+    expect(n8n.calls).toEqual(['GET /api/v1/workflows?excludePinnedData=true&limit=250']);
   });
 
   test('Should say there is nothing to deploy and exit 0 when ./workflows is empty', async () => {

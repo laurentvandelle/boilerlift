@@ -20,6 +20,7 @@ function remote(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
     id: 'abc',
     name: 'CRM',
     tags: [],
+    isArchived: false,
     nodes: [
       { webhookId: 'server-hook', type: 'webhook', name: 'Hook', id: 's1' },
       { name: 'Slack', type: 'slack', id: 's2', credentials: { slackApi: { id: 'prod-9', name: 'Slack bot' } } },
