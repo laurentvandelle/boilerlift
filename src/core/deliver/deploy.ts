@@ -1,6 +1,14 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
 import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/core/connection/check-connection';
-import { DeployError, DeployInput, DeployReport, DeployResult } from '#src/core/deliver/deploy.model';
+import {
+  DeployError,
+  DeployInput,
+  DeployPlan,
+  DeployReport,
+  DeployResult,
+  PlanMode,
+  PlannedStep,
+} from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { SPEC_PATH } from '#src/core/n8n/n8n-client';
 import { ApiFailure, ApiResult, N8nClient, N8nTag, N8nWorkflowBody, N8nWorkflowSummary } from '#src/core/n8n/n8n.model';
@@ -40,12 +48,20 @@ class Stop extends Error {
 }
 
 /**
- * Delivers the local workflows to the instance. Reads first and writes nothing until it knows the instance saves
- * drafts. New ones are created (never published) and tagged `n8nlift:<stable-name>`; changed ones are updated as
+ * Delivers the local workflows to the instance: `planDeploy`, then `applyPlan`. Every read is done before the first
+ * write. New ones are created (never published) and tagged `n8nlift:<stable-name>`; changed ones are updated as
  * drafts (`publishIfActive=false`); unchanged ones are skipped; archived ones are unarchived and updated as drafts.
  * A failure on one workflow fails only that workflow. An unreachable instance or a rejected key stops the rest.
  */
-export async function deploy({ workflows, client }: DeployInput): Promise<DeployReport> {
+export async function deploy(input: DeployInput): Promise<DeployReport> {
+  return applyPlan(await planDeploy(input, 'deploy'), input.client);
+}
+
+/**
+ * Computes what deploy would do, with reads only: the workflow list, the API spec, one GET per workflow to update,
+ * and the tag list when a workflow would be created. It never writes. `mode` only changes how warnings are worded.
+ */
+export async function planDeploy({ workflows, client }: DeployInput, mode: PlanMode = 'dry-run'): Promise<DeployPlan> {
   const listed = await client.listWorkflows();
   if (listed.kind !== 'ok') {
     return stopped(describeFailure(listed));
@@ -59,38 +75,136 @@ export async function deploy({ workflows, client }: DeployInput): Promise<Deploy
   }
 
   const index = indexByStableTag(listed.body);
-  const tags = lazyTags(client);
   const warnings: string[] = [];
-  const results: DeployResult[] = [];
+  const steps: PlannedStep[] = [];
   let fatal: DeployError | undefined;
-  for (const workflow of [...workflows].sort((a, b) => a.stableName.localeCompare(b.stableName))) {
+  for (const workflow of sortByStableName(workflows)) {
     if (fatal !== undefined) {
-      results.push(result(workflow, 'not-processed'));
+      steps.push({ workflow, action: 'not-processed' });
       continue;
     }
-    const target = resolveTarget(workflow.stableName, index.get(workflow.stableName), warnings);
-    if (target.kind === 'duplicate') {
-      results.push(failed(workflow, duplicateTag(workflow.stableName, target.ids)));
+    const target = resolveTarget(workflow.stableName, index.get(workflow.stableName), warnings, mode);
+    switch (target.kind) {
+    case 'duplicate':
+      steps.push(failedStep(workflow, duplicateTag(workflow.stableName, target.ids)));
+      break;
+    case 'create':
+      steps.push({ workflow, action: 'created' });
+      break;
+    case 'restore':
+      steps.push({ workflow, action: 'restored', id: target.id });
+      break;
+    case 'update': {
+      const remote = await client.getWorkflow(target.id);
+      if (remote.kind === 'ok') {
+        steps.push({ workflow, action: isSameContent(workflow, remote.body) ? 'skipped' : 'updated', id: target.id });
+        break;
+      }
+      const error = describeFailure(remote);
+      steps.push(failedStep(workflow, error, target.id));
+      if (isFatal(error)) {
+        fatal = error;
+      }
+    }
+    }
+  }
+
+  let tags: N8nTag[] | undefined;
+  if (fatal === undefined && steps.some(({ action }) => action === 'created')) {
+    const listedTags = await client.listTags();
+    if (listedTags.kind === 'ok') {
+      tags = listedTags.body;
+    } else {
+      const error = describeFailure(listedTags);
+      for (const [i, step] of steps.entries()) {
+        if (step.action === 'created') {
+          steps[i] = failedStep(step.workflow, error);
+        }
+      }
+      if (isFatal(error)) {
+        fatal = error;
+      }
+    }
+  }
+  return {
+    steps,
+    warnings,
+    ...(tags === undefined ? {} : { tags }),
+    ...(fatal === undefined ? {} : { error: fatal }),
+    exitCode: exitCodeOf(steps, fatal),
+  };
+}
+
+/**
+ * Runs the writes of a plan. A plan stopped by a fatal failure writes nothing: the workflows it would have written
+ * are reported `not-processed`. Skipped and failed workflows make no call.
+ */
+export async function applyPlan(plan: DeployPlan, client: N8nClient): Promise<DeployReport> {
+  if (plan.error !== undefined) {
+    const steps = plan.steps.map((step): PlannedStep => (writes(step) ? { workflow: step.workflow, action: 'not-processed' } : step));
+    return planToReport({ ...plan, steps });
+  }
+  const tags = tagFinder(client, plan.tags ?? []);
+  const results: DeployResult[] = [];
+  let fatal: DeployError | undefined;
+  for (const step of plan.steps) {
+    if (fatal !== undefined) {
+      results.push(result(step.workflow, 'not-processed'));
+      continue;
+    }
+    if (!writes(step)) {
+      results.push(resultOf(step));
       continue;
     }
     try {
-      results.push(await deliver(client, tags, workflow, target));
+      results.push(await write(client, tags, step));
     } catch (error) {
       if (!(error instanceof Stop)) {
         throw error;
       }
-      results.push(failed(workflow, error.deployError, target.kind === 'create' ? undefined : target.id));
-      if (error.deployError.exitCode !== EXIT_PARTIAL_FAILURE) {
+      results.push(failed(step.workflow, error.deployError, step.id));
+      if (isFatal(error.deployError)) {
         fatal = error.deployError;
       }
     }
   }
-  const exitCode = fatal?.exitCode ?? (results.some(({ action }) => action === 'failed') ? EXIT_PARTIAL_FAILURE : 0);
-  return { results, warnings, ...(fatal === undefined ? {} : { error: fatal }), exitCode };
+  return {
+    results,
+    warnings: plan.warnings,
+    ...(fatal === undefined ? {} : { error: fatal }),
+    exitCode: exitCodeOf(results, fatal),
+  };
 }
 
-function stopped(error: DeployError): DeployReport {
-  return { results: [], warnings: [], error, exitCode: error.exitCode };
+/** The report a plan stands for, without the data apply needs. A dry run returns it. */
+export function planToReport(plan: DeployPlan): DeployReport {
+  return {
+    results: plan.steps.map(resultOf),
+    warnings: plan.warnings,
+    ...(plan.error === undefined ? {} : { error: plan.error }),
+    exitCode: plan.exitCode,
+  };
+}
+
+function stopped(error: DeployError): DeployPlan {
+  return { steps: [], warnings: [], error, exitCode: error.exitCode };
+}
+
+function sortByStableName(workflows: LocalWorkflow[]): LocalWorkflow[] {
+  return [...workflows].sort((a, b) => a.stableName.localeCompare(b.stableName));
+}
+
+/** A failure that stops the whole run: anything but a per-workflow failure (exit 5). */
+function isFatal(error: DeployError): boolean {
+  return error.exitCode !== EXIT_PARTIAL_FAILURE;
+}
+
+function exitCodeOf(items: { action: DeployResult['action'] }[], fatal: DeployError | undefined): number {
+  return fatal?.exitCode ?? (items.some(({ action }) => action === 'failed') ? EXIT_PARTIAL_FAILURE : 0);
+}
+
+function writes(step: PlannedStep): step is PlannedStep & { action: 'created' | 'updated' | 'restored' } {
+  return step.action === 'created' || step.action === 'updated' || step.action === 'restored';
 }
 
 function draftsUnsupported(spec: Exclude<ApiResult<string>, { kind: 'unreachable' }>): DeployError {
@@ -119,11 +233,15 @@ function indexByStableTag(remote: N8nWorkflowSummary[]): Map<string, Matches> {
   return index;
 }
 
-/** Picks what to do with one workflow, and adds a warning when the instance holds extra tagged copies. */
-function resolveTarget(stableName: string, matches: Matches | undefined, warnings: string[]): Target {
+/**
+ * Picks what to do with one workflow, and adds a warning when the instance holds extra tagged copies. A dry run
+ * words the warnings as what deploy would do.
+ */
+function resolveTarget(stableName: string, matches: Matches | undefined, warnings: string[], mode: PlanMode): Target {
   if (matches === undefined) {
     return { kind: 'create' };
   }
+  const dryRun = mode === 'dry-run';
   const { live, archived } = matches;
   const tag = stableTag(stableName);
   if (live.length > 1) {
@@ -133,7 +251,7 @@ function resolveTarget(stableName: string, matches: Matches | undefined, warning
   if (liveId !== undefined) {
     if (archived.length > 0) {
       warnings.push(
-        `${stableName}: archived ${plural(archived, 'workflow')} ${list(archived)} still ${archived.length === 1 ? 'carries' : 'carry'} the tag ${tag}; deploy used the live workflow ${liveId}`,
+        `${stableName}: archived ${plural(archived, 'workflow')} ${list(archived)} still ${archived.length === 1 ? 'carries' : 'carry'} the tag ${tag}; deploy ${dryRun ? 'would use' : 'used'} the live workflow ${liveId}`,
       );
     }
     return { kind: 'update', id: liveId };
@@ -142,27 +260,33 @@ function resolveTarget(stableName: string, matches: Matches | undefined, warning
   if (archivedId === undefined) {
     return { kind: 'create' };
   }
-  warnings.push(`${stableName}: workflow ${archivedId} was archived in n8n; it is back as an unpublished draft`);
+  warnings.push(
+    dryRun
+      ? `${stableName}: workflow ${archivedId} was archived in n8n; deploy would bring it back as an unpublished draft`
+      : `${stableName}: workflow ${archivedId} was archived in n8n; it is back as an unpublished draft`,
+  );
   if (archived.length > 1) {
-    warnings.push(`${stableName}: archived workflows ${list(archived)} all carry the tag ${tag}; deploy restored ${archivedId}`);
+    warnings.push(
+      `${stableName}: archived workflows ${list(archived)} all carry the tag ${tag}; deploy ${dryRun ? 'would restore' : 'restored'} ${archivedId}`,
+    );
   }
   return { kind: 'restore', id: archivedId };
 }
 
-async function deliver(
+async function write(
   client: N8nClient,
   tags: (name: string) => Promise<N8nTag>,
-  workflow: LocalWorkflow,
-  target: Exclude<Target, { kind: 'duplicate' }>,
+  step: PlannedStep & { action: 'created' | 'updated' | 'restored' },
 ): Promise<DeployResult> {
-  switch (target.kind) {
-  case 'create':
+  const { workflow, id } = step;
+  if (step.action === 'created' || id === undefined) {
     return create(client, tags, workflow);
-  case 'update':
-    return update(client, workflow, target.id);
-  case 'restore':
-    return restore(client, workflow, target.id);
   }
+  if (step.action === 'updated') {
+    unwrap(await client.updateWorkflow(id, bodyOf(workflow)));
+    return result(workflow, 'updated', id);
+  }
+  return restore(client, workflow, id);
 }
 
 async function create(
@@ -177,16 +301,10 @@ async function create(
   return result(workflow, 'created', created.id);
 }
 
-async function update(client: N8nClient, workflow: LocalWorkflow, id: string): Promise<DeployResult> {
-  const remote = unwrap(await client.getWorkflow(id));
-  if (isSameContent(workflow, remote)) {
-    return result(workflow, 'skipped', id);
-  }
-  unwrap(await client.updateWorkflow(id, bodyOf(workflow)));
-  return result(workflow, 'updated', id);
-}
-
-/** Unarchives the workflow, then updates it like any other. It reports `restored` even when the content matched. */
+/**
+ * Unarchives the workflow, then reads it and updates it when it differs. That read follows a write by nature. It
+ * reports `restored` even when the content matched.
+ */
 async function restore(client: N8nClient, workflow: LocalWorkflow, id: string): Promise<DeployResult> {
   const unarchived = await client.unarchiveWorkflow(id);
   if (unarchived.kind === 'http-error') {
@@ -197,15 +315,17 @@ async function restore(client: N8nClient, workflow: LocalWorkflow, id: string): 
     });
   }
   unwrap(unarchived);
-  await update(client, workflow, id);
+  const remote = unwrap(await client.getWorkflow(id));
+  if (!isSameContent(workflow, remote)) {
+    unwrap(await client.updateWorkflow(id, bodyOf(workflow)));
+  }
   return result(workflow, 'restored', id);
 }
 
-/** Finds a tag by name, creating it on first use. The tag list is read once. */
-function lazyTags(client: N8nClient): (name: string) => Promise<N8nTag> {
-  let cache: N8nTag[] | undefined;
+/** Finds a tag by name in the planned tag list, creating it on first use. */
+function tagFinder(client: N8nClient, planned: N8nTag[]): (name: string) => Promise<N8nTag> {
+  const cache = [...planned];
   return async (name) => {
-    cache ??= unwrap(await client.listTags());
     const found = cache.find((tag) => tag.name === name);
     if (found !== undefined) {
       return found;
@@ -232,6 +352,14 @@ function result(workflow: LocalWorkflow, action: DeployResult['action'], id?: st
 
 function failed(workflow: LocalWorkflow, { call, detail, hint }: DeployError, id?: string): DeployResult {
   return { ...result(workflow, 'failed', id), error: { call, detail, hint } };
+}
+
+function failedStep(workflow: LocalWorkflow, { call, detail, hint }: DeployError, id?: string): PlannedStep {
+  return { workflow, action: 'failed', ...(id === undefined ? {} : { id }), error: { call, detail, hint } };
+}
+
+function resultOf({ workflow, action, id, error }: PlannedStep): DeployResult {
+  return { ...result(workflow, action, id), ...(error === undefined ? {} : { error }) };
 }
 
 function duplicateTag(stableName: string, ids: string[]): DeployError {
