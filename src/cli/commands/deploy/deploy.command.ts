@@ -3,14 +3,14 @@ import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
 import { EXIT_MISSING_CONFIG, describeMissingConfig } from '#src/core/config/missing-config';
-import { deploy } from '#src/core/deliver/deploy';
+import { deploy, planDeploy, planToReport } from '#src/core/deliver/deploy';
 import { DeployAction, DeployReport, DeployResult } from '#src/core/deliver/deploy.model';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 
 const WORKFLOWS_DIR = 'workflows';
 const EXIT_INVALID_FILES = 1;
 
-const USAGE = `n8nlift deploy [--json]
+const USAGE = `n8nlift deploy [--dry-run] [--json]
 
 Delivers every workflow under ./workflows (*.workflow.ts with a default export, or *.json),
 pasted from an n8n export, to your n8n instance:
@@ -23,6 +23,9 @@ The stable name is the file name without .workflow.ts / .json: 1 to 16 of a-z, 0
 Nothing is written until the instance proves it saves drafts (n8n 2.35.0 or later).
 A failure on one workflow fails only that workflow; the others are still delivered.
 Reads N8N_URL and N8N_API_KEY like n8nlift ping.
+
+--dry-run reads the instance and shows what deploy would create, update, restore, skip or fail,
+and any blocker, without writing anything. It exits with the same codes as a real deploy.
 
 Exit codes:
   0  Every workflow delivered, or nothing to deploy
@@ -41,8 +44,18 @@ const MARKS: Record<DeployAction, string> = {
   'not-processed': '-',
 };
 
-/** The longest action, `not-processed`, plus one space. */
-const ACTION_WIDTH = 14;
+/** What a dry run calls each action. */
+const DRY_RUN_LABELS: Record<DeployAction, string> = {
+  created: 'would create',
+  updated: 'would update',
+  skipped: 'would skip',
+  restored: 'would restore',
+  failed: 'would fail',
+  'not-processed': 'not processed',
+};
+
+/** The longest label, `not-processed` or `would restore`, plus one space. */
+const ACTION_WIDTH = 1 + Math.max(...Object.keys(MARKS).map((action) => action.length), ...Object.values(DRY_RUN_LABELS).map((label) => label.length));
 const INDENT = ' '.repeat(2 + ACTION_WIDTH);
 
 export const deployCommand: CommandDefinition = {
@@ -51,10 +64,12 @@ export const deployCommand: CommandDefinition = {
   usage: USAGE,
   allowPositionals: false,
   options: {
+    'dry-run': { type: 'boolean', description: 'Show what deploy would do; write nothing' },
     json: { type: 'boolean', description: 'Print the report as JSON' },
   },
   run: async (input, ctx) => {
     const json = input.values.json === true;
+    const dryRun = input.values['dry-run'] === true;
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
       return { exitCode: EXIT_MISSING_CONFIG, stdout: '', stderr: describeMissingConfig(resolved.missing) };
@@ -67,12 +82,13 @@ export const deployCommand: CommandDefinition = {
     const instance = config.url.value;
     if (loaded.workflows.length === 0) {
       return json
-        ? renderJson(instance, { results: [], warnings: [], exitCode: 0 })
+        ? renderJson(instance, { results: [], warnings: [], exitCode: 0 }, dryRun)
         : { exitCode: 0, stdout: `Nothing to deploy: no workflow in ./${WORKFLOWS_DIR}.\n`, stderr: '' };
     }
     const client = createN8nClient({ baseUrl: instance, apiKey: config.apiKey.value, fetch: ctx.fetch });
-    const report = await deploy({ workflows: loaded.workflows, client });
-    return json ? renderJson(instance, report) : renderText(instance, report);
+    const deployInput = { workflows: loaded.workflows, client };
+    const report = dryRun ? planToReport(await planDeploy(deployInput)) : await deploy(deployInput);
+    return json ? renderJson(instance, report, dryRun) : renderText(instance, report, dryRun);
   },
 };
 
@@ -123,11 +139,12 @@ function describe(result: DeployResult): string {
   }
 }
 
-function renderText(instance: string, report: DeployReport): CliResult {
+function renderText(instance: string, report: DeployReport, dryRun: boolean): CliResult {
   const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
-  const stdout = [`n8nlift deploy → ${instance}`];
+  const stdout = [`n8nlift deploy${dryRun ? ' --dry-run' : ''} → ${instance}`];
   for (const result of report.results) {
-    stdout.push(`${MARKS[result.action]} ${result.action.padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${describe(result)}`);
+    const label = dryRun ? DRY_RUN_LABELS[result.action] : result.action;
+    stdout.push(`${MARKS[result.action]} ${label.padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${describe(result)}`);
     if (result.error !== undefined) {
       stdout.push(`${INDENT}→ ${result.error.hint}`);
     }
@@ -140,20 +157,28 @@ function renderText(instance: string, report: DeployReport): CliResult {
   }
   const summary = summarize(report.results);
   const { created, updated, restored, skipped, failed } = summary;
-  const drafts = created + updated + restored > 0 ? ' Drafts are not live until you publish them.' : '';
-  stdout.push(`${created} created, ${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`);
-  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: recap(report) };
+  if (dryRun) {
+    stdout.push(
+      `Would: ${created} create, ${updated} update, ${restored} restore, ${skipped} skip, ${failed} fail.`,
+      'Dry run: nothing was written. Run n8nlift deploy to apply.',
+      'n8n can still reject a write; this preview covers what reads can show.',
+    );
+  } else {
+    const drafts = created + updated + restored > 0 ? ' Drafts are not live until you publish them.' : '';
+    stdout.push(`${created} created, ${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`);
+  }
+  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: recap(report, dryRun) };
 }
 
 /** The stderr recap: which workflows need attention and what to do next. Empty when everything went through. */
-function recap(report: DeployReport): string {
+function recap(report: DeployReport, dryRun: boolean): string {
   const names = (action: DeployAction): string[] =>
     report.results.filter((result) => result.action === action).map((result) => result.stableName);
   const failedNames = names('failed');
   const notProcessed = names('not-processed');
   const lines: string[] = [];
   if (failedNames.length > 0) {
-    lines.push(`Failed: ${failedNames.join(', ')}.`);
+    lines.push(`${dryRun ? 'Would fail' : 'Failed'}: ${failedNames.join(', ')}.`);
   }
   if (report.error !== undefined) {
     lines.push(`Stopped: ${report.error.call} → ${report.error.detail}`);
@@ -167,10 +192,11 @@ function recap(report: DeployReport): string {
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
 }
 
-function renderJson(instance: string, report: DeployReport): CliResult {
+function renderJson(instance: string, report: DeployReport, dryRun: boolean): CliResult {
   const { error } = report;
   const payload = {
     instance,
+    dryRun,
     results: report.results.map(({ stableName, path, action, id, name, error: failure }) => ({
       stableName,
       path,

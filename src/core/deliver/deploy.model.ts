@@ -1,5 +1,5 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { N8nClient } from '#src/core/n8n/n8n.model';
+import { N8nClient, N8nTag } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';
 
@@ -42,3 +42,28 @@ export interface DeployInput {
   workflows: LocalWorkflow[];
   client: N8nClient;
 }
+
+/** One workflow in a deploy plan: the action a deploy would take, and what apply needs to take it. */
+export interface PlannedStep {
+  workflow: LocalWorkflow;
+  action: DeployAction;
+  /** The target workflow id on the instance. Absent for a create, or a failure with no target yet. */
+  id?: string;
+  /** Set when `action` is `failed`. */
+  error?: WorkflowError;
+}
+
+/** What a deploy would do, computed from reads only. A dry run renders it; a real deploy applies it. */
+export interface DeployPlan {
+  /** Every local workflow, in stable-name order. Empty when the plan stopped before any workflow. */
+  steps: PlannedStep[];
+  warnings: string[];
+  /** The instance tag list, read once when at least one workflow is created. */
+  tags?: N8nTag[];
+  /** Set only when a failure stopped the plan. */
+  error?: DeployError;
+  exitCode: number;
+}
+
+/** How warnings are worded: a dry run says what deploy would do, a deploy says what it did. */
+export type PlanMode = 'dry-run' | 'deploy';

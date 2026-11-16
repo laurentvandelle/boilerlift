@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { deploy } from '#src/core/deliver/deploy';
+import { deploy, planDeploy, planToReport } from '#src/core/deliver/deploy';
 import { ApiFailure, ApiResult, N8nClient, N8nTag, N8nWorkflow } from '#src/core/n8n/n8n.model';
 
 type Method = Exclude<keyof N8nClient, 'checkHealth' | 'checkApiKey'>;
@@ -130,8 +130,8 @@ describe('deploy', () => {
     expect(instance.calls).toEqual([
       'list',
       'spec',
-      'create Workflow invoice-sync',
       'listTags',
+      'create Workflow invoice-sync',
       'createTag n8nlift:invoice-sync',
       'setTags w1 t2',
     ]);
@@ -460,5 +460,125 @@ describe('deploy', () => {
     expect(report.error).toMatchObject({ call: 'GET /api/v1/workflows', exitCode });
     expect(report.error?.hint).toContain(hint);
     expect(instance.calls).toEqual(['list']);
+  });
+
+  test('Should mark the rest not-processed and write nothing when a GET becomes unreachable mid-plan', async () => {
+    // Given
+    const changed = (stableName: string, id: string): N8nWorkflow => ({
+      ...remoteOf(local(stableName), id, [{ id: `t-${stableName}`, name: `n8nlift:${stableName}` }]),
+      name: 'Old name',
+    });
+    const instance = fakeInstance(
+      { workflows: [changed('a', 'ida'), changed('b', 'idb')] },
+      { 'get idb': { kind: 'unreachable', call: 'GET /api/v1/workflows/idb', reason: 'connection reset' } },
+    );
+
+    // When
+    const report = await deploy({ workflows: [local('a'), local('b'), local('c')], client: instance.client });
+
+    // Then
+    expect(report.results.map(({ stableName, action }) => [stableName, action])).toEqual([
+      ['a', 'not-processed'],
+      ['b', 'failed'],
+      ['c', 'not-processed'],
+    ]);
+    expect(report.exitCode).toBe(3);
+    expect(report.error).toMatchObject({ call: 'GET /api/v1/workflows/idb', exitCode: 3 });
+    expect(instance.calls).toEqual(['list', 'spec', 'get ida', 'get idb']);
+  });
+});
+
+/** A seed with one workflow to create, one to update, one to skip, one to restore and one duplicate. */
+function mixedSeed(): { workflows: LocalWorkflow[]; remote: N8nWorkflow[] } {
+  const tag = (stableName: string): N8nTag[] => [{ id: `t-${stableName}`, name: `n8nlift:${stableName}` }];
+  const same = local('same');
+  const changed = local('changed');
+  const archived = local('archived');
+  const dup = local('dup');
+  return {
+    workflows: [local('new'), changed, same, archived, dup],
+    remote: [
+      { ...remoteOf(changed, 'idc', tag('changed')), name: 'Old name' },
+      remoteOf(same, 'ids', tag('same')),
+      { ...remoteOf(archived, 'ida', tag('archived')), isArchived: true },
+      remoteOf(dup, 'd1', tag('dup')),
+      remoteOf(dup, 'd2', tag('dup')),
+    ],
+  };
+}
+
+describe('planDeploy', () => {
+  test('Should make no write call during a dry run', async () => {
+    // Given
+    const { workflows, remote } = mixedSeed();
+    const instance = fakeInstance({ workflows: remote });
+
+    // When
+    const report = planToReport(await planDeploy({ workflows, client: instance.client }));
+
+    // Then
+    expect(report.results.map(({ stableName, action }) => [stableName, action])).toEqual([
+      ['archived', 'restored'],
+      ['changed', 'updated'],
+      ['dup', 'failed'],
+      ['new', 'created'],
+      ['same', 'skipped'],
+    ]);
+    expect(report.exitCode).toBe(5);
+    expect(instance.calls).toEqual(['list', 'spec', 'get idc', 'get ids', 'listTags']);
+  });
+
+  test('Should apply exactly the planned actions', async () => {
+    // Given
+    const { workflows, remote } = mixedSeed();
+    const planned = planToReport(await planDeploy({ workflows, client: fakeInstance({ workflows: remote }).client }));
+
+    // When
+    const deployed = await deploy({ workflows, client: fakeInstance({ workflows: remote }).client });
+
+    // Then
+    const actions = (report: typeof planned): string[][] => report.results.map(({ stableName, action }) => [stableName, action]);
+    expect(actions(deployed)).toEqual(actions(planned));
+    expect(deployed.exitCode).toBe(planned.exitCode);
+  });
+
+  test.each<[string, { spec?: string }, Partial<Record<string, ApiFailure>>, number]>([
+    ['the spec has no publishIfActive', { spec: 'paths: {}\n' }, {}, 6],
+    ['the instance is unreachable', {}, { listWorkflows: { kind: 'unreachable', call: 'GET /api/v1/workflows', reason: 'refused' } }, 3],
+    ['the key is rejected', {}, { listWorkflows: { kind: 'http-error', call: 'GET /api/v1/workflows', status: 401 } }, 4],
+  ])('Should stop before planning any workflow when %s', async (_, seed, failures, exitCode) => {
+    // Given
+    const instance = fakeInstance({ ...seed, workflows: [remoteOf(local('a'), 'abc', [{ id: 't1', name: 'n8nlift:a' }])] }, failures);
+
+    // When
+    const plan = await planDeploy({ workflows: [local('a'), local('b')], client: instance.client });
+
+    // Then
+    expect(plan.steps).toEqual([]);
+    expect(plan.exitCode).toBe(exitCode);
+    expect(instance.calls).not.toContain('get abc');
+    expect(instance.calls).not.toContain('listTags');
+  });
+
+  test('Should word the restore warning conditionally in a dry run', async () => {
+    // Given
+    const workflow = local('crm');
+    const tags = [{ id: 't1', name: 'n8nlift:crm' }];
+    const instance = fakeInstance({
+      workflows: [
+        { ...remoteOf(workflow, 'arc1', tags), isArchived: true },
+        { ...remoteOf(workflow, 'arc2', tags), isArchived: true },
+      ],
+    });
+
+    // When
+    const plan = await planDeploy({ workflows: [workflow], client: instance.client });
+
+    // Then
+    expect(plan.warnings).toEqual([
+      'crm: workflow arc1 was archived in n8n; deploy would bring it back as an unpublished draft',
+      'crm: archived workflows arc1 and arc2 all carry the tag n8nlift:crm; deploy would restore arc1',
+    ]);
+    expect(instance.calls).toEqual(['list', 'spec']);
   });
 });

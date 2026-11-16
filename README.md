@@ -36,6 +36,7 @@ npm install --save-dev n8nlift
 n8nlift --help            # list the available commands
 n8nlift ping              # check the connection to your n8n instance
 n8nlift deploy            # deliver ./workflows to your instance as drafts
+n8nlift deploy --dry-run  # show what deploy would do, write nothing
 n8nlift help <command>    # show the options of one command
 n8nlift --version         # print the installed version
 ```
@@ -136,7 +137,7 @@ n8nlift deploy → https://your-n8n.example.com
 - A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered. Two live workflows with the same `n8nlift:` tag fail only that stable name.
 - An unreachable instance or a rejected key stops the run: the workflows not yet processed are listed as `not-processed`.
 - After the summary, stderr recaps the failed and not-processed workflows and the next step.
-- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `updated`, `skipped`, `restored`, `failed`, `not-processed`) and, when it failed, an `error` with `call`, `detail` and `hint`; plus `summary`, `warnings`, `exitCode`, and a top-level `error` only when the whole run stopped.
+- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `updated`, `skipped`, `restored`, `failed`, `not-processed`) and, when it failed, an `error` with `call`, `detail` and `hint`; plus `dryRun` (`true` under `--dry-run`), `summary`, `warnings`, `exitCode`, and a top-level `error` only when the whole run stopped.
 
 | Exit code | Meaning                                                                    |
 | --------- | -------------------------------------------------------------------------- |
@@ -146,6 +147,20 @@ n8nlift deploy → https://your-n8n.example.com
 | 4         | The API key is rejected                                                    |
 | 5         | At least one workflow failed; the others were delivered                    |
 | 6         | The instance is older than n8n 2.35.0: nothing was written                 |
+
+### Dry run
+
+`n8nlift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n older than 2.35.0) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
+
+```text
+n8nlift deploy --dry-run → https://your-n8n.example.com
+~ would update  crm-import     workflows/crm/crm-import.json (draft; published version still running)
+= would skip    daily-report   unchanged
++ would create  invoice-sync   workflows/invoice-sync.workflow.ts
+Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
+Dry run: nothing was written. Run n8nlift deploy to apply.
+n8n can still reject a write; this preview covers what reads can show.
+```
 
 ## Status
 
