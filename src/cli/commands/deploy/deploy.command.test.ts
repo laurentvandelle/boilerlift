@@ -5,6 +5,8 @@ import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
 
 const TEXT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
+const DRY_RUN = { positionals: [], values: { 'dry-run': true } };
+const DRY_RUN_JSON = { positionals: [], values: { 'dry-run': true, json: true } };
 const ENV = { N8N_URL: 'https://n8n.example.com', N8N_API_KEY: 'secret' };
 
 interface Stored {
@@ -166,6 +168,7 @@ describe('deployCommand', () => {
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
       instance: 'https://n8n.example.com',
+      dryRun: false,
       results: [
         { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'skipped', id: 'rep1', name: 'Daily report' },
         { stableName: 'new', path: 'workflows/new.json', action: 'created', id: 'w100', name: 'New' },
@@ -272,6 +275,7 @@ Nothing was written to n8n.
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
     expect(JSON.parse(json.stdout)).toEqual({
       instance: 'https://n8n.example.com',
+      dryRun: false,
       results: [],
       summary: { created: 0, updated: 0, restored: 0, skipped: 0, failed: 0, notProcessed: 0 },
       warnings: [],
@@ -365,5 +369,123 @@ Nothing was written to n8n.
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Missing N8N_URL and N8N_API_KEY.');
     expect(result.stderr).toContain('  N8N_URL=https://your-n8n.example.com\n');
+  });
+
+  test('Should show what deploy would do and write nothing with --dry-run', async () => {
+    // Given
+    const n8n = fakeN8n({
+      workflows: [
+        stored('crm1', 'crm-import', 'CRM import (old)'),
+        stored('rep1', 'daily-report', 'Daily report'),
+      ],
+    });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
+
+    // When
+    const result = await deployCommand.run(DRY_RUN, ctx);
+
+    // Then
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe(`n8nlift deploy --dry-run → https://n8n.example.com
+~ would update  crm-import     workflows/crm/crm-import.json (draft; published version still running)
+= would skip    daily-report   unchanged
++ would create  invoice-sync   workflows/invoice-sync.workflow.ts
+Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
+Dry run: nothing was written. Run n8nlift deploy to apply.
+n8n can still reject a write; this preview covers what reads can show.
+`);
+    expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(n8n.workflows.map(({ id, name }) => [id, name])).toEqual([
+      ['crm1', 'CRM import (old)'],
+      ['rep1', 'Daily report'],
+    ]);
+  });
+
+  test('Should print the same JSON report with dryRun true under --dry-run --json', async () => {
+    // Given
+    const n8n = fakeN8n({ workflows: [stored('rep1', 'daily-report', 'Daily report', { isArchived: true })] });
+    const files = [file('workflows/daily-report.json', 'Daily report'), file('workflows/new.json', 'New')];
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(files) });
+
+    // When
+    const result = await deployCommand.run(DRY_RUN_JSON, ctx);
+
+    // Then
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      instance: 'https://n8n.example.com',
+      dryRun: true,
+      results: [
+        { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'restored', id: 'rep1', name: 'Daily report' },
+        { stableName: 'new', path: 'workflows/new.json', action: 'created', id: null, name: 'New' },
+      ],
+      summary: { created: 1, updated: 0, restored: 1, skipped: 0, failed: 0, notProcessed: 0 },
+      warnings: ['daily-report: workflow rep1 was archived in n8n; deploy would bring it back as an unpublished draft'],
+      error: null,
+      exitCode: 0,
+    });
+    expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
+  });
+
+  test('Should exit 5 under --dry-run when a workflow would fail', async () => {
+    // Given
+    const n8n = fakeN8n({
+      workflows: [stored('a', 'daily-report', 'Daily report'), stored('b', 'daily-report', 'Daily report')],
+    });
+    const files = [file('workflows/daily-report.json', 'Daily report')];
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(files) });
+
+    // When
+    const result = await deployCommand.run(DRY_RUN, ctx);
+
+    // Then
+    expect(result.exitCode).toBe(5);
+    expect(result.stdout).toContain('✗ would fail    daily-report   GET /api/v1/workflows → workflows a and b both carry the tag n8nlift:daily-report\n');
+    expect(result.stdout).toContain('Would: 0 create, 0 update, 0 restore, 0 skip, 1 fail.\n');
+    expect(result.stderr).toBe(`Would fail: daily-report.
+Next: fix each failure with the hint under its line, then run deploy again.
+`);
+  });
+
+  test('Should exit 6 and show the blocker under --dry-run when the instance cannot save drafts', async () => {
+    // Given
+    const n8n = fakeN8n({ spec: { status: 404 } });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
+
+    // When
+    const result = await deployCommand.run(DRY_RUN, ctx);
+
+    // Then
+    expect(result.exitCode).toBe(6);
+    expect(result.stdout).toBe('n8nlift deploy --dry-run → https://n8n.example.com\n');
+    expect(result.stderr).toContain('✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required');
+    expect(result.stderr).toContain('Nothing was written to n8n.');
+  });
+
+  test('Should say there is nothing to deploy under --dry-run when ./workflows is empty', async () => {
+    // Given
+    const ctx = context({});
+
+    // When
+    const text = await deployCommand.run(DRY_RUN, ctx);
+    const json = await deployCommand.run(DRY_RUN_JSON, ctx);
+
+    // Then
+    expect(text).toEqual({ exitCode: 0, stdout: 'Nothing to deploy: no workflow in ./workflows.\n', stderr: '' });
+    expect(JSON.parse(json.stdout)).toMatchObject({ dryRun: true, results: [], exitCode: 0 });
+  });
+
+  test('Should list --dry-run in the usage and options the help is generated from', () => {
+    // Given
+    const { usage, options } = deployCommand;
+
+    // When
+    const dryRun = options['dry-run'];
+
+    // Then
+    expect(usage).toContain('n8nlift deploy [--dry-run] [--json]');
+    expect(usage).toContain('It exits with the same codes as a real deploy.');
+    expect(dryRun).toEqual({ type: 'boolean', description: 'Show what deploy would do; write nothing' });
   });
 });
