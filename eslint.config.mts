@@ -3,6 +3,8 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import vitest from '@vitest/eslint-plugin';
 import boundaries from 'eslint-plugin-boundaries';
+import stylistic from '@stylistic/eslint-plugin';
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 
 const noBarrelOrRelative = {
   patterns: [
@@ -26,19 +28,33 @@ export default tseslint.config(
         tsconfigRootDir: new URL('.', import.meta.url).pathname,
       },
     },
+    plugins: { '@stylistic': stylistic },
     rules: {
-      // Folded from the former .eslintrc.json.
-      indent: ['error', 2],
-      semi: ['warn', 'always'],
+      // Folded from the former .eslintrc.json. SwitchCase 0 keeps the core indent rule's default.
+      '@stylistic/indent': ['error', 2, { SwitchCase: 0 }],
+      '@stylistic/semi': ['warn', 'always'],
       'no-console': 'warn',
       'no-throw-literal': 'error',
       'no-warning-comments': 'off',
       'no-else-return': 'error',
-      '@typescript-eslint/ban-ts-comment': 'off',
       '@typescript-eslint/explicit-function-return-type': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    // A directive comment names its rules and gives its reason after `--`. Boundaries and the import rule
+    // are never disabled inline: an exception goes in this file.
+    plugins: { '@eslint-community/eslint-comments': eslintComments },
+    rules: {
+      '@eslint-community/eslint-comments/require-description': ['error', { ignore: ['eslint-enable'] }],
+      '@eslint-community/eslint-comments/no-unlimited-disable': 'error',
+      '@eslint-community/eslint-comments/no-restricted-disable': [
+        'error',
+        'boundaries/dependencies',
+        'no-restricted-imports',
       ],
     },
   },
@@ -75,7 +91,7 @@ export default tseslint.config(
       'boundaries/files': [
         { category: 'test', pattern: '**/*.test.ts' },
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
-        { category: 'cli-fake', pattern: 'src/cli/*.fake.ts' },
+        { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },
         { category: 'index', pattern: 'src/index.ts' },
       ],
@@ -87,6 +103,8 @@ export default tseslint.config(
           default: 'disallow',
           checkAllOrigins: true,
           checkUnknownLocals: true,
+          // Also check imports inside one element, so the fake fence below holds within cli/ too.
+          checkInternals: true,
           policies: [
             // 1. npm packages and Node core: allowed unless a later policy says otherwise.
             { allow: { to: { module: { origin: ['external', 'core'] } } } },
@@ -143,10 +161,24 @@ export default tseslint.config(
               from: { file: { categories: 'test' } },
               allow: { to: { module: { source: 'vitest' } } },
             },
-            // Test fakes shared by CLI tests (cli/*.fake.ts): tests only.
+            // 6. Fakes (*.fake.ts) are test code: production source never imports one. Tests and fakes
+            // reach them through the layer allows above, so a core/ test cannot use the CLI fake.
             {
-              from: { file: { categories: 'test' } },
-              allow: { to: { file: { categories: 'cli-fake' } } },
+              // Production source: a file in no category, or in neither the test nor the fake category.
+              from: [{ file: { isUnknown: true } }, { file: { categories: { noneOf: ['test', 'fake'] } } }],
+              disallow: { to: { file: { categories: 'fake' } } },
+              message: 'Production source does not import the fakes (*.fake.ts): only tests do.',
+            },
+            {
+              // Command tests build their context with fakeContext() from cli/cli.fake.ts (src/cli/AGENTS.md).
+              from: { element: { type: 'cli-command' }, file: { categories: 'test' } },
+              allow: { to: { element: { type: 'cli' }, file: { categories: 'fake' } } },
+            },
+            {
+              // The allowlist already blocks this edge. This policy only names the rule in the error.
+              from: { file: { path: 'src/core/**' } },
+              disallow: { to: { file: { path: 'src/cli/**' } } },
+              message: 'core/ never imports cli/, tests included (src/core/AGENTS.md).',
             },
           ],
         },
