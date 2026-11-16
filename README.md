@@ -75,7 +75,7 @@ Add the script to your project's `package.json`, then run `npm run ping`:
 | 3         | The instance or its public API cannot be reached       |
 | 4         | The API key is rejected                                |
 
-> Requires n8n 2.35.0 or later. `ping` cannot check this: the n8n API doesn't expose its version.
+> Requires n8n 2.35.0 or later. `ping` cannot check this: the n8n API doesn't expose its version. `deploy` checks it before writing anything, from the API spec the instance serves.
 
 ## Write a workflow
 
@@ -119,24 +119,33 @@ The file name without `.workflow.ts` / `.json` is the workflow's **stable name**
 
 ```text
 n8nlift deploy → https://your-n8n.example.com
-+ created  invoice-sync   workflows/invoice-sync.workflow.ts
-~ updated  crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= skipped  daily-report   unchanged
-1 created, 1 updated, 1 skipped. Drafts are not live until you publish them.
+~ updated       crm-import     workflows/crm/crm-import.json (draft; published version still running)
+= skipped       daily-report   unchanged
++ created       invoice-sync   workflows/invoice-sync.workflow.ts
+! restored      lead-scoring   workflows/lead-scoring.json (unpublished draft)
+⚠ lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
+1 created, 1 updated, 1 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
 ```
 
+- Before any write, `deploy` reads the instance's API spec (`GET /api/v1/openapi.yml`). If the instance cannot save drafts (older than n8n 2.35.0), it stops, changes nothing and exits 6.
 - New workflows are created and never published.
 - Changed workflows are updated as drafts: the published version keeps running until you publish in n8n.
 - Workflows whose current draft already matches the file are skipped, so a rerun changes nothing.
-- `--json` prints the same report as JSON, for scripts and AI agents.
-- The first failed call stops the run, names the workflow and the call, and exits non-zero.
+- A workflow deleted in the n8n editor is only archived. `deploy` unarchives it and updates it as a draft (`restored`), with a warning: it stays unpublished until you publish it. This needs the `workflow:delete` scope on the API key. A workflow deleted through the API is gone for good and is simply created again.
+- When an archived copy and a live workflow carry the same tag, the live one is used and a warning names the archived copy.
+- A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered. Two live workflows with the same `n8nlift:` tag fail only that stable name.
+- An unreachable instance or a rejected key stops the run: the workflows not yet processed are listed as `not-processed`.
+- After the summary, stderr recaps the failed and not-processed workflows and the next step.
+- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `updated`, `skipped`, `restored`, `failed`, `not-processed`) and, when it failed, an `error` with `call`, `detail` and `hint`; plus `summary`, `warnings`, `exitCode`, and a top-level `error` only when the whole run stopped.
 
-| Exit code | Meaning                                                                                      |
-| --------- | -------------------------------------------------------------------------------------------- |
-| 0         | Every workflow delivered, or nothing to deploy                                               |
-| 1         | Usage error, missing configuration, invalid workflow files, or a duplicate `n8nlift:` tag    |
-| 3         | The instance cannot be reached or its API returned an error                                  |
-| 4         | The API key is rejected                                                                      |
+| Exit code | Meaning                                                                    |
+| --------- | -------------------------------------------------------------------------- |
+| 0         | Every workflow delivered, or nothing to deploy                             |
+| 1         | Usage error, missing configuration or invalid workflow files               |
+| 3         | The instance cannot be reached                                             |
+| 4         | The API key is rejected                                                    |
+| 5         | At least one workflow failed; the others were delivered                    |
+| 6         | The instance is older than n8n 2.35.0: nothing was written                 |
 
 ## Status
 

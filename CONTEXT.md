@@ -9,5 +9,6 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Workflow file**: one workflow under `./workflows`: a `.workflow.ts` file whose default export is an n8n export passed to `defineWorkflow`, or a `.json` n8n export. Its base name is its stable name.
 - **Stable name**: the identity of a workflow across runs and instances: the file base name without `.workflow.ts` / `.json`, 1 to 16 of `a-z`, `0-9` and `-`. On the instance it is the tag `n8nlift:<stable-name>`.
 - **Draft**: the latest saved version of a workflow on the instance. `deploy` writes only drafts.
+- **Restored**: a workflow that was archived on the instance (deleted in the editor) and that `deploy` unarchived and brought back as an unpublished draft.
 - **Published**: the version of a workflow that runs on its triggers. It changes only when the user publishes.
 - **Deploy**: delivering every local workflow to the instance: create the new ones, update the changed ones as drafts, skip the unchanged ones.
