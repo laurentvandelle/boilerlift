@@ -12,3 +12,4 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Restored**: a workflow that was archived on the instance (deleted in the editor) and that `deploy` unarchived and brought back as an unpublished draft.
 - **Published**: the version of a workflow that runs on its triggers. It changes only when the user publishes.
 - **Deploy**: delivering every local workflow to the instance: create the new ones, update the changed ones as drafts, skip the unchanged ones.
+- **Dry run**: `deploy --dry-run` computes deploy's plan (what would be created, updated, restored, skipped or fail) and writes nothing.
