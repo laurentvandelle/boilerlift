@@ -10,28 +10,33 @@ This repository is `n8nlift`, a TypeScript CLI published to npm that validates t
 
 Local setup: see `README.md`. Package manager: npm (`package-lock.json`).
 
-| Task                                            | Command                |
-| ----------------------------------------------- | ---------------------- |
-| Build (`tsc` into `dist/`)                       | `npm run build`        |
-| Build, then run `debug/main.ts` against `dist/` | `npm start`            |
-| Run tests (Vitest)                              | `npm run test`         |
-| Tests in watch mode                             | `npm run test:watch`   |
-| Lint, check only                                | `npm run lint:check`   |
-| Lint with autofix                               | `npm run lint`         |
-| Type-check, no emit                             | `npm run typecheck`    |
-| Lint check, type-check, tests                   | `npm run verify`       |
-| Bump patch version, verify, build, publish      | `npm run pub`          |
+| Task                                          | Command              |
+| --------------------------------------------- | -------------------- |
+| Build (`tsc` into `dist/`)                    | `npm run build`      |
+| Build, then deploy `debug/workflows` for real | `npm start`          |
+| Run tests (Vitest)                            | `npm run test`       |
+| Tests in watch mode                           | `npm run test:watch` |
+| Lint, check only                              | `npm run lint:check` |
+| Lint with autofix                             | `npm run lint`       |
+| Type-check, no emit                           | `npm run typecheck`  |
+| Lint check, type-check, tests                 | `npm run verify`     |
+| Bump patch version, verify, build, publish    | `npm run pub`        |
 
 Run `npm run verify` before handing work back.
 Never hand back a failure: fix it, then run the command again.
 
 `npm run pub` bumps the version and publishes to npm. Never run it unless the user asks.
 
+`npm start` builds, then runs a real `n8nlift deploy` (no `--dry-run`) of `debug/workflows` to the n8n instance in `debug/.env`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks.
+
 ## Routing
 
 - Before editing `src/**`, read `src/AGENTS.md`.
+- Before editing `src/cli/**`, read `src/cli/AGENTS.md`.
+- Before editing `src/core/**`, read `src/core/AGENTS.md`.
 - Before adding a dependency or crossing a module boundary, read `ARCHITECTURE.md`.
-- Before naming a domain concept, read `CONTEXT.md`.
+- Before naming a domain concept, read `GLOSSARY.md`.
+- Before writing or changing a test, read `docs/testing.md`.
 - Before writing an architecture decision, read `docs/adr/README.md`.
 - Before changing these instruction files, read `docs/agents.md`.
 - Before treating a convention as enforced, read `docs/guardrails.md`.
@@ -48,9 +53,8 @@ Never hand back a failure: fix it, then run the command again.
 ## Boundaries
 
 - `debug/` uses only the built `dist/` (it runs `dist/bin.js` and depends on `n8nlift` as `file:../dist`). It never imports from `src/`.
-- `src/` never imports from `debug/`.
 
-No check enforces these. `tsconfig.json` excludes `debug/` and ESLint ignores it. Boundaries inside `src/` are in `src/AGENTS.md`.
+No check enforces this. `tsconfig.json` excludes `debug/` and ESLint ignores it. Boundaries inside `src/` are in `src/AGENTS.md`.
 
 ## Maintenance
 

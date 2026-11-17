@@ -18,7 +18,7 @@ const noBarrelOrRelative = {
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
 const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'exit', 'guard', 'result'];
 
-const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (src/AGENTS.md).'];
+const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (docs/testing.md).'];
 const noSleep = 'No sleeps in tests: use fake timers or await the event.';
 
 /** One way per job: `typeof x === 'object'` is written once, in isRecord. */
@@ -238,7 +238,7 @@ export default tseslint.config(
             {
               from: { element: { type: 'compile' } },
               disallow: { to: { element: { type: ['deliver', 'n8n', 'connection'] } } },
-              message: 'compile/ imports only compile/, config/, exit/ and guard/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
+              message: 'compile/ imports only compile/, config/, exit/, guard/ and result/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: ['config', 'n8n', 'exit', 'guard', 'result'] } },
@@ -286,7 +286,7 @@ export default tseslint.config(
               // The allowlist already blocks this edge. This policy only names the rule in the error.
               from: { file: { path: 'src/core/**' } },
               disallow: { to: { file: { path: 'src/cli/**' } } },
-              message: 'core/ never imports cli/, tests included (src/core/AGENTS.md).',
+              message: 'core/ never imports cli/, tests included (src/AGENTS.md).',
             },
           ],
         },
@@ -295,7 +295,7 @@ export default tseslint.config(
   },
   {
     // Hidden-dependency bans. core/ and the commands take configuration, I/O, time and randomness through their
-    // parameters (CommandContext, the N8nClient port), so a test controls them (src/cli/AGENTS.md). Tests keep
+    // parameters (CommandContext, the N8nClient port), so a test controls them (src/AGENTS.md). Tests keep
     // the Test lint no-restricted-syntax, which this block would replace, and fakes are test code too.
     files: ['src/core/**/*.ts', 'src/cli/commands/**/*.ts'],
     ignores: ['src/**/*.test.ts', 'src/**/*.test-d.ts', 'src/**/*.fake.ts'],

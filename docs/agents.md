@@ -23,13 +23,14 @@ The root file keeps rules that apply to every task: exact commands, absolute pro
 
 The root file stays under 150 lines. Past that, the rules that matter sink into noise. A nested file stays short: prohibitions, shape, tests, and one path to a real example. Background moves to `ARCHITECTURE.md` in the same directory.
 
-Effective instruction files give a precise role, exact commands, explicit boundaries, and examples. They do not describe the project. The project description belongs in `README.md` and `ARCHITECTURE.md`. The glossary belongs in `CONTEXT.md`.
+Effective instruction files give a precise role, exact commands, explicit boundaries, and examples. They do not describe the project. The project description belongs in `README.md` and `ARCHITECTURE.md`. The glossary belongs in `GLOSSARY.md`.
 
 ## What to point at
 
 - Before editing a structural directory, read that directory's `AGENTS.md`.
 - Before adding a dependency or crossing a boundary, read `ARCHITECTURE.md`.
-- Before naming a domain concept, read `CONTEXT.md`.
+- Before naming a domain concept, read `GLOSSARY.md`.
+- Before writing or changing a test, read `docs/testing.md`.
 - Before writing a decision record, read `docs/adr/README.md`.
 - Before treating a convention as enforced, read `docs/guardrails.md`.
 - Before adding a convention after review, read `docs/maintenance.md`.

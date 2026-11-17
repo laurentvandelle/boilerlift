@@ -1,3 +1,7 @@
+---
+status: accepted, amended by ADR-0003
+---
+
 # Identify workflows by an `n8nlift:` tag and always update them as drafts
 
 `deploy` must find, on the user's instance, the workflow that a local file already created, without breaking what runs in production. Each workflow carries the tag `n8nlift:<stable-name>`, where the stable name is the file base name. Updates always go through `PUT /api/v1/workflows/{id}?publishIfActive=false`, so they land as a draft and the published version keeps running (n8n 2.35.0 or later). A workflow is skipped when its local nodes, connections, settings and name equal the instance's current draft, compared live on every run.

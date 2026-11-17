@@ -2,19 +2,27 @@
 
 ## Prohibitions
 
-- `core/` never imports from `cli/`. Lint enforces this.
-- `compile/` imports only `compile/` and shared `core/` folders. It never imports `deliver/`.
-- `deliver/` may import `compile/` (to read what it produces) and shared `core/` folders.
-- A shared `core/` folder (for example `config/`) imports neither `compile/` nor `deliver/`.
+- Each folder imports only what its `boundaries/dependencies` policy in `eslint.config.mts` allows. Lint enforces all of these:
+  - `compile/` imports only `config/`, `exit/`, `guard/` and `result/`. It never imports `deliver/`, `n8n/` or `connection/`: no network.
+  - `deliver/` (deploy) may import `compile/`, `config/` and `n8n/`. `connection/` (ping) may import `config/` and `n8n/`. Neither imports the other.
+  - A shared folder (`config/`, `n8n/`, `exit/`, `guard/`, `result/`) imports neither `compile/` nor `deliver/`.
+  - Outside `n8n/`, use the `N8nClient` port of `n8n/n8n.model.ts`, never `n8n/n8n-client.ts`.
+- A new folder needs its own element and policy in `eslint.config.mts`: a file in no element fails `boundaries/no-unknown-files`.
+- A `StableName`, `WorkflowId` or `TagId` comes only from its guard: `isStableName` (`compile/load-workflows.ts`), `isWorkflowId` and `isTagId` (`n8n/n8n-ids.ts`). A `StableTag` comes only from `stableTag()` (`deliver/stable-tag.ts`). The ban on type assertions leaves no other way to make one.
 
 ## Shape
 
-- `compile/` reads and validates workflow files: the `defineWorkflow` types for the editor and the deploy-time checks. No network.
-- `deliver/` sends compiled workflows to the user's n8n instance, through the n8n public API, as drafts.
-- Shared concerns get their own folder next to them, created by the first code that needs them: `config/` (connection config from env and `.env`), `n8n/` (the n8n client), `connection/` (the checks behind `ping`).
+- `compile/` reads and validates workflow files: the `defineWorkflow` types for the editor, and the loader that checks each export before deploy. It does no I/O: the files come in through `CommandContext.loadWorkflowFiles`. `isWorkflowFilePath` alone decides which paths are workflow files. Why typed exports: `docs/adr/0005-workflow-files-are-typed-n8n-exports.md`.
+- `deliver/` is deploy: `plan-deploy.ts` reads and decides each workflow's action, `apply-plan.ts` runs the writes (`docs/adr/0004-deploy-plans-before-it-writes.md`). `deploy-failure.ts` holds `EFFECTS`, the one table that says which deploy errors stop the run and with which exit code.
+- `connection/` is ping: the checks that `n8nlift ping` runs.
+- Shared folders: `config/` (connection config from env and `.env`), `n8n/` (the client, what n8nlift relies on in the public API in `n8n-api.ts`), `exit/` (every exit code, in `exit-codes.ts`), `guard/` (`isRecord`), `result/` (`Result`).
+- The client parses every n8n body once, with the parsers of `n8n/n8n-response.ts`. A body that does not match is an `invalid-response` failure, which deploy treats like an unreachable instance (exit 3). Past the client, the types are trusted.
 - Each folder holds its code, its tests and its `*.model.ts`.
 
 ## Tests
 
-- Tests sit next to the code as `*.test.ts`, like the rest of `src/`.
-- `deliver/` and `connection/` tests use a fake n8n client, never a real instance. `n8n/` tests use a fake `fetch`.
+- Tests outside `n8n/` reach the instance through `fakeN8n().client` (`n8n/n8n.fake.ts`), the shared in-memory instance, never a real one and never a new stand-in. `n8n/n8n-client.test.ts` tests the HTTP adapter with a fake `fetch`.
+
+## Example
+
+- `src/core/deliver/plan-deploy.ts` and `src/core/deliver/deploy.test.ts`

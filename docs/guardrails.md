@@ -4,10 +4,10 @@ Documents steer. Checks constrain. An agent follows a rule that fails the build.
 
 ## Where a convention lives
 
-| Kind of convention                                                   | Where it lives                                              |
-| -------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Layer boundaries, forbidden imports, strict types, mechanical naming | An executable check that already exists                     |
-| Semantic names, slicing, product language                            | The nearest `AGENTS.md`, or `CONTEXT.md` for glossary terms |
+| Kind of convention                                                   | Where it lives                                               |
+| -------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Layer boundaries, forbidden imports, strict types, mechanical naming | An executable check that already exists                      |
+| Semantic names, slicing, product language                            | The nearest `AGENTS.md`, or `GLOSSARY.md` for glossary terms |
 
 Name the check in the root `AGENTS.md` command table. When the repository has a script named `verify`, the definition of done is that command:
 

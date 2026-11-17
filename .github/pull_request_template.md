@@ -10,5 +10,5 @@
 
 - [ ] `npm run verify` passes (lint, typecheck, tests)
 - [ ] Tests cover the change
-- [ ] Docs updated if behavior changed (`README.md`, `ARCHITECTURE.md`, `CONTEXT.md`)
+- [ ] Docs updated if behavior changed (`README.md`, `ARCHITECTURE.md`, `GLOSSARY.md`)
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)

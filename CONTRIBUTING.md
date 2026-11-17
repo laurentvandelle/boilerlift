@@ -21,18 +21,18 @@ npm install
 npm run verify   # lint, typecheck, tests
 ```
 
-| Task                         | Command              |
-| ---------------------------- | -------------------- |
-| Build into `dist/`           | `npm run build`      |
-| Run the built CLI end to end | `npm start`          |
-| Tests                        | `npm run test`       |
-| Tests in watch mode          | `npm run test:watch` |
-| Lint with autofix            | `npm run lint`       |
-| Type-check                   | `npm run typecheck`  |
+| Task                                                                 | Command              |
+| -------------------------------------------------------------------- | -------------------- |
+| Build into `dist/`                                                   | `npm run build`      |
+| Build, then deploy `debug/workflows` to the instance in `debug/.env` | `npm start`          |
+| Tests                                                                | `npm run test`       |
+| Tests in watch mode                                                  | `npm run test:watch` |
+| Lint with autofix                                                    | `npm run lint`       |
+| Type-check                                                           | `npm run typecheck`  |
 
 ## Project layout
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) before crossing a module boundary or adding a dependency, and [CONTEXT.md](CONTEXT.md) before naming a domain concept. Architecture decisions are recorded in [docs/adr](docs/adr/README.md).
+Read [ARCHITECTURE.md](ARCHITECTURE.md) before crossing a module boundary or adding a dependency, and [GLOSSARY.md](GLOSSARY.md) before naming a domain concept, and [docs/testing.md](docs/testing.md) before writing a test. Architecture decisions are recorded in [docs/adr](docs/adr/README.md).
 
 The `AGENTS.md` files describe conventions per folder. They are written for coding agents but apply to human contributors too.
 
