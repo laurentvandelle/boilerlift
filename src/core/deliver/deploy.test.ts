@@ -176,7 +176,7 @@ describe('deploy', () => {
         call: 'GET /api/v1/openapi.yml',
         detail: 'the API spec has no publishIfActive: n8n 2.35.0 or later is required',
         hint: 'Upgrade the instance to n8n 2.35.0 or later, then run deploy again',
-        exitCode: 6,
+        kind: 'drafts-unsupported',
       },
       exitCode: 6,
     });
@@ -371,7 +371,7 @@ describe('deploy', () => {
       ['c', 'not-processed'],
       ['d', 'not-processed'],
     ]);
-    expect(report.error).toMatchObject({ call: 'POST /api/v1/workflows', detail: 'HTTP 401', exitCode: 4 });
+    expect(report.error).toMatchObject({ call: 'POST /api/v1/workflows', detail: 'HTTP 401', kind: 'key-rejected' });
     expect(report.exitCode).toBe(4);
     expect(n8n.calls.filter((call) => call === 'POST /api/v1/workflows')).toHaveLength(1);
   });
@@ -393,7 +393,7 @@ describe('deploy', () => {
 
     const report = await deploy({ workflows: [fakeLocalWorkflow('a')], client: n8n.client });
 
-    expect(report).toMatchObject({ results: [], exitCode, error: { call: 'GET /api/v1/workflows', exitCode, hint } });
+    expect(report).toMatchObject({ results: [], exitCode, error: { call: 'GET /api/v1/workflows', hint } });
     expect(n8n.calls).toEqual(['GET /api/v1/workflows']);
   });
 
@@ -413,7 +413,7 @@ describe('deploy', () => {
       ['b', 'failed'],
       ['c', 'not-processed'],
     ]);
-    expect(report).toMatchObject({ exitCode: 3, error: { call: 'GET /api/v1/workflows/idb', exitCode: 3 } });
+    expect(report).toMatchObject({ exitCode: 3, error: { call: 'GET /api/v1/workflows/idb', kind: 'unreachable' } });
     expect(n8n.calls).toEqual([
       'GET /api/v1/workflows',
       'GET /api/v1/openapi.yml',

@@ -3,10 +3,11 @@ import { fakeContext } from '#src/cli/cli.fake';
 import { CommandContext, CommandDefinition } from '#src/cli/cli.model';
 import { helpCommand, renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.command';
 import { versionCommand } from '#src/cli/commands/version/version.command';
+import { defineCommand } from '#src/cli/define-command';
 import { COMMANDS } from '#src/cli/registry';
-import { runCli } from '#src/cli/run-cli';
+import { crashResult, runCli } from '#src/cli/run-cli';
 
-const echoCommand: CommandDefinition = {
+const echoCommand: CommandDefinition = defineCommand({
   name: 'echo',
   summary: 'Echo the parsed input',
   usage: 'n8nlift echo [options]',
@@ -15,11 +16,24 @@ const echoCommand: CommandDefinition = {
     name: { type: 'string', short: 'n', description: 'Name to echo' },
     loud: { type: 'boolean', description: 'Shout' },
   },
-  run: ({ values }) =>
-    Promise.resolve({ exitCode: 0, stdout: `${String(values.name)}${values.loud === true ? '!' : ''}\n`, stderr: '' }),
-};
+  run: ({ options }) =>
+    Promise.resolve({ exitCode: 0, stdout: `${String(options.text('name'))}${options.flag('loud') ? '!' : ''}\n`, stderr: '' }),
+});
 
-const ctx: CommandContext = fakeContext({ version: '1.2.3', registry: [helpCommand, versionCommand, echoCommand] });
+/** A command with a bug: it throws instead of returning a CliResult. */
+const throwingCommand: CommandDefinition = defineCommand({
+  name: 'boom',
+  summary: 'Throw',
+  usage: 'n8nlift boom',
+  allowPositionals: false,
+  options: {},
+  run: () => Promise.reject(new Error('EACCES: permission denied, scandir workflows')),
+});
+
+const ctx: CommandContext = fakeContext({
+  version: '1.2.3',
+  registry: [helpCommand, versionCommand, echoCommand, throwingCommand],
+});
 const GLOBAL_HELP = renderGlobalHelp(ctx.registry);
 
 describe('runCli', () => {
@@ -136,5 +150,31 @@ Run \`n8nlift help <command>\` for the options of one command.
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(renderCommandHelp(versionCommand));
+  });
+
+  test('Should let the error reach the caller, not report a usage error, when a command throws', async () => {
+    const run = runCli(['boom'], ctx);
+
+    await expect(run).rejects.toThrow('EACCES: permission denied, scandir workflows');
+  });
+});
+
+describe('crashResult', () => {
+  test('Should exit 1 with the stack and without the help when an error escapes a command', () => {
+    const error = new Error('EACCES: permission denied, scandir workflows');
+
+    const result = crashResult(error);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(`${error.stack ?? ''}\n`);
+    expect(result.stderr).toContain('Error: EACCES: permission denied, scandir workflows\n    at ');
+    expect(result.stderr).not.toContain('Usage:');
+  });
+
+  test('Should print the value when something other than an Error is thrown', () => {
+    const result = crashResult('plain string');
+
+    expect(result).toEqual({ exitCode: 1, stdout: '', stderr: 'plain string\n' });
   });
 });

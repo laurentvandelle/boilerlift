@@ -64,8 +64,9 @@ describe('checkConnection', () => {
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
     expect(report.exitCode).toBe(3);
-    expect(report.checks[1]).toMatchObject({ status: 'failed', detail: 'unreachable: connection refused' });
-    expect(report.checks[1]?.hint).toContain('Check N8N_URL');
+    const check = report.checks[1];
+    expect(check).toMatchObject({ status: 'failed', detail: 'unreachable: connection refused' });
+    expect(check?.status === 'failed' ? check.hint : '').toContain('Check N8N_URL');
   });
 
   test('Should skip the API key check when the URL is unreachable', async () => {
@@ -106,7 +107,8 @@ describe('checkConnection', () => {
 
     expect(report.exitCode).toBe(3);
     expect(report.checks[2]?.detail).toBe('public API not found at /api/v1 (GET /api/v1/workflows → 404)');
-    expect(report.checks[2]?.hint).toContain('public API is enabled');
+    const check = report.checks[2];
+    expect(check?.status === 'failed' ? check.hint : '').toContain('public API is enabled');
   });
 
   test.each<[string, ApiFailure]>([

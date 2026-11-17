@@ -3,7 +3,7 @@ import { CommandContext, CommandInput } from '#src/cli/cli.model';
 import { fakeContext } from '#src/cli/cli.fake';
 import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
-import { FakeN8n, fakeN8n, fakeN8nWorkflow, fakeStableTag, httpError } from '#src/core/n8n/n8n.fake';
+import { FakeN8n, fakeN8n, fakeN8nWorkflow, fakeStableTag, httpError, invalidResponse } from '#src/core/n8n/n8n.fake';
 
 const TEXT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
@@ -389,7 +389,7 @@ Nothing was written to n8n.
 
   test('Should exit 1 and send nothing when a stable name is invalid or duplicated', async () => {
     const files = [
-      fakeWorkflowFile(fakeLocalWorkflow('Bad_Name', { name: 'Bad' })),
+      fakeWorkflowFile(fakeLocalWorkflow('bad', { path: 'workflows/Bad_Name.json', name: 'Bad' })),
       fakeWorkflowFile(fakeLocalWorkflow('sync', { path: 'workflows/a/sync.json', name: 'Sync' })),
       fakeWorkflowFile(fakeLocalWorkflow('sync', { path: 'workflows/sync.workflow.ts', name: 'Sync again' })),
     ];
@@ -529,5 +529,34 @@ Next: fix each failure with the hint under its line, then run deploy again.
     expect(usage).toContain('n8nlift deploy [--dry-run] [--json]');
     expect(usage).toContain('It exits with the same codes as a real deploy.');
     expect(dryRun).toEqual({ type: 'boolean', description: 'Show what deploy would do; write nothing' });
+  });
+
+  test('Should exit 1 and send nothing when N8N_URL uses another scheme than http or https', async () => {
+    const ctx = context({ env: { N8N_URL: 'ftp://n8n.example.com', N8N_API_KEY: 'secret' }, loadWorkflowFiles: () => Promise.resolve(FILES) });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: '',
+      stderr:
+        'Invalid N8N_URL "ftp://n8n.example.com" (from env): it must be an http:// or https:// URL.\n' +
+        'Fix it in your environment, for example:\n' +
+        '  N8N_URL=https://your-n8n.example.com\n',
+    });
+  });
+
+  test('Should stop with exit 3 and name the unexpected answer when the instance answers a page that is not the n8n API', async () => {
+    const n8n = fakeN8n({ failures: [invalidResponse('GET /api/v1/workflows')] });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr).toBe(
+      '✗ GET /api/v1/workflows → unexpected answer (HTTP 200): the body is not JSON\n' +
+        '  → Check that N8N_URL points to an n8n instance (n8n 2.35.0 or later), then run deploy again\n' +
+        'Nothing was written to n8n.\n',
+    );
   });
 });

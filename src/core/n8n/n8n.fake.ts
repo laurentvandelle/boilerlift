@@ -1,18 +1,42 @@
 import { isRecord } from '#src/core/guard/is-record';
 import { API_PATH } from '#src/core/n8n/n8n-api';
-import { ApiFailure, ApiResult, N8nClient, N8nTag, N8nWorkflow, N8nWorkflowBody, ProbeResult } from '#src/core/n8n/n8n.model';
+import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
+import {
+  ApiFailure,
+  ApiResult,
+  N8nClient,
+  N8nTag,
+  N8nWorkflow,
+  N8nWorkflowBody,
+  ProbeResult,
+  TagId,
+  WorkflowId,
+} from '#src/core/n8n/n8n.model';
+import { err, ok } from '#src/core/result/result';
 
 /** An API spec that lists `publishIfActive`: the instance saves drafts (MIN_N8N_VERSION or later). */
 const DRAFT_SPEC = 'paths:\n  /workflows/{id}:\n    put:\n      parameters:\n        - name: publishIfActive\n';
 
+/** A tag as a test writes it: plain string ids, which the fake turns into `TagId`s. */
+export interface FakeTag {
+  id: string;
+  name: string;
+}
+
+/** What a test overrides on an instance workflow: plain string ids, which the fake turns into branded ids. */
+export type FakeWorkflowOverrides = Partial<Omit<N8nWorkflow, 'id' | 'tags'>> & { id?: string; tags?: FakeTag[] };
+
 export interface FakeN8nOptions {
-  /** The workflows on the instance. The tags they carry are on its tag list too. */
+  /** The workflows on the instance (build them with fakeN8nWorkflow). The tags they carry are on its tag list too. */
   workflows?: N8nWorkflow[];
   /** Tags on the instance's tag list that no workflow carries. */
-  tags?: N8nTag[];
+  tags?: FakeTag[];
   /** The API spec the instance serves. The default one supports drafts. */
   spec?: string;
-  /** Calls that fail every time they are made, each named by its `call` (build them with httpError or unreachable). */
+  /**
+   * Calls that fail every time they are made, each named by its `call` (build them with httpError, unreachable or
+   * invalidResponse). Through `fetch`, an invalid response is a 2xx answer whose body is not JSON.
+   */
   failures?: ApiFailure[];
 }
 
@@ -42,9 +66,35 @@ export function unreachable(call: string, reason: string): ApiFailure {
   return { kind: 'unreachable', call, reason };
 }
 
+/** A call that the instance answers with a success status and a body that is not what n8n sends. */
+export function invalidResponse(call: string, detail = 'the body is not JSON'): ApiFailure {
+  return { kind: 'invalid-response', call, status: 200, detail };
+}
+
+/** `value` as a workflow id, through the same guard as the client's response parsing. Throws on an empty string. */
+export function fakeWorkflowId(value: string): WorkflowId {
+  if (!isWorkflowId(value)) {
+    throw new Error(`"${value}" is not a workflow id`);
+  }
+  return value;
+}
+
+/** `value` as a tag id, through the same guard as the client's response parsing. Throws on an empty string. */
+export function fakeTagId(value: string): TagId {
+  if (!isTagId(value)) {
+    throw new Error(`"${value}" is not a tag id`);
+  }
+  return value;
+}
+
+/** A tag as the instance holds it. */
+export function fakeTag({ id, name }: FakeTag): N8nTag {
+  return { id: fakeTagId(id), name };
+}
+
 /** The tag `n8nlift:{stableName}`, which identifies a workflow on the instance. */
 export function fakeStableTag(stableName: string): N8nTag {
-  return { id: `tag-${stableName}`, name: `n8nlift:${stableName}` };
+  return fakeTag({ id: `tag-${stableName}`, name: `n8nlift:${stableName}` });
 }
 
 /**
@@ -53,15 +103,15 @@ export function fakeStableTag(stableName: string): N8nTag {
  */
 export function fakeN8nWorkflow(
   workflow: N8nWorkflowBody & { stableName: string },
-  overrides: Partial<N8nWorkflow> = {},
+  { id, tags, ...overrides }: FakeWorkflowOverrides = {},
 ): N8nWorkflow {
   return {
-    id: `${workflow.stableName}-id`,
+    id: fakeWorkflowId(id ?? `${workflow.stableName}-id`),
     name: workflow.name,
     nodes: workflow.nodes.map((node, index) => (isRecord(node) ? { ...node, id: `server-${index + 1}` } : node)),
     connections: structuredClone(workflow.connections),
     settings: { ...workflow.settings, redactionPolicy: 'none' },
-    tags: [fakeStableTag(workflow.stableName)],
+    tags: tags === undefined ? [fakeStableTag(workflow.stableName)] : tags.map(fakeTag),
     isArchived: false,
     ...overrides,
   };
@@ -69,49 +119,54 @@ export function fakeN8nWorkflow(
 
 export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRAFT_SPEC, failures = [] }: FakeN8nOptions = {}): FakeN8n {
   const workflows = structuredClone(seed);
-  const allTags = [...workflows.flatMap((workflow) => workflow.tags), ...structuredClone(extraTags)];
-  const tags = [...new Map(allTags.map((tag): [string, N8nTag] => [tag.id, tag])).values()];
+  const allTags = [...workflows.flatMap((workflow) => workflow.tags), ...extraTags.map(fakeTag)];
+  const tags = [...new Map(allTags.map((tag): [TagId, N8nTag] => [tag.id, tag])).values()];
   const calls: string[] = [];
   const requests: string[] = [];
   let lastId = 0;
   const newId = (prefix: string): string => `${prefix}${(lastId += 1)}`;
+  const failureOf = (call: string): ApiFailure | undefined => failures.find((failure) => failure.call === call);
 
   /** Records the call, then answers it with its configured failure, or with what `perform` returns. */
   const answer = <T>(call: string, perform: (call: string) => ApiResult<T>): Promise<ApiResult<T>> => {
     calls.push(call);
-    return Promise.resolve(failures.find((failure) => failure.call === call) ?? perform(call));
+    const failure = failureOf(call);
+    return Promise.resolve(failure === undefined ? perform(call) : err(failure));
   };
-  const onWorkflow = <T>(call: string, id: string, perform: (workflow: N8nWorkflow) => T): Promise<ApiResult<T>> =>
+  const onWorkflow = <T>(call: string, id: WorkflowId, perform: (workflow: N8nWorkflow) => T): Promise<ApiResult<T>> =>
     answer(call, () => {
       const workflow = workflows.find((candidate) => candidate.id === id);
-      return workflow === undefined ? httpError(call, 404, 'Not Found') : ok(call, perform(workflow));
+      return workflow === undefined ? err(httpError(call, 404, 'Not Found')) : answered(call, perform(workflow));
     });
-  const probe = async (call: string): Promise<ProbeResult> => {
-    const result = await answer(call, () => ok(call, undefined));
-    switch (result.kind) {
-    case 'ok':
-      return { kind: 'ok', call, status: result.status };
+  const probe = (call: string): Promise<ProbeResult> => {
+    calls.push(call);
+    const failure = failureOf(call);
+    switch (failure?.kind) {
+    case undefined:
+    case 'invalid-response':
+      // A probe never reads the body.
+      return Promise.resolve(ok({ call, status: 200 }));
     case 'http-error':
-      return { kind: 'http-error', call, status: result.status };
+      return Promise.resolve(err({ kind: 'http-error', call, status: failure.status }));
     case 'unreachable':
-      return { kind: 'unreachable', call, reason: result.reason };
+      return Promise.resolve(err(failure));
     }
   };
 
   const client: N8nClient = {
     checkHealth: () => probe('GET /healthz'),
     checkApiKey: () => probe(`GET ${API_PATH}/workflows`),
-    readApiSpec: () => answer(`GET ${API_PATH}/openapi.yml`, (call) => ok(call, spec)),
+    readApiSpec: () => answer(`GET ${API_PATH}/openapi.yml`, (call) => answered(call, spec)),
     listWorkflows: () =>
       answer(`GET ${API_PATH}/workflows`, (call) =>
-        ok(call, workflows.map(({ id, name, tags: workflowTags, isArchived }) => ({ id, name, tags: structuredClone(workflowTags), isArchived }))),
+        answered(call, workflows.map(({ id, name, tags: workflowTags, isArchived }) => ({ id, name, tags: structuredClone(workflowTags), isArchived }))),
       ),
     getWorkflow: (id) => onWorkflow(`GET ${API_PATH}/workflows/${id}`, id, (workflow) => structuredClone(workflow)),
     createWorkflow: (body) =>
       answer(`POST ${API_PATH}/workflows`, (call) => {
-        const workflow: N8nWorkflow = { ...structuredClone(body), id: newId('w'), tags: [], isArchived: false };
+        const workflow: N8nWorkflow = { ...structuredClone(body), id: fakeWorkflowId(newId('w')), tags: [], isArchived: false };
         workflows.push(workflow);
-        return ok(call, structuredClone(workflow));
+        return answered(call, structuredClone(workflow));
       }),
     updateWorkflow: (id, body) =>
       onWorkflow(`PUT ${API_PATH}/workflows/${id}`, id, (workflow) => structuredClone(Object.assign(workflow, structuredClone(body)))),
@@ -120,21 +175,21 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
         workflow.isArchived = false;
         return structuredClone(workflow);
       }),
-    listTags: () => answer(`GET ${API_PATH}/tags`, (call) => ok(call, structuredClone(tags))),
+    listTags: () => answer(`GET ${API_PATH}/tags`, (call) => answered(call, structuredClone(tags))),
     createTag: (name) =>
       answer(`POST ${API_PATH}/tags`, (call) => {
         if (tags.some((tag) => tag.name === name)) {
-          return httpError(call, 409, 'Tag already exists');
+          return err(httpError(call, 409, 'Tag already exists'));
         }
-        const tag = { id: newId('t'), name };
+        const tag = { id: fakeTagId(newId('t')), name };
         tags.push(tag);
-        return ok(call, { ...tag });
+        return answered(call, { ...tag });
       }),
     setWorkflowTags: (id, tagIds) => {
       const call = `PUT ${API_PATH}/workflows/${id}/tags`;
       const found = tagIds.flatMap((tagId) => tags.filter((tag) => tag.id === tagId));
       if (found.length !== tagIds.length) {
-        return answer<N8nTag[]>(call, () => httpError(call, 404, 'Tag not found'));
+        return answer<N8nTag[]>(call, () => err(httpError(call, 404, 'Tag not found')));
       }
       return onWorkflow(call, id, (workflow) => {
         workflow.tags = found;
@@ -154,21 +209,16 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
     if (!url.pathname.startsWith(`${API_PATH}/`)) {
       return noRoute(method, url);
     }
-    const [resource = '', id = '', sub = '', ...rest] = url.pathname.slice(API_PATH.length + 1).split('/').map(decodeURIComponent);
+    const [resource = '', rawId = '', sub = '', ...rest] = url.pathname.slice(API_PATH.length + 1).split('/').map(decodeURIComponent);
     if (rest.length > 0) {
       return noRoute(method, url);
     }
+    const id = isWorkflowId(rawId) ? rawId : undefined;
     const body = parseBody(init);
-    const route = `${method} ${resource}${id === '' ? '' : '/{id}'}${sub === '' ? '' : `/${sub}`}`;
-    switch (route) {
-    case 'GET openapi.yml': {
-      const spec = await client.readApiSpec();
-      return spec.kind === 'ok' ? new Response(spec.body, { status: spec.status }) : respond(spec);
+    if (id === undefined) {
+      return answerCollection(`${method} ${resource}${sub === '' ? '' : `/${sub}`}`, body, method, url);
     }
-    case 'GET workflows':
-      return respond(await client.listWorkflows(), 'page');
-    case 'POST workflows':
-      return isWorkflowBody(body) ? respond(await client.createWorkflow(body)) : invalidBody();
+    switch (`${method} ${resource}/{id}${sub === '' ? '' : `/${sub}`}`) {
     case 'GET workflows/{id}':
       return respond(await client.getWorkflow(id));
     case 'PUT workflows/{id}':
@@ -177,6 +227,22 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
       return respond(await client.unarchiveWorkflow(id));
     case 'PUT workflows/{id}/tags':
       return respond(await client.setWorkflowTags(id, tagIdsOf(body)));
+    default:
+      return noRoute(method, url);
+    }
+  };
+
+  /** Routes a request with no workflow id in its path. */
+  const answerCollection = async (route: string, body: unknown, method: string, url: URL): Promise<Response> => {
+    switch (route) {
+    case 'GET openapi.yml': {
+      const spec = await client.readApiSpec();
+      return spec.ok ? new Response(spec.value.body, { status: spec.value.status }) : respond(spec);
+    }
+    case 'GET workflows':
+      return respond(await client.listWorkflows(), 'page');
+    case 'POST workflows':
+      return isWorkflowBody(body) ? respond(await client.createWorkflow(body)) : invalidBody();
     case 'GET tags':
       return respond(await client.listTags(), 'page');
     case 'POST tags':
@@ -189,33 +255,41 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
   return { client, fetch: answerHttp, workflows, tags, calls, requests };
 }
 
-function ok<T>(call: string, body: T): ApiResult<T> {
-  return { kind: 'ok', call, status: 200, body };
+function answered<T>(call: string, body: T): ApiResult<T> {
+  return ok({ call, status: 200, body });
 }
 
-/** An answer as n8n sends it: JSON, or a `{ data, nextCursor }` page of one. Unreachable becomes a network error. */
+/**
+ * An answer as n8n sends it: JSON, or a `{ data, nextCursor }` page of one. Unreachable becomes a network error, and
+ * an invalid response a body that is not JSON.
+ */
 function respond<T>(result: ApiResult<T>, shape: 'json' | 'page' = 'json'): Response {
-  switch (result.kind) {
-  case 'ok':
-    return new Response(JSON.stringify(shape === 'page' ? { data: result.body, nextCursor: null } : result.body), {
-      status: result.status,
-    });
+  if (result.ok) {
+    const { body, status } = result.value;
+    return new Response(JSON.stringify(shape === 'page' ? { data: body, nextCursor: null } : body), { status });
+  }
+  const failure = result.error;
+  switch (failure.kind) {
   case 'http-error':
-    return new Response(result.message === undefined ? '' : JSON.stringify({ message: result.message }), { status: result.status });
+    return new Response(failure.message === undefined ? '' : JSON.stringify({ message: failure.message }), { status: failure.status });
+  case 'invalid-response':
+    return new Response('<html>not the n8n API</html>', { status: failure.status });
   case 'unreachable':
     // A plain Error: the client reports its message as the reason, so `reason` comes back unchanged.
-    throw new Error(result.reason);
+    throw new Error(failure.reason);
   }
 }
 
 function respondToProbe(result: ProbeResult): Response {
-  switch (result.kind) {
-  case 'ok':
-    return new Response('{"status":"ok"}', { status: result.status });
+  if (result.ok) {
+    return new Response('{"status":"ok"}', { status: result.value.status });
+  }
+  const failure = result.error;
+  switch (failure.kind) {
   case 'http-error':
-    return new Response('', { status: result.status });
+    return new Response('', { status: failure.status });
   case 'unreachable':
-    throw new Error(result.reason);
+    throw new Error(failure.reason);
   }
 }
 
@@ -246,7 +320,10 @@ function isWorkflowBody(value: unknown): value is N8nWorkflowBody {
 }
 
 /** The ids of a `PUT /workflows/{id}/tags` body, `[{ id }]`. */
-function tagIdsOf(body: unknown): string[] {
+function tagIdsOf(body: unknown): TagId[] {
   const items: unknown[] = Array.isArray(body) ? body : [];
-  return items.flatMap((item) => (isRecord(item) && typeof item.id === 'string' ? [item.id] : []));
+  return items.flatMap((item) => {
+    const id = isRecord(item) ? item.id : undefined;
+    return isTagId(id) ? [id] : [];
+  });
 }

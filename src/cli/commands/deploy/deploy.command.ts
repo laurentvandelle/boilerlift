@@ -1,15 +1,16 @@
 import { CliResult, CommandDefinition } from '#src/cli/cli.model';
+import { defineCommand } from '#src/cli/define-command';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
-import { describeMissingConfig } from '#src/core/config/missing-config';
+import { describeConfigError } from '#src/core/config/config-error';
 import { planToReport } from '#src/core/deliver/apply-plan';
 import { deploy } from '#src/core/deliver/deploy';
 import { DeployAction, DeployReport, DeployResult, DeployWarning } from '#src/core/deliver/deploy.model';
 import { formatList } from '#src/core/deliver/format-list';
 import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { stableTag } from '#src/core/deliver/stable-tag';
-import { EXIT_USAGE } from '#src/core/exit/exit-codes';
+import { EXIT_OK, EXIT_USAGE } from '#src/core/exit/exit-codes';
 import { MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 
@@ -121,7 +122,7 @@ const LABELS = [DEPLOY_WORDING, DRY_RUN_WORDING].flatMap(({ labels }) => Object.
 const ACTION_WIDTH = 1 + Math.max(...LABELS.map((label) => label.length));
 const INDENT = ' '.repeat(2 + ACTION_WIDTH);
 
-export const deployCommand: CommandDefinition = {
+export const deployCommand: CommandDefinition = defineCommand({
   name: 'deploy',
   summary: 'Deliver your workflows to your n8n instance as drafts',
   usage: USAGE,
@@ -131,30 +132,31 @@ export const deployCommand: CommandDefinition = {
     json: { type: 'boolean', description: 'Print the report as JSON' },
   },
   run: async (input, ctx) => {
-    const json = input.values.json === true;
-    const dryRun = input.values['dry-run'] === true;
+    const json = input.options.flag('json');
+    const dryRun = input.options.flag('dry-run');
     const wording = dryRun ? DRY_RUN_WORDING : DEPLOY_WORDING;
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
-      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeMissingConfig(resolved.missing) };
+      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeConfigError(resolved.error) };
     }
-    const { config } = resolved;
+    const config = resolved.value;
     const loaded = loadWorkflows(await ctx.loadWorkflowFiles(WORKFLOWS_DIR));
     if (!loaded.ok) {
-      return invalidFiles(loaded.problems);
+      return invalidFiles(loaded.error);
     }
     const instance = config.url.value;
-    if (loaded.workflows.length === 0) {
+    const workflows = loaded.value;
+    if (workflows.length === 0) {
       return json
-        ? renderJson(instance, { results: [], warnings: [], exitCode: 0 }, wording)
-        : { exitCode: 0, stdout: `Nothing to deploy: no workflow in ./${WORKFLOWS_DIR}.\n`, stderr: '' };
+        ? renderJson(instance, { results: [], warnings: [], exitCode: EXIT_OK }, wording)
+        : { exitCode: EXIT_OK, stdout: `Nothing to deploy: no workflow in ./${WORKFLOWS_DIR}.\n`, stderr: '' };
     }
     const client = createN8nClient({ config, fetch: ctx.fetch });
-    const deployInput = { workflows: loaded.workflows, client };
+    const deployInput = { workflows, client };
     const report = dryRun ? planToReport(await planDeploy(deployInput)) : await deploy(deployInput);
     return json ? renderJson(instance, report, wording) : renderText(instance, report, wording);
   },
-};
+});
 
 function invalidFiles(problems: LoadProblem[]): CliResult {
   const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
@@ -188,7 +190,7 @@ function detailOf(result: DeployResult): string {
   case 'skipped':
     return 'unchanged';
   case 'failed':
-    return result.error === undefined ? 'failed' : `${result.error.call} → ${result.error.detail}`;
+    return `${result.error.call} → ${result.error.detail}`;
   case 'not-processed':
     return 'not processed';
   }
@@ -215,7 +217,7 @@ function renderText(instance: string, report: DeployReport, wording: Wording): C
   const stdout = [`${wording.command} → ${instance}`];
   for (const result of report.results) {
     stdout.push(`${MARKS[result.action]} ${wording.labels[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
-    if (result.error !== undefined) {
+    if (result.action === 'failed') {
       stdout.push(`${INDENT}→ ${result.error.hint}`);
     }
   }
@@ -256,13 +258,13 @@ function renderJson(instance: string, report: DeployReport, wording: Wording): C
   const payload = {
     instance,
     dryRun: wording.dryRun,
-    results: report.results.map(({ stableName, path, action, id, name, error: failure }) => ({
-      stableName,
-      path,
-      action,
-      id: id ?? null,
-      name,
-      ...(failure === undefined ? {} : { error: failure }),
+    results: report.results.map((result) => ({
+      stableName: result.stableName,
+      path: result.path,
+      action: result.action,
+      id: 'id' in result ? (result.id ?? null) : null,
+      name: result.name,
+      ...(result.action === 'failed' ? { error: result.error } : {}),
     })),
     summary: summarize(report.results),
     warnings: report.warnings.map((warning) => warningText(warning, wording)),

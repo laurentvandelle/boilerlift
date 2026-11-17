@@ -1,18 +1,45 @@
 import { ConnectionConfig } from '#src/core/config/config.model';
+import { Result } from '#src/core/result/result';
 
-/** The outcome of a read-only check. `call` names it, for example `GET /healthz`. */
-export type ProbeResult =
-  | { kind: 'ok'; call: string; status: number }
+/** A workflow id on the instance. Only the client's response parsing (isWorkflowId in n8n-ids.ts) produces one. */
+export type WorkflowId = string & { readonly __brand: 'WorkflowId' };
+
+/** A tag id on the instance. Only the client's response parsing (isTagId in n8n-ids.ts) produces one. */
+export type TagId = string & { readonly __brand: 'TagId' };
+
+/** A read-only check that went through. `call` names it, for example `GET /healthz`. */
+export interface ProbeAnswer {
+  call: string;
+  status: number;
+}
+
+export type ProbeFailure =
   | { kind: 'unreachable'; call: string; reason: string }
   | { kind: 'http-error'; call: string; status: number };
 
-/** The outcome of one public API call. `call` names it, for example `PUT /api/v1/workflows/abc`. */
-export type ApiResult<T> =
-  | { kind: 'ok'; call: string; status: number; body: T }
-  | { kind: 'unreachable'; call: string; reason: string }
-  | { kind: 'http-error'; call: string; status: number; message?: string };
+/** The outcome of a read-only check. */
+export type ProbeResult = Result<ProbeAnswer, ProbeFailure>;
 
-export type ApiFailure = Exclude<ApiResult<never>, { kind: 'ok' }>;
+/** A public API call that went through, with its parsed body. `call` names it, for example `PUT /api/v1/workflows/abc`. */
+export interface ApiAnswer<T> {
+  call: string;
+  status: number;
+  body: T;
+}
+
+/**
+ * Why a public API call failed.
+ * - `unreachable`: no answer, or a network error.
+ * - `http-error`: an error status, with the n8n `message` when the body has one.
+ * - `invalid-response`: a success status whose body is not what the n8n public API sends (not JSON, or another shape).
+ */
+export type ApiFailure =
+  | { kind: 'unreachable'; call: string; reason: string }
+  | { kind: 'http-error'; call: string; status: number; message?: string }
+  | { kind: 'invalid-response'; call: string; status: number; detail: string };
+
+/** The outcome of one public API call. */
+export type ApiResult<T> = Result<ApiAnswer<T>, ApiFailure>;
 
 export interface N8nClientOptions {
   /** N8N_URL, the instance root without trailing slash, and N8N_API_KEY, as resolveConnectionConfig returns them. */
@@ -22,20 +49,20 @@ export interface N8nClientOptions {
 }
 
 export interface N8nTag {
-  id: string;
+  id: TagId;
   name: string;
 }
 
-/** A workflow as `GET /api/v1/workflows` lists it. */
+/** A workflow as `GET /api/v1/workflows` lists it. The client defaults omitted `tags` to `[]` and `isArchived` to false. */
 export interface N8nWorkflowSummary {
-  id: string;
+  id: WorkflowId;
   name: string;
   tags: N8nTag[];
   /** A workflow deleted in the editor is only archived: it stays listed and keeps its tags. */
   isArchived: boolean;
 }
 
-/** A workflow as `GET /api/v1/workflows/{id}` returns it: the top-level fields are the current draft. */
+/** A workflow as `GET /api/v1/workflows/{id}` returns it: the top-level fields are the current draft. Omitted `settings` default to `{}`. */
 export interface N8nWorkflow extends N8nWorkflowSummary {
   nodes: unknown[];
   connections: Record<string, unknown>;
@@ -59,16 +86,16 @@ export interface N8nClient {
   readApiSpec(): Promise<ApiResult<string>>;
   /** Every workflow on the instance, archived ones included, following `nextCursor`. */
   listWorkflows(): Promise<ApiResult<N8nWorkflowSummary[]>>;
-  getWorkflow(id: string): Promise<ApiResult<N8nWorkflow>>;
+  getWorkflow(id: WorkflowId): Promise<ApiResult<N8nWorkflow>>;
   /** `POST /api/v1/workflows`: the new workflow is never published. */
-  createWorkflow(body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflow>>;
+  createWorkflow(body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflowSummary>>;
   /** `PUT /api/v1/workflows/{id}?publishIfActive=false`: the change lands as a draft. */
-  updateWorkflow(id: string, body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflow>>;
+  updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflowSummary>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
-  unarchiveWorkflow(id: string): Promise<ApiResult<N8nWorkflow>>;
+  unarchiveWorkflow(id: WorkflowId): Promise<ApiResult<N8nWorkflowSummary>>;
   /** Every tag on the instance, following `nextCursor`. */
   listTags(): Promise<ApiResult<N8nTag[]>>;
   createTag(name: string): Promise<ApiResult<N8nTag>>;
   /** `PUT /api/v1/workflows/{id}/tags`: replaces the workflow's tags. */
-  setWorkflowTags(id: string, tagIds: string[]): Promise<ApiResult<N8nTag[]>>;
+  setWorkflowTags(id: WorkflowId, tagIds: TagId[]): Promise<ApiResult<N8nTag[]>>;
 }

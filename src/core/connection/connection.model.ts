@@ -1,25 +1,28 @@
 import { ConnectionConfig } from '#src/core/config/config.model';
+import { ExitCode, FailureExitCode } from '#src/core/exit/exit-codes';
 import { N8nClient } from '#src/core/n8n/n8n.model';
 
 export type CheckName = 'node' | 'url' | 'apiKey';
 
-export type CheckStatus = 'ok' | 'failed' | 'skipped';
-
-export interface Check {
+/** A check that failed: the next step for the user, and the process exit code. */
+export interface FailedCheck {
   name: CheckName;
-  status: CheckStatus;
+  status: 'failed';
   detail: string;
-  /** The next step for the user, set on a failed check. */
-  hint?: string;
-  /** The process exit code, set on a failed check. */
-  exitCode?: number;
+  hint: string;
+  exitCode: FailureExitCode;
 }
+
+/** One check, keyed by status: only a failed check carries a hint and an exit code. */
+export type Check = { name: CheckName; status: 'ok' | 'skipped'; detail: string } | FailedCheck;
+
+export type CheckStatus = Check['status'];
 
 export interface ConnectionReport {
   checks: Check[];
   warnings: string[];
   /** The first failed check's exit code, or 0 when every check passed. */
-  exitCode: number;
+  exitCode: ExitCode;
 }
 
 export interface CheckConnectionInput {

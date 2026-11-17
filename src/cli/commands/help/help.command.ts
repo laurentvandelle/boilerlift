@@ -1,5 +1,6 @@
 import { CliResult, CommandDefinition, CommandOption } from '#src/cli/cli.model';
-import { EXIT_USAGE } from '#src/core/exit/exit-codes';
+import { defineCommand } from '#src/cli/define-command';
+import { EXIT_OK, EXIT_USAGE } from '#src/core/exit/exit-codes';
 
 const HELP_OPTION: CommandOption = { type: 'boolean', short: 'h', description: 'Show this help' };
 
@@ -9,29 +10,29 @@ export const GLOBAL_OPTIONS: Readonly<Record<string, CommandOption>> = {
   version: { type: 'boolean', short: 'v', description: 'Print the n8nlift version' },
 };
 
-export const helpCommand: CommandDefinition = {
+export const helpCommand: CommandDefinition = defineCommand({
   name: 'help',
   summary: 'Show help for n8nlift or for one command',
   usage: 'n8nlift help [command]',
   allowPositionals: true,
   options: {},
   run: ({ positionals }, ctx) => Promise.resolve(renderHelp(positionals, ctx.registry)),
-};
+});
 
 function renderHelp(positionals: string[], registry: readonly CommandDefinition[]): CliResult {
   const [target] = positionals;
   if (target === undefined) {
-    return { exitCode: 0, stdout: renderGlobalHelp(registry), stderr: '' };
+    return { exitCode: EXIT_OK, stdout: renderGlobalHelp(registry), stderr: '' };
   }
   const command = registry.find((candidate) => candidate.name === target);
   if (command === undefined) {
     return unknownCommand(target, registry);
   }
-  return { exitCode: 0, stdout: renderCommandHelp(command), stderr: '' };
+  return { exitCode: EXIT_OK, stdout: renderCommandHelp(command), stderr: '' };
 }
 
 /** The options a command takes: its own, then `-h, --help`. */
-export function commandOptions(command: CommandDefinition): Record<string, CommandOption> {
+export function commandOptions(command: CommandDefinition): Readonly<Record<string, CommandOption>> {
   return { ...command.options, help: HELP_OPTION };
 }
 
@@ -46,7 +47,7 @@ export function unknownCommand(name: string, registry: readonly CommandDefinitio
 }
 
 export function renderGlobalHelp(registry: readonly CommandDefinition[]): string {
-  const commands = table(registry.map((command) => [command.name, command.summary]));
+  const commands = table(registry.map((command): Row => [command.name, command.summary]));
   const options = table(optionRows(GLOBAL_OPTIONS));
   return `Usage: n8nlift <command> [options]
 
@@ -70,15 +71,18 @@ Options:
 ${options}`;
 }
 
-function optionRows(options: Readonly<Record<string, CommandOption>>): string[][] {
-  return Object.entries(options).map(([name, option]) => {
+/** One line of a help table: the left column, then its description. */
+type Row = [string, string];
+
+function optionRows(options: Readonly<Record<string, CommandOption>>): Row[] {
+  return Object.entries(options).map(([name, option]): Row => {
     const flag = option.short === undefined ? `    --${name}` : `-${option.short}, --${name}`;
     const value = option.type === 'string' ? ` <${name}>` : '';
     return [`${flag}${value}`, option.description];
   });
 }
 
-function table(rows: string[][]): string {
+function table(rows: Row[]): string {
   const width = Math.max(...rows.map(([left]) => left.length));
   return rows.map(([left, right]) => `  ${left.padEnd(width)}  ${right}\n`).join('');
 }

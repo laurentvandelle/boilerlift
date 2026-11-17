@@ -10,7 +10,7 @@ describe('loadWorkflows', () => {
 
     const result = loadWorkflows([fakeWorkflowFile(zeta), fakeWorkflowFile(alpha)]);
 
-    expect(result).toEqual({ ok: true, workflows: [alpha, zeta] });
+    expect(result).toEqual({ ok: true, value: [alpha, zeta] });
   });
 
   test('Should default settings to {} when the export has none', () => {
@@ -18,7 +18,7 @@ describe('loadWorkflows', () => {
 
     const result = loadWorkflows(files);
 
-    expect(result).toMatchObject({ ok: true, workflows: [{ stableName: 'plain', settings: {} }] });
+    expect(result).toMatchObject({ ok: true, value: [{ stableName: 'plain', settings: {} }] });
   });
 
   test('Should take the stable name from the base name when the path uses backslashes', () => {
@@ -26,15 +26,15 @@ describe('loadWorkflows', () => {
 
     const result = loadWorkflows([fakeWorkflowFile(workflow)]);
 
-    expect(result).toEqual({ ok: true, workflows: [workflow] });
+    expect(result).toEqual({ ok: true, value: [workflow] });
   });
 
   test.each(['Invoice', 'with_underscore', 'seventeen-chars-x'])('Should reject the file when its stable name is %s', (name) => {
-    const files = [fakeWorkflowFile(fakeLocalWorkflow(name))];
+    const files = [fakeWorkflowFile(fakeLocalWorkflow('valid', { path: `workflows/${name}.json` }))];
 
     const result = loadWorkflows(files);
 
-    expect(result).toMatchObject({ ok: false, problems: [{ kind: 'invalid-name', path: `workflows/${name}.json` }] });
+    expect(result).toMatchObject({ ok: false, error: [{ kind: 'invalid-name', path: `workflows/${name}.json` }] });
   });
 
   test('Should reject the second file and name the first when two files share a stable name across folders and extensions', () => {
@@ -47,7 +47,7 @@ describe('loadWorkflows', () => {
 
     expect(result).toEqual({
       ok: false,
-      problems: [
+      error: [
         {
           kind: 'duplicate-name',
           path: 'workflows/sync.workflow.ts',
@@ -64,7 +64,7 @@ describe('loadWorkflows', () => {
 
     expect(result).toEqual({
       ok: false,
-      problems: [{ kind: 'unreadable', path: 'workflows/broken.json', detail: 'cannot be read: Unexpected token } in JSON' }],
+      error: [{ kind: 'unreadable', path: 'workflows/broken.json', detail: 'cannot be read: Unexpected token } in JSON' }],
     });
   });
 
@@ -75,7 +75,7 @@ describe('loadWorkflows', () => {
 
     expect(result).toEqual({
       ok: false,
-      problems: [
+      error: [
         {
           kind: 'invalid-shape',
           path: 'workflows/empty.json',
@@ -90,7 +90,7 @@ describe('loadWorkflows', () => {
 
     const result = loadWorkflows(files);
 
-    expect(result).toMatchObject({ ok: false, problems: [{ kind: 'invalid-shape' }] });
+    expect(result).toMatchObject({ ok: false, error: [{ kind: 'invalid-shape' }] });
   });
 
   test('Should keep the nodes and connections as they are when a full n8n export has unknown keys', () => {
@@ -103,19 +103,19 @@ describe('loadWorkflows', () => {
 
     expect(result).toEqual({
       ok: true,
-      workflows: [{ stableName: 'full', path: 'workflows/full.json', name: 'Full', nodes, connections, settings: {} }],
+      value: [{ stableName: 'full', path: 'workflows/full.json', name: 'Full', nodes, connections, settings: {} }],
     });
   });
 
   test('Should name each invalid node by name, or else by index, when nodes lack fields', () => {
     const nodes = [{ ...fakeNode(), typeVersion: undefined, position: [0] }, { ...fakeNode({ type: 'n8n-nodes-base.noOp' }), name: undefined }, 'not a node'];
-    const files = [fakeWorkflowFile(fakeLocalWorkflow('nodes', { nodes }))];
+    const files: WorkflowFile[] = [{ path: 'workflows/nodes.json', content: { name: 'Nodes', nodes, connections: {} } }];
 
     const result = loadWorkflows(files);
 
     expect(result).toEqual({
       ok: false,
-      problems: [
+      error: [
         {
           kind: 'invalid-shape',
           path: 'workflows/nodes.json',
@@ -135,7 +135,7 @@ describe('loadWorkflows', () => {
 
     expect(result).toEqual({
       ok: false,
-      problems: [{ kind: 'invalid-shape', path: 'workflows/twice.json', detail: 'node name "Start" is used twice' }],
+      error: [{ kind: 'invalid-shape', path: 'workflows/twice.json', detail: 'node name "Start" is used twice' }],
     });
   });
 
@@ -151,7 +151,7 @@ describe('loadWorkflows', () => {
 
     expect(result).toEqual({
       ok: false,
-      problems: [
+      error: [
         {
           kind: 'invalid-shape',
           path: 'workflows/edges.workflow.ts',

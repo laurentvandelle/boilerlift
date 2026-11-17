@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { CommandContext, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
+import { isRecord } from '#src/core/guard/is-record';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
@@ -24,7 +25,11 @@ export function nodeContext(cwd: string): CommandContext {
 
 /** The version in the n8nlift package.json, two folders above this file (`src/cli/` or `dist/cli/`). */
 function packageVersion(): string {
-  const packageJson = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { version: string };
+  const path = join(__dirname, '..', '..', 'package.json');
+  const packageJson: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  if (!isRecord(packageJson) || typeof packageJson.version !== 'string') {
+    throw new Error(`${path} has no version`);
+  }
   return packageJson.version;
 }
 
@@ -32,7 +37,7 @@ function readDotEnv(path: string): string | undefined {
   try {
     return readFileSync(path, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (isMissingFile(error)) {
       return undefined;
     }
     throw error;
@@ -46,7 +51,7 @@ async function loadWorkflowFiles(cwd: string, dir: string): Promise<WorkflowFile
   try {
     entries = await readdir(root, { recursive: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (isMissingFile(error)) {
       return [];
     }
     throw error;
@@ -63,12 +68,18 @@ async function readWorkflowFile(cwd: string, absolute: string): Promise<Workflow
   const path = relative(cwd, absolute).split(sep).join('/');
   try {
     if (absolute.endsWith('.json')) {
-      return { path, content: JSON.parse(await readFile(absolute, 'utf8')) as unknown };
+      const content: unknown = JSON.parse(await readFile(absolute, 'utf8'));
+      return { path, content };
     }
     // Node 22.18 and later strip TypeScript types natively, so a .workflow.ts file imports as is.
-    const module = (await import(pathToFileURL(absolute).href)) as { default?: unknown };
-    return { path, content: module.default };
+    const module: unknown = await import(pathToFileURL(absolute).href);
+    return { path, content: isRecord(module) ? module.default : undefined };
   } catch (error) {
     return { path, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** True when a file system call failed because the path does not exist (`ENOENT`). */
+function isMissingFile(error: unknown): boolean {
+  return isRecord(error) && error.code === 'ENOENT';
 }

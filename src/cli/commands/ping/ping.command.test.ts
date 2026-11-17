@@ -155,4 +155,19 @@ All checks passed.
     expect(result.stdout).toContain('1 check failed. Exit code 4.');
     expect(result.stderr).toBe('1 check failed. Exit code 4.\n');
   });
+
+  test('Should exit 1 with the line to fix, and call nothing, when N8N_URL has no scheme', async () => {
+    const ctx = context({ dotEnv: 'N8N_URL=n8n.example.com\nN8N_API_KEY=secret\n' });
+
+    const result = await pingCommand.run(INPUT, ctx);
+
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: '',
+      stderr:
+        'Invalid N8N_URL "n8n.example.com" (from .env): it must be an http:// or https:// URL.\n' +
+        'Fix it in .env, for example:\n' +
+        '  N8N_URL=https://your-n8n.example.com\n',
+    });
+  });
 });

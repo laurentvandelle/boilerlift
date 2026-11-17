@@ -1,3 +1,5 @@
+import { Result } from '#src/core/result/result';
+
 /** One file found under `./workflows`: its parsed content, or why it could not be read. */
 export type WorkflowFile =
   | {
@@ -8,13 +10,19 @@ export type WorkflowFile =
   }
   | { path: string; error: string };
 
+/**
+ * The file base name without `.workflow.ts` / `.json`: 1 to 16 of a-z, 0-9 and -. It identifies the workflow on the
+ * instance (ADR 0002). Only `isStableName` in load-workflows.ts produces one.
+ */
+export type StableName = string & { readonly __brand: 'StableName' };
+
 /** A local workflow ready to deliver. */
 export interface LocalWorkflow {
-  /** The file base name without `.workflow.ts` / `.json`. It identifies the workflow on the instance. */
-  stableName: string;
+  stableName: StableName;
   path: string;
   name: string;
-  nodes: unknown[];
+  /** Every node has the fields `WorkflowNode` requires: the loader checked them. */
+  nodes: WorkflowNode[];
   connections: Record<string, unknown>;
   settings: Record<string, unknown>;
 }
@@ -28,7 +36,8 @@ export interface LoadProblem {
   detail: string;
 }
 
-export type LoadResult = { ok: true; workflows: LocalWorkflow[] } | { ok: false; problems: LoadProblem[] };
+/** The workflows of every file, or every problem found: one problem fails the whole load. */
+export type LoadResult = Result<LocalWorkflow[], LoadProblem[]>;
 
 /** One node of an n8n workflow export. Unknown keys (`credentials`, `disabled`, `webhookId`…) are kept. */
 export interface WorkflowNode<Name extends string = string> {

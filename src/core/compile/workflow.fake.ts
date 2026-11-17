@@ -1,4 +1,5 @@
-import { LocalWorkflow, WorkflowFile, WorkflowNode } from '#src/core/compile/workflow.model';
+import { isStableName } from '#src/core/compile/load-workflows';
+import { LocalWorkflow, StableName, WorkflowFile, WorkflowNode } from '#src/core/compile/workflow.model';
 
 /** A valid n8n node: a manual trigger named `Start`. */
 export function fakeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
@@ -13,10 +14,18 @@ export function fakeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
   };
 }
 
+/** `value` as a stable name, through the same guard as the loader. Throws when it breaks the stable-name rule. */
+export function fakeStableName(value: string): StableName {
+  if (!isStableName(value)) {
+    throw new Error(`"${value}" is not a stable name: 1 to 16 of a-z, 0-9 and -`);
+  }
+  return value;
+}
+
 /** A local workflow, as `loadWorkflows` returns it, read from `workflows/{stableName}.json` unless `path` says otherwise. */
-export function fakeLocalWorkflow(stableName: string, overrides: Partial<LocalWorkflow> = {}): LocalWorkflow {
+export function fakeLocalWorkflow(stableName: string, overrides: Partial<Omit<LocalWorkflow, 'stableName'>> = {}): LocalWorkflow {
   return {
-    stableName,
+    stableName: fakeStableName(stableName),
     path: `workflows/${stableName}.json`,
     name: `Workflow ${stableName}`,
     nodes: [fakeNode()],

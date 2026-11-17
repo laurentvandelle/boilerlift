@@ -1,7 +1,8 @@
 import { CliResult, CommandDefinition } from '#src/cli/cli.model';
+import { defineCommand } from '#src/cli/define-command';
 import { ConnectionConfig } from '#src/core/config/config.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
-import { describeMissingConfig } from '#src/core/config/missing-config';
+import { describeConfigError } from '#src/core/config/config-error';
 import { CHECK_LABELS, MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
 import { EXIT_USAGE } from '#src/core/exit/exit-codes';
@@ -24,7 +25,7 @@ Exit codes:
   3  The n8n instance or its public API cannot be reached
   4  The API key is rejected`;
 
-export const pingCommand: CommandDefinition = {
+export const pingCommand: CommandDefinition = defineCommand({
   name: 'ping',
   summary: 'Check the connection to your n8n instance',
   usage: USAGE,
@@ -33,14 +34,14 @@ export const pingCommand: CommandDefinition = {
   run: async (_input, ctx) => {
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
-      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeMissingConfig(resolved.missing) };
+      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeConfigError(resolved.error) };
     }
-    const { config } = resolved;
+    const config = resolved.value;
     const client = createN8nClient({ config, fetch: ctx.fetch });
     const report = await checkConnection({ nodeVersion: ctx.nodeVersion, config, client });
     return render(config, report);
   },
-};
+});
 
 function render(config: ConnectionConfig, report: ConnectionReport): CliResult {
   const header = [
@@ -52,7 +53,7 @@ function render(config: ConnectionConfig, report: ConnectionReport): CliResult {
   const width = Math.max(...Object.values(CHECK_LABELS).map((label) => label.length)) + 2;
   const checks = report.checks.flatMap((check) => {
     const line = `${STATUS_MARKS[check.status]} ${CHECK_LABELS[check.name].padEnd(width)}${check.detail}`;
-    return check.hint === undefined ? [line] : [line, `${' '.repeat(width + 2)}→ ${check.hint}`];
+    return check.status === 'failed' ? [line, `${' '.repeat(width + 2)}→ ${check.hint}`] : [line];
   });
   const failures = report.checks.filter((check) => check.status === 'failed').length;
   const summary =

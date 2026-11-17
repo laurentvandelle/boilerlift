@@ -1,5 +1,5 @@
-import { Check, CheckConnectionInput, CheckName, ConnectionReport } from '#src/core/connection/connection.model';
-import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_UNREACHABLE } from '#src/core/exit/exit-codes';
+import { Check, CheckConnectionInput, CheckName, ConnectionReport, FailedCheck } from '#src/core/connection/connection.model';
+import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/exit/exit-codes';
 import { API_KEY_HINT, API_PATH, classifyHttpError } from '#src/core/n8n/n8n-api';
 
 /** The oldest Node.js that n8nlift runs on (`engines` in package.json). */
@@ -20,7 +20,7 @@ export async function checkConnection({ nodeVersion, config, client }: CheckConn
     ['apiKey', (): Promise<Check> => checkApiKey(client)],
   ];
   const checks: Check[] = [];
-  let failed: Check | undefined;
+  let failed: FailedCheck | undefined;
   for (const [name, step] of steps) {
     if (failed !== undefined) {
       checks.push({ name, status: 'skipped', detail: `skipped because the ${CHECK_LABELS[failed.name]} check failed` });
@@ -32,7 +32,7 @@ export async function checkConnection({ nodeVersion, config, client }: CheckConn
       failed = check;
     }
   }
-  return { checks, warnings: warningsFor(config.url.value), exitCode: failed?.exitCode ?? 0 };
+  return { checks, warnings: warningsFor(config.url.value), exitCode: failed?.exitCode ?? EXIT_OK };
 }
 
 function checkNode(nodeVersion: string): Check {
@@ -51,16 +51,18 @@ function checkNode(nodeVersion: string): Check {
 async function checkUrl(client: CheckConnectionInput['client']): Promise<Check> {
   const result = await client.checkHealth();
   const hint = 'Check N8N_URL: it must be the root URL of your n8n instance, for example https://your-n8n.example.com';
-  switch (result.kind) {
-  case 'ok':
-    return { name: 'url', status: 'ok', detail: `reachable (${result.call} → ${result.status})` };
+  if (result.ok) {
+    return { name: 'url', status: 'ok', detail: `reachable (${result.value.call} → ${result.value.status})` };
+  }
+  const failure = result.error;
+  switch (failure.kind) {
   case 'unreachable':
-    return { name: 'url', status: 'failed', detail: `unreachable: ${result.reason}`, hint, exitCode: EXIT_UNREACHABLE };
+    return { name: 'url', status: 'failed', detail: `unreachable: ${failure.reason}`, hint, exitCode: EXIT_UNREACHABLE };
   case 'http-error':
     return {
       name: 'url',
       status: 'failed',
-      detail: `not healthy (${result.call} → ${result.status})`,
+      detail: `not healthy (${failure.call} → ${failure.status})`,
       hint,
       exitCode: EXIT_UNREACHABLE,
     };
@@ -69,20 +71,21 @@ async function checkUrl(client: CheckConnectionInput['client']): Promise<Check> 
 
 async function checkApiKey(client: CheckConnectionInput['client']): Promise<Check> {
   const result = await client.checkApiKey();
-  if (result.kind === 'ok') {
-    return { name: 'apiKey', status: 'ok', detail: `accepted (${result.call} → ${result.status})` };
+  if (result.ok) {
+    return { name: 'apiKey', status: 'ok', detail: `accepted (${result.value.call} → ${result.value.status})` };
   }
-  if (result.kind === 'unreachable') {
+  const failure = result.error;
+  if (failure.kind === 'unreachable') {
     return {
       name: 'apiKey',
       status: 'failed',
-      detail: `unreachable: ${result.reason}`,
+      detail: `unreachable: ${failure.reason}`,
       hint: 'Check N8N_URL and your network, then run ping again',
       exitCode: EXIT_UNREACHABLE,
     };
   }
-  const call = `${result.call} → ${result.status}`;
-  switch (classifyHttpError(result.status)) {
+  const call = `${failure.call} → ${failure.status}`;
+  switch (classifyHttpError(failure.status)) {
   case 'key-rejected':
     return { name: 'apiKey', status: 'failed', detail: `rejected (${call})`, hint: API_KEY_HINT, exitCode: EXIT_API_KEY_REJECTED };
   case 'not-found':
@@ -113,12 +116,10 @@ function warningsFor(url: string): string[] {
 
 /** Compares two `x.y.z` versions (a leading `v` and any pre-release suffix are ignored). */
 function compareVersions(left: string, right: string): number {
-  const parse = (version: string): number[] =>
-    version
-      .replace(/^v/, '')
-      .split(/[-+]/)[0]
-      .split('.')
-      .map((part) => Number.parseInt(part, 10) || 0);
+  const parse = (version: string): number[] => {
+    const [core = ''] = version.replace(/^v/, '').split(/[-+]/);
+    return core.split('.').map((part) => Number.parseInt(part, 10) || 0);
+  };
   const [a, b] = [parse(left), parse(right)];
   for (let index = 0; index < 3; index += 1) {
     const difference = (a[index] ?? 0) - (b[index] ?? 0);

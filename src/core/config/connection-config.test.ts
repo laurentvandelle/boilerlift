@@ -9,7 +9,7 @@ describe('resolveConnectionConfig', () => {
 
     expect(result).toEqual({
       ok: true,
-      config: {
+      value: {
         url: { value: 'https://n8n.example.com', source: 'env' },
         apiKey: { value: 'secret', source: 'env' },
       },
@@ -23,7 +23,7 @@ describe('resolveConnectionConfig', () => {
 
     expect(result).toEqual({
       ok: true,
-      config: {
+      value: {
         url: { value: 'https://n8n.example.com', source: '.env' },
         apiKey: { value: 'secret', source: '.env' },
       },
@@ -38,7 +38,7 @@ describe('resolveConnectionConfig', () => {
 
     expect(result).toEqual({
       ok: true,
-      config: {
+      value: {
         url: { value: 'https://from-env.example.com', source: 'env' },
         apiKey: { value: 'secret', source: '.env' },
       },
@@ -51,7 +51,7 @@ describe('resolveConnectionConfig', () => {
 
     const result = resolveConnectionConfig(env, dotEnv);
 
-    expect(result).toMatchObject({ ok: true, config: { url: { value: 'https://n8n.example.com', source: '.env' } } });
+    expect(result).toMatchObject({ ok: true, value: { url: { value: 'https://n8n.example.com', source: '.env' } } });
   });
 
   test('Should strip trailing slashes when the URL ends with them', () => {
@@ -59,7 +59,7 @@ describe('resolveConnectionConfig', () => {
 
     const result = resolveConnectionConfig(env, undefined);
 
-    expect(result).toMatchObject({ ok: true, config: { url: { value: 'https://n8n.example.com' } } });
+    expect(result).toMatchObject({ ok: true, value: { url: { value: 'https://n8n.example.com' } } });
   });
 
   test('Should list every missing value when they are blank or absent', () => {
@@ -67,6 +67,17 @@ describe('resolveConnectionConfig', () => {
 
     const result = resolveConnectionConfig(env, 'OTHER=1');
 
-    expect(result).toEqual({ ok: false, missing: ['N8N_URL', 'N8N_API_KEY'] });
+    expect(result).toEqual({ ok: false, error: { kind: 'missing', keys: ['N8N_URL', 'N8N_API_KEY'] } });
+  });
+
+  test.each([
+    ['has no scheme', 'n8n.example.com'],
+    ['uses another scheme', 'ftp://n8n.example.com'],
+  ])('Should fail as an invalid URL when N8N_URL %s', (_condition, url) => {
+    const dotEnv = `N8N_URL=${url}\nN8N_API_KEY=secret`;
+
+    const result = resolveConnectionConfig({}, dotEnv);
+
+    expect(result).toEqual({ ok: false, error: { kind: 'invalid-url', url: { value: url, source: '.env' } } });
   });
 });

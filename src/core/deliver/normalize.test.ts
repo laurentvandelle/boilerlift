@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
+import { fakeLocalWorkflow, fakeNode } from '#src/core/compile/workflow.fake';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { fakeN8nWorkflow } from '#src/core/n8n/n8n.fake';
 import { N8nWorkflow } from '#src/core/n8n/n8n.model';
@@ -7,8 +7,8 @@ import { N8nWorkflow } from '#src/core/n8n/n8n.model';
 const LOCAL = fakeLocalWorkflow('crm', {
   name: 'CRM',
   nodes: [
-    { id: 'l2', name: 'Slack', type: 'slack', credentials: { slackApi: { id: 'dev-1', name: 'Slack bot' } } },
-    { id: 'l1', name: 'Hook', type: 'webhook', webhookId: 'local-hook' },
+    fakeNode({ id: 'l2', name: 'Slack', type: 'slack', credentials: { slackApi: { id: 'dev-1', name: 'Slack bot' } } }),
+    fakeNode({ id: 'l1', name: 'Hook', type: 'webhook', webhookId: 'local-hook' }),
   ],
   connections: { Hook: { main: [[{ node: 'Slack', type: 'main', index: 0 }]] } },
 });
@@ -17,8 +17,16 @@ const LOCAL = fakeLocalWorkflow('crm', {
 function draftOfLocal(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
   return fakeN8nWorkflow(LOCAL, {
     nodes: [
-      { webhookId: 'server-hook', type: 'webhook', name: 'Hook', id: 's1' },
-      { name: 'Slack', type: 'slack', id: 's2', credentials: { slackApi: { id: 'prod-9', name: 'Slack bot' } } },
+      { parameters: {}, webhookId: 'server-hook', type: 'webhook', name: 'Hook', id: 's1', typeVersion: 1, position: [0, 0] },
+      {
+        name: 'Slack',
+        position: [0, 0],
+        type: 'slack',
+        id: 's2',
+        typeVersion: 1,
+        parameters: {},
+        credentials: { slackApi: { id: 'prod-9', name: 'Slack bot' } },
+      },
     ],
     connections: { Hook: { main: [[{ index: 0, type: 'main', node: 'Slack' }]] } },
     settings: { executionOrder: 'v1', redactionPolicy: 'none', saveManualExecutions: true },

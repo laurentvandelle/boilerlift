@@ -1,14 +1,24 @@
 import { isRecord } from '#src/core/guard/is-record';
 import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
 import {
+  BodyParser,
+  Page,
+  pageParser,
+  tagParser,
+  tagsParser,
+  workflowParser,
+  workflowSummaryParser,
+} from '#src/core/n8n/n8n-response';
+import {
+  ApiAnswer,
+  ApiFailure,
   ApiResult,
   N8nClient,
   N8nClientOptions,
-  N8nTag,
-  N8nWorkflow,
-  N8nWorkflowSummary,
   ProbeResult,
+  WorkflowId,
 } from '#src/core/n8n/n8n.model';
+import { Result, err, ok } from '#src/core/result/result';
 
 const HEALTH_PATH = '/healthz';
 const API_KEY_PATH = `${API_PATH}/workflows?limit=1`;
@@ -19,19 +29,21 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 
 type Method = 'GET' | 'POST' | 'PUT';
 
-interface Page<T> {
-  data: T[];
-  nextCursor?: string | null;
-}
+/** What can go wrong before a body is parsed. */
+type TransportFailure = Exclude<ApiFailure, { kind: 'invalid-response' }>;
 
-/** A minimal client for the n8n instance and its public API. */
+/**
+ * A minimal client for the n8n instance and its public API. Every JSON body is parsed once, here: a success status
+ * whose body does not match comes back as an `invalid-response` failure.
+ */
 export function createN8nClient({ config, fetch, timeoutMs = DEFAULT_TIMEOUT_MS }: N8nClientOptions): N8nClient {
-  const request = async <T>(
+  /** Sends one request. A success status comes back with the raw body text. */
+  const request = async (
     method: Method,
     path: string,
     { body, auth = true }: { body?: unknown; auth?: boolean } = {},
-  ): Promise<ApiResult<T>> => {
-    const call = `${method} ${path.split('?')[0]}`;
+  ): Promise<Result<ApiAnswer<string>, TransportFailure>> => {
+    const call = `${method} ${path.split('?')[0] ?? path}`;
     try {
       const response = await fetch(`${config.url.value}${path}`, {
         method,
@@ -45,102 +57,110 @@ export function createN8nClient({ config, fetch, timeoutMs = DEFAULT_TIMEOUT_MS 
       });
       const text = await response.text();
       if (response.ok) {
-        return { kind: 'ok', call, status: response.status, body: parseJson(text) as T };
+        return ok({ call, status: response.status, body: text });
       }
       const message = errorMessage(text);
-      return { kind: 'http-error', call, status: response.status, ...(message === undefined ? {} : { message }) };
+      return err({ kind: 'http-error', call, status: response.status, ...(message === undefined ? {} : { message }) });
     } catch (error) {
-      return { kind: 'unreachable', call, reason: describeNetworkError(error, timeoutMs) };
+      return err({ kind: 'unreachable', call, reason: describeNetworkError(error, timeoutMs) });
     }
+  };
+
+  /** Sends one request and parses its JSON body with `parser`. */
+  const requestJson = async <T>(
+    method: Method,
+    path: string,
+    parser: BodyParser<T>,
+    options: { body?: unknown } = {},
+  ): Promise<ApiResult<T>> => {
+    const result = await request(method, path, options);
+    if (!result.ok) {
+      return result;
+    }
+    const { call, status, body: text } = result.value;
+    const json = parseJson(text);
+    const body = json.ok ? parser.parse(json.value) : undefined;
+    if (body === undefined) {
+      const detail = json.ok ? `the body is not ${parser.expected}` : 'the body is not JSON';
+      return err({ kind: 'invalid-response', call, status, detail });
+    }
+    return ok({ call, status, body });
   };
 
   const probe = async (path: string, auth: boolean): Promise<ProbeResult> => {
-    const result = await request<unknown>('GET', path, { auth });
-    switch (result.kind) {
-    case 'ok':
-      return { kind: 'ok', call: result.call, status: result.status };
+    const result = await request('GET', path, { auth });
+    if (result.ok) {
+      return ok({ call: result.value.call, status: result.value.status });
+    }
+    const failure = result.error;
+    switch (failure.kind) {
     case 'http-error':
-      return { kind: 'http-error', call: result.call, status: result.status };
+      return err({ kind: 'http-error', call: failure.call, status: failure.status });
     case 'unreachable':
-      return { kind: 'unreachable', call: result.call, reason: result.reason };
+      return err(failure);
     }
   };
 
-  const listAll = async <T>(path: string): Promise<ApiResult<T[]>> => {
+  const listAll = async <T>(path: string, item: BodyParser<T>): Promise<ApiResult<T[]>> => {
+    const parser = pageParser(item);
     const items: T[] = [];
     let cursor: string | undefined;
-    let call: string;
-    let status: number;
+    let last: { call: string; status: number };
     do {
       const separator = path.includes('?') ? '&' : '?';
-      const page = await request<Page<T>>(
+      const page: ApiResult<Page<T>> = await requestJson(
         'GET',
         `${path}${separator}limit=${PAGE_LIMIT}${cursor === undefined ? '' : `&cursor=${encodeURIComponent(cursor)}`}`,
+        parser,
       );
-      if (page.kind !== 'ok') {
+      if (!page.ok) {
         return page;
       }
-      call = page.call;
-      status = page.status;
-      items.push(...(page.body.data ?? []));
-      cursor = page.body.nextCursor ?? undefined;
+      last = page.value;
+      items.push(...page.value.body.data);
+      cursor = page.value.body.nextCursor;
     } while (cursor !== undefined && cursor !== '');
-    return { kind: 'ok', call, status, body: items };
+    return ok({ call: last.call, status: last.status, body: items });
   };
 
-  const workflowPath = (id: string): string => `${API_PATH}/workflows/${encodeURIComponent(id)}`;
+  const workflowPath = (id: WorkflowId): string => `${API_PATH}/workflows/${encodeURIComponent(id)}`;
 
   return {
     checkHealth: () => probe(HEALTH_PATH, false),
     checkApiKey: () => probe(API_KEY_PATH, true),
-    readApiSpec: async (): Promise<ApiResult<string>> => {
-      const result = await request<unknown>('GET', SPEC_PATH, { auth: false });
-      if (result.kind !== 'ok') {
-        return result;
-      }
-      const { body } = result;
-      return { ...result, body: typeof body === 'string' ? body : (JSON.stringify(body) ?? '') };
-    },
-    listWorkflows: async (): Promise<ApiResult<N8nWorkflowSummary[]>> => {
-      const result = await listAll<N8nWorkflowSummary>(`${API_PATH}/workflows?excludePinnedData=true`);
-      if (result.kind !== 'ok') {
-        return result;
-      }
-      const body = result.body.map(({ id, name, tags, isArchived }) => ({
-        id,
-        name,
-        tags: tags ?? [],
-        isArchived: isArchived ?? false,
-      }));
-      return { ...result, body };
-    },
-    getWorkflow: (id) => request<N8nWorkflow>('GET', workflowPath(id)),
-    createWorkflow: (body) => request<N8nWorkflow>('POST', `${API_PATH}/workflows`, { body }),
-    updateWorkflow: (id, body) => request<N8nWorkflow>('PUT', `${workflowPath(id)}?${DRAFT_PARAM}=false`, { body }),
-    unarchiveWorkflow: (id) => request<N8nWorkflow>('POST', `${workflowPath(id)}/unarchive`),
-    listTags: () => listAll<N8nTag>(`${API_PATH}/tags`),
-    createTag: (name) => request<N8nTag>('POST', `${API_PATH}/tags`, { body: { name } }),
+    // The spec is YAML: it stays text.
+    readApiSpec: () => request('GET', SPEC_PATH, { auth: false }),
+    listWorkflows: () => listAll(`${API_PATH}/workflows?excludePinnedData=true`, workflowSummaryParser),
+    getWorkflow: (id) => requestJson('GET', workflowPath(id), workflowParser),
+    createWorkflow: (body) => requestJson('POST', `${API_PATH}/workflows`, workflowSummaryParser, { body }),
+    updateWorkflow: (id, body) =>
+      requestJson('PUT', `${workflowPath(id)}?${DRAFT_PARAM}=false`, workflowSummaryParser, { body }),
+    unarchiveWorkflow: (id) => requestJson('POST', `${workflowPath(id)}/unarchive`, workflowSummaryParser),
+    listTags: () => listAll(`${API_PATH}/tags`, tagParser),
+    createTag: (name) => requestJson('POST', `${API_PATH}/tags`, tagParser, { body: { name } }),
     setWorkflowTags: (id, tagIds) =>
-      request<N8nTag[]>('PUT', `${workflowPath(id)}/tags`, { body: tagIds.map((tagId) => ({ id: tagId })) }),
+      requestJson('PUT', `${workflowPath(id)}/tags`, tagsParser, { body: tagIds.map((tagId) => ({ id: tagId })) }),
   };
 }
 
-function parseJson(text: string): unknown {
+/** The JSON value of a body, or an error when it is not JSON. An empty body is `undefined`. */
+function parseJson(text: string): Result<unknown, 'not-json'> {
   if (text === '') {
-    return undefined;
+    return ok(undefined);
   }
   try {
-    return JSON.parse(text);
+    const value: unknown = JSON.parse(text);
+    return ok(value);
   } catch {
-    return text;
+    return err('not-json');
   }
 }
 
 /** The `message` field of an n8n error body, when there is one. */
 function errorMessage(text: string): string | undefined {
   const body = parseJson(text);
-  if (isRecord(body) && typeof body.message === 'string') {
-    return body.message;
+  if (body.ok && isRecord(body.value) && typeof body.value.message === 'string') {
+    return body.value.message;
   }
   return undefined;
 }

@@ -16,7 +16,7 @@ const noBarrelOrRelative = {
 };
 
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
-const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'exit', 'guard'];
+const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'exit', 'guard', 'result'];
 
 const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (src/AGENTS.md).'];
 const noSleep = 'No sleeps in tests: use fake timers or await the event.';
@@ -79,6 +79,18 @@ export default tseslint.config(
     },
   },
   {
+    // Strict types: no explicit any, no type assertion but `as const`, no non-null `!`. Parse untrusted input with a
+    // type guard instead (isRecord from core/guard/). A switch over a union handles every member.
+    files: ['src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      // 'never' still allows `as const`.
+      '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+    },
+  },
+  {
     // Test lint. *.test-d.ts files hold type tests, which Vitest checks with tsc (vitest.config.mts).
     files: ['src/**/*.test.ts', 'src/**/*.test-d.ts'],
     ...vitest.configs.recommended,
@@ -135,10 +147,12 @@ export default tseslint.config(
         { type: 'connection', pattern: 'src/core/connection' },
         { type: 'exit', pattern: 'src/core/exit' },
         { type: 'guard', pattern: 'src/core/guard' },
+        { type: 'result', pattern: 'src/core/result' },
       ],
       'boundaries/files': [
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
+        { category: 'define-command', pattern: 'src/cli/define-command.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'n8n-client', pattern: 'src/core/n8n/n8n-client.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },
@@ -158,9 +172,10 @@ export default tseslint.config(
           policies: [
             // 1. npm packages and Node core: allowed unless a later policy says otherwise.
             { allow: { to: { module: { origin: ['external', 'core'] } } } },
-            // 2. core/exit/ holds the exit codes of every command: every folder may import it. core/guard/ holds the
-            // shared type guards (isRecord): every core/ folder may import it, and cli/ through CORE.
-            { allow: { to: { element: { type: 'exit' } } } },
+            // 2. core/exit/ holds the exit codes of every command, and core/result/ the one Result type: every folder may
+            // import them. core/guard/ holds the shared type guards (isRecord): every core/ folder may import it, and
+            // cli/ through CORE.
+            { allow: { to: { element: { type: ['exit', 'result'] } } } },
             {
               from: { element: { type: CORE } },
               allow: { to: { element: { type: 'guard' } } },
@@ -190,13 +205,14 @@ export default tseslint.config(
               allow: { to: { element: { type: ['connection', 'config', 'n8n'] } } },
             },
             {
-              // A command sees only itself, the CLI contracts (cli/*.model.ts) and core. Never another command.
+              // A command sees only itself, the CLI contracts (cli/*.model.ts and defineCommand) and core. Never another command.
               from: { element: { type: 'cli-command' } },
               allow: { to: { element: { type: CORE } } },
             },
             {
+              // defineCommand builds each command's CommandDefinition, with option values typed by its options.
               from: { element: { type: 'cli-command' } },
-              allow: { to: { file: { categories: 'cli-model' } } },
+              allow: { to: { file: { categories: ['cli-model', 'define-command'] } } },
             },
             {
               from: { element: { type: 'cli-command' } },
@@ -225,7 +241,7 @@ export default tseslint.config(
               message: 'compile/ imports only compile/, config/, exit/ and guard/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
-              from: { element: { type: ['config', 'n8n', 'exit', 'guard'] } },
+              from: { element: { type: ['config', 'n8n', 'exit', 'guard', 'result'] } },
               disallow: { to: { element: { type: ['compile', 'deliver'] } } },
               message: 'A shared core/ folder imports neither compile/ nor deliver/ (src/core/AGENTS.md).',
             },

@@ -1,5 +1,6 @@
-import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { N8nClient, N8nTag } from '#src/core/n8n/n8n.model';
+import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
+import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/core/exit/exit-codes';
+import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';
 
@@ -12,20 +13,43 @@ export interface WorkflowError {
   hint: string;
 }
 
-export interface DeployResult {
-  stableName: string;
-  path: string;
-  action: DeployAction;
-  /** The workflow id on the instance. Absent when a failed or not-processed workflow has none yet. */
-  id?: string;
-  name: string;
-  /** Set when `action` is `failed`. */
-  error?: WorkflowError;
-}
+/** An action on an existing workflow of the instance: it carries the id of that workflow. */
+type TargetAction =
+  | { action: 'updated'; id: WorkflowId }
+  | { action: 'skipped'; id: WorkflowId }
+  | { action: 'restored'; id: WorkflowId };
 
-/** A failure that stopped the whole run. */
+/** A failed workflow carries its error, and the id of its target when it had one. */
+type FailedAction = { action: 'failed'; id?: WorkflowId; error: WorkflowError };
+
+/**
+ * The action a plan takes on one workflow, and what it carries. A `created` step has no id yet, and a
+ * `not-processed` step nothing: a failure stopped the run first.
+ */
+export type PlannedAction = { action: 'created' } | TargetAction | FailedAction | { action: 'not-processed' };
+
+/** The action a report shows for one workflow. A real deploy gives a created workflow its new id; a dry run has none. */
+export type ResultAction = { action: 'created'; id?: WorkflowId } | TargetAction | FailedAction | { action: 'not-processed' };
+
+/** One workflow in a report. */
+export type DeployResult = {
+  stableName: StableName;
+  path: string;
+  name: string;
+} & ResultAction;
+
+/**
+ * What went wrong with a deploy, tagged by `kind`. `effectOf` in deploy-failure.ts derives from the kind whether it
+ * stops the run and its exit code.
+ * - `unreachable`: the instance gives no answer, or an answer that is not the n8n public API. Stops the run.
+ * - `key-rejected`: the instance rejects the API key. Stops the run.
+ * - `drafts-unsupported`: the instance is older than MIN_N8N_VERSION. Stops the run before any write.
+ * - `workflow-failed`: one workflow failed; the others are still delivered.
+ */
+export type DeployErrorKind = 'unreachable' | 'key-rejected' | 'drafts-unsupported' | 'workflow-failed';
+
 export interface DeployError extends WorkflowError {
-  exitCode: number;
+  kind: DeployErrorKind;
 }
 
 /**
@@ -36,18 +60,23 @@ export interface DeployError extends WorkflowError {
  * - `several-archived`: several archived workflows, and no live one, carry the stable tag; deploy restores the first.
  */
 export type DeployWarning =
-  | { kind: 'archived-copies'; stableName: string; archivedIds: string[]; liveId: string }
-  | { kind: 'restored'; stableName: string; id: string }
-  | { kind: 'several-archived'; stableName: string; archivedIds: string[]; restoredId: string };
+  | { kind: 'archived-copies'; stableName: StableName; archivedIds: WorkflowId[]; liveId: WorkflowId }
+  | { kind: 'restored'; stableName: StableName; id: WorkflowId }
+  | { kind: 'several-archived'; stableName: StableName; archivedIds: WorkflowId[]; restoredId: WorkflowId };
 
-export interface DeployReport {
+/**
+ * How a run ended. A run that went to the end exits 0, or 5 when a workflow failed. A run stopped by a failure
+ * carries it, and exits with its code.
+ */
+export type RunEnd =
+  | { error?: undefined; exitCode: typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE }
+  | { error: DeployError; exitCode: ExitCode };
+
+export type DeployReport = {
   /** Every local workflow, in stable-name order. Empty when the run stopped before any workflow. */
   results: DeployResult[];
   warnings: DeployWarning[];
-  /** Set only when a failure stopped the whole run. */
-  error?: DeployError;
-  exitCode: number;
-}
+} & RunEnd;
 
 export interface DeployInput {
   workflows: LocalWorkflow[];
@@ -55,23 +84,13 @@ export interface DeployInput {
 }
 
 /** One workflow in a deploy plan: the action a deploy would take, and what apply needs to take it. */
-export interface PlannedStep {
-  workflow: LocalWorkflow;
-  action: DeployAction;
-  /** The target workflow id on the instance. Absent for a create, or a failure with no target yet. */
-  id?: string;
-  /** Set when `action` is `failed`. */
-  error?: WorkflowError;
-}
+export type PlannedStep = { workflow: LocalWorkflow } & PlannedAction;
 
 /** What a deploy would do, computed from reads only. A dry run renders it; a real deploy applies it. */
-export interface DeployPlan {
+export type DeployPlan = {
   /** Every local workflow, in stable-name order. Empty when the plan stopped before any workflow. */
   steps: PlannedStep[];
   warnings: DeployWarning[];
   /** The instance tag list, read once when at least one workflow is created. */
   tags?: N8nTag[];
-  /** Set only when a failure stopped the plan. */
-  error?: DeployError;
-  exitCode: number;
-}
+} & RunEnd;

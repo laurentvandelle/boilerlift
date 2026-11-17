@@ -18,13 +18,13 @@ function comparable(
   workflow: Pick<N8nWorkflow, 'name' | 'nodes' | 'connections' | 'settings'>,
   settingsKeys: string[],
 ): Comparable {
-  const nodes = (workflow.nodes ?? []).map(normalizeNode);
+  const nodes = workflow.nodes.map(normalizeNode);
   nodes.sort((a, b) => nodeName(a).localeCompare(nodeName(b)));
-  const settings = workflow.settings ?? {};
+  const { settings } = workflow;
   return {
     name: workflow.name,
     nodes,
-    connections: workflow.connections ?? {},
+    connections: workflow.connections,
     settings: Object.fromEntries(settingsKeys.filter((key) => key in settings).map((key) => [key, settings[key]])),
   };
 }
