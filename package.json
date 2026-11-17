@@ -1,12 +1,13 @@
 {
-  "name": "n8nlift",
+  "name": "boilerlift",
   "description": "Write n8n workflows in TypeScript, test them, and lift them from dev to prod. Code is the source. n8n is the runtime.",
   "author": "laurentvandelle",
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "n8nlift": "dist/bin.js"
+    "lift": "dist/bin.js",
+    "boilerlift": "dist/bin.js"
   },
   "exports": {
     ".": {
@@ -52,13 +53,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/laurentvandelle/n8nlift.git"
+    "url": "git+https://github.com/laurentvandelle/boilerlift.git"
   },
   "bugs": {
-    "url": "https://github.com/laurentvandelle/n8nlift/issues"
+    "url": "https://github.com/laurentvandelle/boilerlift/issues"
   },
-  "homepage": "https://github.com/laurentvandelle/n8nlift#readme",
+  "homepage": "https://github.com/laurentvandelle/boilerlift#readme",
   "keywords": [
+    "boilerlift",
     "n8n",
     "cli",
     "workflow-as-code",
