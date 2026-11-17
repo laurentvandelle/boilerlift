@@ -2,7 +2,7 @@ import { isStableName } from '#src/core/compile/load-workflows';
 import { StableName } from '#src/core/compile/workflow.model';
 import { N8nWorkflowSummary, WorkflowId } from '#src/core/n8n/n8n.model';
 
-const STABLE_TAG_PREFIX = 'n8nlift:';
+const STABLE_TAG_PREFIX = 'boilerlift:';
 
 /** The tag that identifies a workflow on the instance (ADR 0002). Only `stableTag` builds one. */
 export type StableTag = `${typeof STABLE_TAG_PREFIX}${StableName}`;
@@ -19,7 +19,7 @@ export interface Matches {
 }
 
 /**
- * The ids of the instance workflows, by the stable name of each `n8nlift:` tag they carry. A tag whose suffix breaks
+ * The ids of the instance workflows, by the stable name of each `boilerlift:` tag they carry. A tag whose suffix breaks
  * the stable-name rule matches no local workflow, so it is left out.
  */
 export function indexByStableTag(instanceWorkflows: N8nWorkflowSummary[]): Map<StableName, Matches> {

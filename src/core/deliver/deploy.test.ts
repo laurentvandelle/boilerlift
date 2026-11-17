@@ -8,7 +8,7 @@ import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { FakeN8nOptions, fakeN8n, fakeN8nWorkflow, fakeStableTag, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { ApiFailure, N8nWorkflow } from '#src/core/n8n/n8n.model';
 
-const PING_HINT = 'Run n8nlift ping to check N8N_URL and your network, then run deploy again';
+const PING_HINT = 'Run lift ping to check N8N_URL and your network, then run deploy again';
 
 function actions(report: DeployReport): string[][] {
   return report.results.map(({ stableName, action }) => [stableName, action]);
@@ -40,7 +40,7 @@ describe('deploy', () => {
 
     await deploy({ workflows: [fakeLocalWorkflow('invoice-sync')], client: n8n.client });
 
-    expect(n8n.workflows[0]?.tags).toEqual([{ id: 't2', name: 'n8nlift:invoice-sync' }]);
+    expect(n8n.workflows[0]?.tags).toEqual([{ id: 't2', name: 'boilerlift:invoice-sync' }]);
   });
 
   test('Should read the workflows, the spec and the tags before the first write when it creates a workflow', async () => {
@@ -59,15 +59,15 @@ describe('deploy', () => {
   });
 
   test('Should reuse the stable tag when the instance already has it', async () => {
-    const n8n = fakeN8n({ tags: [{ id: 'ta', name: 'n8nlift:a' }] });
+    const n8n = fakeN8n({ tags: [{ id: 'ta', name: 'boilerlift:a' }] });
 
     await deploy({ workflows: [fakeLocalWorkflow('a')], client: n8n.client });
 
-    expect(n8n.workflows[0]?.tags).toEqual([{ id: 'ta', name: 'n8nlift:a' }]);
+    expect(n8n.workflows[0]?.tags).toEqual([{ id: 'ta', name: 'boilerlift:a' }]);
   });
 
   test('Should read the tag list once when it creates several workflows', async () => {
-    const n8n = fakeN8n({ tags: [{ id: 'ta', name: 'n8nlift:a' }] });
+    const n8n = fakeN8n({ tags: [{ id: 'ta', name: 'boilerlift:a' }] });
 
     await deploy({ workflows: [fakeLocalWorkflow('b'), fakeLocalWorkflow('a')], client: n8n.client });
 
@@ -144,8 +144,8 @@ describe('deploy', () => {
         name: 'Workflow dup',
         error: {
           call: 'GET /api/v1/workflows',
-          detail: 'workflows a and b both carry the tag n8nlift:dup',
-          hint: 'Remove the tag n8nlift:dup from one of them in the n8n editor, then run deploy again',
+          detail: 'workflows a and b both carry the tag boilerlift:dup',
+          hint: 'Remove the tag boilerlift:dup from one of them in the n8n editor, then run deploy again',
         },
       },
       expect.objectContaining({ stableName: 'new', action: 'created' }),
