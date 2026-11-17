@@ -11,11 +11,11 @@ import { createN8nClient } from '#src/services/n8n/n8n-client';
 
 const WORKFLOWS_DIR = 'workflows';
 
-const USAGE = `n8nlift deploy [--dry-run] [--json]
+const USAGE = `lift deploy [--dry-run] [--json]
 
 Delivers every workflow under ./workflows (*.workflow.ts with a default export, or *.json),
 pasted from an n8n export, to your n8n instance:
-  new workflows are created (never published) and tagged n8nlift:<stable-name>,
+  new workflows are created (never published) and tagged boilerlift:<stable-name>,
   changed workflows are updated as drafts: the published version keeps running,
   unchanged workflows are skipped,
   workflows deleted (archived) in the n8n editor are restored as unpublished drafts.
@@ -23,7 +23,7 @@ The stable name is the file name without .workflow.ts / .json: 1 to 16 of a-z, 0
 
 Nothing is written until the instance proves it saves drafts (n8n ${MIN_N8N_VERSION} or later).
 A failure on one workflow fails only that workflow; the others are still delivered.
-Reads N8N_URL and N8N_API_KEY like n8nlift ping.
+Reads N8N_URL and N8N_API_KEY like lift ping.
 
 --dry-run reads the instance and shows what deploy would create, update, restore, skip or fail,
 and any blocker, without writing anything. It exits with the same codes as a real deploy.

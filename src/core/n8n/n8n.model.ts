@@ -55,7 +55,7 @@ export interface N8nWorkflow extends N8nWorkflowSummary {
   settings: Record<string, unknown>;
 }
 
-/** The fields n8nlift writes on create and update. */
+/** The fields Boilerlift writes on create and update. */
 export interface N8nWorkflowBody {
   name: string;
   nodes: unknown[];

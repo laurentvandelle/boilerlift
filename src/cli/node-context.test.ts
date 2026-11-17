@@ -8,7 +8,7 @@ const WORKFLOW = { name: 'Invoice sync', nodes: [], connections: {} };
 
 /** A new empty folder in the system temp folder, deleted when the test ends. */
 async function tempFolder(): Promise<string> {
-  const folder = await mkdtemp(join(tmpdir(), 'n8nlift-node-context-'));
+  const folder = await mkdtemp(join(tmpdir(), 'boilerlift-node-context-'));
   onTestFinished(() => rm(folder, { recursive: true, force: true }));
   return folder;
 }
@@ -38,7 +38,7 @@ describe('nodeContext', () => {
     expect(ctx.dotEnv).toBeUndefined();
   });
 
-  test('Should take the version from the package.json of n8nlift when it builds the context', async () => {
+  test('Should take the version from the package.json of boilerlift when it builds the context', async () => {
     const cwd = await tempFolder();
 
     const ctx = nodeContext(cwd);

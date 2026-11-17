@@ -49,7 +49,7 @@ interface Wording {
 
 const DEPLOY_WORDING: Wording = {
   dryRun: false,
-  command: 'n8nlift deploy',
+  command: 'lift deploy',
   labels: {
     created: 'created',
     updated: 'updated',
@@ -68,7 +68,7 @@ const DEPLOY_WORDING: Wording = {
 
 const DRY_RUN_WORDING: Wording = {
   dryRun: true,
-  command: 'n8nlift deploy --dry-run',
+  command: 'lift deploy --dry-run',
   labels: {
     created: 'would create',
     updated: 'would update',
@@ -79,7 +79,7 @@ const DRY_RUN_WORDING: Wording = {
   },
   summary: ({ created, updated, restored, skipped, failed }) => [
     `Would: ${created} create, ${updated} update, ${restored} restore, ${skipped} skip, ${failed} fail.`,
-    'Dry run: nothing was written. Run n8nlift deploy to apply.',
+    'Dry run: nothing was written. Run lift deploy to apply.',
     'n8n can still reject a write; this preview covers what reads can show.',
   ],
   failed: 'Would fail',

@@ -15,7 +15,7 @@ describe('defineCommand', () => {
       defineCommand({
         name: 'typed',
         summary: 'Typed options',
-        usage: 'n8nlift typed',
+        usage: 'lift typed',
         allowPositionals: false,
         options: OPTIONS,
         run: ({ options }) => {
@@ -32,7 +32,7 @@ describe('defineCommand', () => {
       defineCommand({
         name: 'typed',
         summary: 'Typed options',
-        usage: 'n8nlift typed',
+        usage: 'lift typed',
         allowPositionals: false,
         options: OPTIONS,
         run: ({ options }) => {

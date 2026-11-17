@@ -6,11 +6,11 @@ import { MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/ch
 import { API_PATH } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/services/n8n/n8n-client';
 
-const USAGE = `n8nlift ping
+const USAGE = `lift ping
 
 Reads N8N_URL and N8N_API_KEY from the environment, then from ./.env.
 A variable set in the environment wins over .env.
-  N8N_URL      Root URL of your n8n instance (n8nlift adds ${API_PATH})
+  N8N_URL      Root URL of your n8n instance (Boilerlift adds ${API_PATH})
   N8N_API_KEY  n8n API key (n8n → Settings → n8n API)
 
 Exit codes:

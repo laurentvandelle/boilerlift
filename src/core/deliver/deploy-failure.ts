@@ -70,7 +70,7 @@ export function describeFailure(failure: ApiFailure): DeployError {
       kind: 'unreachable',
       call: failure.call,
       detail: `unreachable: ${failure.reason}`,
-      hint: 'Run n8nlift ping to check N8N_URL and your network, then run deploy again',
+      hint: 'Run lift ping to check N8N_URL and your network, then run deploy again',
     };
   case 'invalid-response':
     return {

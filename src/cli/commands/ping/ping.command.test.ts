@@ -44,7 +44,7 @@ describe('pingCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `n8nlift ping
+      stdout: `lift ping
   URL      https://n8n.example.com (from env)
   API key  •••• (set, from env)
 

@@ -20,7 +20,7 @@ export function unknownCommand(name: string, registry: readonly CommandDefinitio
 export function renderGlobalHelp(registry: readonly CommandDefinition[]): string {
   const commands = table(registry.map((command): Row => [command.name, command.summary]));
   const options = table(optionRows(GLOBAL_OPTIONS));
-  return `Usage: n8nlift <command> [options]
+  return `Usage: lift <command> [options]
 
 Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
 
@@ -28,7 +28,8 @@ Commands:
 ${commands}
 Options:
 ${options}
-Run \`n8nlift help <command>\` for the options of one command.
+Run \`lift help <command>\` for the options of one command.
+\`boilerlift\` is an alias of \`lift\`.
 `;
 }
 

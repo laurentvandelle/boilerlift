@@ -15,7 +15,7 @@ export function renderConfigError(error: ConfigError): CliResult {
 /** The configuration ping read, one line per check, then the summary. */
 export function renderReport(config: ConnectionConfig, report: ConnectionReport): CliResult {
   const header = [
-    'n8nlift ping',
+    'lift ping',
     `  URL      ${config.url.value} (from ${config.url.source})`,
     `  API key  •••• (set, from ${config.apiKey.source})`,
     ...report.warnings.map((warning) => `  ! ${warning}`),
