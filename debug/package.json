@@ -6,7 +6,7 @@
     "deploy:json": "node ../dist/bin.js deploy --json"
   },
   "dependencies": {
-    "n8nlift": "file:../dist"
+    "boilerlift": "file:../dist"
   },
   "type": "module"
 }

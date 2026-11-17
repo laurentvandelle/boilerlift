@@ -1,10 +1,10 @@
 // A workflow pasted from an n8n export (editor → ⋯ → Download) into defineWorkflow, as the default export.
 // Its stable name is the file name: `demo`. Edit a parameter, then deploy again to get a draft.
 // Break a connection target (for example 'Set mesage') and the editor flags it.
-import { defineWorkflow } from 'n8nlift';
+import { defineWorkflow } from 'boilerlift';
 
 export default defineWorkflow({
-  name: 'n8nlift demo',
+  name: 'Boilerlift demo',
   nodes: [
     {
       parameters: {},
@@ -18,7 +18,7 @@ export default defineWorkflow({
       parameters: {
         assignments: {
           assignments: [
-            { id: 'a1', name: 'message', value: 'Hello from n8nlift', type: 'string' },
+            { id: 'a1', name: 'message', value: 'Hello from Boilerlift', type: 'string' },
           ],
         },
         options: {},
