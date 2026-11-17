@@ -2,7 +2,7 @@ import { Check, CheckConnectionInput, CheckName, ConnectionReport, FailedCheck }
 import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
 import { API_KEY_HINT, API_PATH, classifyHttpError } from '#src/core/n8n/n8n-api';
 
-/** The oldest Node.js that n8nlift runs on (`engines` in package.json). */
+/** The oldest Node.js that Boilerlift runs on (`engines` in package.json). */
 export const MIN_NODE_VERSION = '22.18.0';
 
 /** MIN_NODE_VERSION as hints and usage texts write it, without a `.0` patch: `22.18`. */

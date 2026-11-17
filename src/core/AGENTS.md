@@ -14,8 +14,8 @@
 
 - `compile/` reads and validates workflow files: the `defineWorkflow` types for the editor, and the loader that checks each export before deploy. It does no I/O: the files come in through `CommandContext.loadWorkflowFiles`. `isWorkflowFilePath` alone decides which paths are workflow files. Why typed exports: `docs/adr/0005-workflow-files-are-typed-n8n-exports.md`.
 - `deliver/` is deploy: `plan-deploy.ts` reads and decides each workflow's action, `apply-plan.ts` runs the writes (`docs/adr/0004-deploy-plans-before-it-writes.md`). `deploy-failure.ts` holds `EFFECTS`, the one table that says which deploy errors stop the run and with which exit code.
-- `connection/` is ping: the checks that `n8nlift ping` runs.
-- Shared folders: `config/` (connection config from env and `.env`), `n8n/` (the `N8nClient` port in `n8n.model.ts`, the id guards, what n8nlift relies on in the public API in `n8n-api.ts`, and the shared fake), `common/` (what several folders use: every exit code in `exit-codes.ts`, `isRecord` in `is-record.ts`, `Result` in `result.ts`).
+- `connection/` is ping: the checks that `lift ping` runs.
+- Shared folders: `config/` (connection config from env and `.env`), `n8n/` (the `N8nClient` port in `n8n.model.ts`, the id guards, what Boilerlift relies on in the public API in `n8n-api.ts`, and the shared fake), `common/` (what several folders use: every exit code in `exit-codes.ts`, `isRecord` in `is-record.ts`, `Result` in `result.ts`).
 - Past the `N8nClient` port, the types are trusted: the adapter (`src/services/n8n/`) parses every body once. An `invalid-response` failure is treated like an unreachable instance (exit 3).
 - Each folder holds its code, its tests and its `*.model.ts`.
 

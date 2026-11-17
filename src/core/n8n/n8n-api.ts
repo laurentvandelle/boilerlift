@@ -1,4 +1,4 @@
-// What n8nlift relies on in the n8n public API: where it lives, how an update lands as a draft and since which n8n
+// What Boilerlift relies on in the n8n public API: where it lives, how an update lands as a draft and since which n8n
 // version (ADR 0003), and what its error statuses mean.
 
 /** Where the public API lives on the instance. */

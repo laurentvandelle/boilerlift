@@ -6,7 +6,7 @@ import { helpCommand } from '#src/cli/commands/help/help.command';
 const fakeCommand: CommandDefinition = {
   name: 'fake',
   summary: 'Do fake things',
-  usage: 'n8nlift fake [options]',
+  usage: 'lift fake [options]',
   allowPositionals: false,
   options: { target: { type: 'string', short: 't', description: 'Where to go' } },
   run: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
@@ -23,19 +23,20 @@ describe('helpCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `Usage: n8nlift <command> [options]
+      stdout: `Usage: lift <command> [options]
 
 Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
 
 Commands:
-  help  Show help for n8nlift or for one command
+  help  Show help for Boilerlift or for one command
   fake  Do fake things
 
 Options:
   -h, --help     Show this help
-  -v, --version  Print the n8nlift version
+  -v, --version  Print the Boilerlift version
 
-Run \`n8nlift help <command>\` for the options of one command.
+Run \`lift help <command>\` for the options of one command.
+\`boilerlift\` is an alias of \`lift\`.
 `,
     });
   });
@@ -48,7 +49,7 @@ Run \`n8nlift help <command>\` for the options of one command.
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `Usage: n8nlift fake [options]
+      stdout: `Usage: lift fake [options]
 
 Do fake things
 

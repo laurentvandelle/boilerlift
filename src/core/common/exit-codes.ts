@@ -13,7 +13,7 @@ export const EXIT_USAGE = 1;
  */
 export const EXIT_UNEXPECTED = 1;
 
-/** Node.js is older than n8nlift requires. */
+/** Node.js is older than Boilerlift requires. */
 export const EXIT_NODE_TOO_OLD = 2;
 
 /** The n8n instance or its public API cannot be reached. */

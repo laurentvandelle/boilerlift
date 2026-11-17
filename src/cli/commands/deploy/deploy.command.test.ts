@@ -66,7 +66,7 @@ describe('deployCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `n8nlift deploy → https://n8n.example.com
+      stdout: `lift deploy → https://n8n.example.com
 ~ updated       crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = skipped       daily-report   unchanged
 + created       invoice-sync   workflows/invoice-sync.workflow.ts
@@ -101,7 +101,7 @@ describe('deployCommand', () => {
     await deployCommand.run(TEXT, ctx);
 
     expect(n8n.workflows.find((workflow) => workflow.name === 'Invoice sync')?.tags.map((tag) => tag.name)).toEqual([
-      'n8nlift:invoice-sync',
+      'boilerlift:invoice-sync',
     ]);
   });
 
@@ -155,7 +155,7 @@ describe('deployCommand', () => {
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(5);
-    expect(result.stdout).toBe(`n8nlift deploy → https://n8n.example.com
+    expect(result.stdout).toBe(`lift deploy → https://n8n.example.com
 ✗ failed        crm-import     PUT /api/v1/workflows/crm1 → HTTP 500: boom
                 → ${RETRY_HINT}
 + created       daily-report   workflows/daily-report.json
@@ -206,7 +206,7 @@ Next: fix each failure with the hint under its line, then run deploy again.
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(4);
-    expect(result.stdout).toBe(`n8nlift deploy → https://n8n.example.com
+    expect(result.stdout).toBe(`lift deploy → https://n8n.example.com
 ✗ failed        crm-import     POST /api/v1/workflows → HTTP 401: boom
                 → ${KEY_HINT}
 - not-processed daily-report   not processed
@@ -249,7 +249,7 @@ Next: ${KEY_HINT}.
 
     expect(result).toEqual({
       exitCode: 6,
-      stdout: 'n8nlift deploy → https://n8n.example.com\n',
+      stdout: 'lift deploy → https://n8n.example.com\n',
       stderr: `✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required
   → Upgrade the instance to n8n 2.35.0 or later, then run deploy again
 Nothing was written to n8n.
@@ -296,7 +296,7 @@ Nothing was written to n8n.
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `n8nlift deploy → https://n8n.example.com
+      stdout: `lift deploy → https://n8n.example.com
 ! restored      daily-report   workflows/daily-report.json (unpublished draft)
 ⚠ daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
 0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
@@ -320,14 +320,14 @@ Nothing was written to n8n.
       'deploy',
       TEXT,
       `⚠ daily-report: workflow a1 was archived in n8n; it is back as an unpublished draft
-⚠ daily-report: archived workflows a1 and a2 all carry the tag n8nlift:daily-report; deploy restored a1
+⚠ daily-report: archived workflows a1 and a2 all carry the tag boilerlift:daily-report; deploy restored a1
 `,
     ],
     [
       'deploy --dry-run',
       DRY_RUN,
       `⚠ daily-report: workflow a1 was archived in n8n; deploy would bring it back as an unpublished draft
-⚠ daily-report: archived workflows a1 and a2 all carry the tag n8nlift:daily-report; deploy would restore a1
+⚠ daily-report: archived workflows a1 and a2 all carry the tag boilerlift:daily-report; deploy would restore a1
 `,
     ],
   ])('Should name the copy it restores in the warnings when %s meets several archived workflows with the stable tag', async (_command, input, warnings) => {
@@ -342,12 +342,12 @@ Nothing was written to n8n.
   });
 
   test.each<[string, CommandInput, string[], string]>([
-    ['deploy', TEXT, ['arc'], '⚠ daily-report: archived workflow arc still carries the tag n8nlift:daily-report; deploy used the live workflow rep1\n'],
+    ['deploy', TEXT, ['arc'], '⚠ daily-report: archived workflow arc still carries the tag boilerlift:daily-report; deploy used the live workflow rep1\n'],
     [
       'deploy --dry-run',
       DRY_RUN,
       ['a1', 'a2'],
-      '⚠ daily-report: archived workflows a1 and a2 still carry the tag n8nlift:daily-report; deploy would use the live workflow rep1\n',
+      '⚠ daily-report: archived workflows a1 and a2 still carry the tag boilerlift:daily-report; deploy would use the live workflow rep1\n',
     ],
   ])('Should warn about the archived copies when %s meets them next to the live workflow', async (_command, input, archivedIds, warning) => {
     const archived = archivedIds.map((id) => fakeN8nWorkflow(REPORT, { id, isArchived: true }));
@@ -425,12 +425,12 @@ Nothing was written to n8n.
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `n8nlift deploy --dry-run → https://n8n.example.com
+      stdout: `lift deploy --dry-run → https://n8n.example.com
 ~ would update  crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = would skip    daily-report   unchanged
 + would create  invoice-sync   workflows/invoice-sync.workflow.ts
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
-Dry run: nothing was written. Run n8nlift deploy to apply.
+Dry run: nothing was written. Run lift deploy to apply.
 n8n can still reject a write; this preview covers what reads can show.
 `,
     });
@@ -478,7 +478,7 @@ n8n can still reject a write; this preview covers what reads can show.
     const result = await deployCommand.run(DRY_RUN, ctx);
 
     expect(result.exitCode).toBe(5);
-    expect(result.stdout).toContain('✗ would fail    daily-report   GET /api/v1/workflows → workflows a and b both carry the tag n8nlift:daily-report\n');
+    expect(result.stdout).toContain('✗ would fail    daily-report   GET /api/v1/workflows → workflows a and b both carry the tag boilerlift:daily-report\n');
     expect(result.stdout).toContain('Would: 0 create, 0 update, 0 restore, 0 skip, 1 fail.\n');
   });
 
@@ -500,7 +500,7 @@ Next: fix each failure with the hint under its line, then run deploy again.
     const result = await deployCommand.run(DRY_RUN, ctx);
 
     expect(result.exitCode).toBe(6);
-    expect(result.stdout).toBe('n8nlift deploy --dry-run → https://n8n.example.com\n');
+    expect(result.stdout).toBe('lift deploy --dry-run → https://n8n.example.com\n');
     expect(result.stderr).toContain('✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required');
     expect(result.stderr).toContain('Nothing was written to n8n.');
   });
@@ -526,7 +526,7 @@ Next: fix each failure with the hint under its line, then run deploy again.
 
     const dryRun = options['dry-run'];
 
-    expect(usage).toContain('n8nlift deploy [--dry-run] [--json]');
+    expect(usage).toContain('lift deploy [--dry-run] [--json]');
     expect(usage).toContain('It exits with the same codes as a real deploy.');
     expect(dryRun).toEqual({ type: 'boolean', description: 'Show what deploy would do; write nothing' });
   });

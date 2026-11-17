@@ -1,14 +1,14 @@
-# n8nlift
+# Boilerlift
 
-n8nlift is a command-line tool that keeps n8n workflows as typed files in Git and tests them like any other code.
+Boilerlift is a command-line tool that keeps n8n workflows as typed files in Git and tests them like any other code.
 It deploys them to the user's own n8n instance as drafts, and the published version keeps running until the user publishes.
 
 ## Terms
 
 ### The instance
 
-- **Instance**: the user's own n8n server, reached through `N8N_URL` and its public API with `N8N_API_KEY`. n8nlift never hosts one.
-- **Instance connection**: the link from n8nlift to the instance, that `ping` checks. _Avoid_: connection, which is a link between two nodes.
+- **Instance**: the user's own n8n server, reached through `N8N_URL` and its public API with `N8N_API_KEY`. Boilerlift never hosts one.
+- **Instance connection**: the link from Boilerlift to the instance, that `ping` checks. _Avoid_: connection, which is a link between two nodes.
 
 ### Workflows
 
@@ -17,7 +17,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Node**: one step of an n8n workflow, as the export lists it under `nodes`. _Avoid_: node for the runtime; write Node.js.
 - **Connection**: a link from the output of one node to another node, as the export lists it under `connections`. _Avoid_: connection for the instance connection.
 - **Stable name**: the identity of a workflow across runs and instances: the file base name without `.workflow.ts` / `.json`, 1 to 16 of `a-z`, `0-9` and `-`.
-- **Stable tag**: the tag `n8nlift:<stable-name>` that a workflow carries on the instance, by which `deploy` finds it again.
+- **Stable tag**: the tag `boilerlift:<stable-name>` that a workflow carries on the instance, by which `deploy` finds it again.
 
 ### Versions on the instance
 

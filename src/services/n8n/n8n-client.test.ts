@@ -132,7 +132,7 @@ describe('createN8nClient public API calls', () => {
   test('Should follow nextCursor when the workflow list has several pages', async () => {
     const pages = [
       json({
-        data: [{ id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], nodes: [], isArchived: true }],
+        data: [{ id: '1', name: 'A', tags: [{ id: 't', name: 'boilerlift:a' }], nodes: [], isArchived: true }],
         nextCursor: 'next=1',
       }),
       json({ data: [{ id: '2', name: 'B', tags: [], isArchived: false }], nextCursor: null }),
@@ -148,7 +148,7 @@ describe('createN8nClient public API calls', () => {
         call: 'GET /api/v1/workflows',
         status: 200,
         body: [
-          { id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], isArchived: true },
+          { id: '1', name: 'A', tags: [{ id: 't', name: 'boilerlift:a' }], isArchived: true },
           { id: '2', name: 'B', tags: [], isArchived: false },
         ],
       },

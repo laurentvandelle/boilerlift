@@ -4,7 +4,7 @@ Instructions for every coding agent. Humans read `README.md` and `ARCHITECTURE.m
 
 ## Role
 
-This repository is `n8nlift`, a TypeScript CLI published to npm that validates typed workflow files and delivers them to n8n. Source lives in `src/`: the `n8nlift` command starts in `src/bin.ts`; `src/index.ts` is the package entry point and exports `defineWorkflow` and the workflow types. `debug/` runs the built `dist/bin.js` like an external user.
+This repository is `boilerlift`, a TypeScript CLI published to npm that validates typed workflow files and delivers them to n8n. Source lives in `src/`: the `lift` command (alias `boilerlift`) starts in `src/bin.ts`; `src/index.ts` is the package entry point and exports `defineWorkflow` and the workflow types. `debug/` runs the built `dist/bin.js` like an external user.
 
 ## Commands
 
@@ -27,7 +27,7 @@ Never hand back a failure: fix it, then run the command again.
 
 `npm run pub` bumps the version and publishes to npm. Never run it unless the user asks.
 
-`npm start` builds, then runs a real `n8nlift deploy` (no `--dry-run`) of `debug/workflows` to the n8n instance in `debug/.env`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks.
+`npm start` builds, then runs a real `lift deploy` (no `--dry-run`) of `debug/workflows` to the n8n instance in `debug/.env`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks.
 
 ## Routing
 
@@ -53,7 +53,7 @@ Never hand back a failure: fix it, then run the command again.
 
 ## Boundaries
 
-- `debug/` uses only the built `dist/` (it runs `dist/bin.js` and depends on `n8nlift` as `file:../dist`). It never imports from `src/`.
+- `debug/` uses only the built `dist/` (it runs `dist/bin.js` and depends on `boilerlift` as `file:../dist`). It never imports from `src/`.
 
 No check enforces this. `tsconfig.json` excludes `debug/` and ESLint ignores it. Boundaries inside `src/` are in `src/AGENTS.md`.
 

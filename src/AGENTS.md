@@ -12,7 +12,7 @@
 ## Shape
 
 - `bin.ts` is the executable: it hands `process.argv` and `nodeContext(process.cwd())` (`cli/node-context.ts`) to `runCli`, then writes the `CliResult`. An error that escapes a command reaches it and exits 1 with its stack.
-- `index.ts` is the package entry point: what workflow files import from `'n8nlift'` (`defineWorkflow` and the workflow types). Everything it exports is public API.
+- `index.ts` is the package entry point: what workflow files import from `'boilerlift'` (`defineWorkflow` and the workflow types). Everything it exports is public API.
 - Imports across folders use the `#src/` alias (`#src/cli/cli.model`). Relative imports fail lint. Node.js resolves the alias at runtime through `package.json` `imports` (`#src/*` → `./dist/*.js`). `tsconfig.json` `paths` maps it to `src/` for type-checking and lint, and `vitest.config.mts` maps it in tests. The alias must start with `#`: Node.js rejects other prefixes such as `@/`.
 - Type files are named `*.model.ts` and hold types only.
 - Exported functions declare their return type (`@typescript-eslint/explicit-function-return-type`). Lint enforces it: `lint:check` fails on warnings.

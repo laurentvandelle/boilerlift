@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "types": ["node"],
     "paths": {
-      "n8nlift": ["../dist/index.d.ts"]
+      "boilerlift": ["../dist/index.d.ts"]
     }
   },
   "include": ["main.ts"]

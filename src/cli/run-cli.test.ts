@@ -11,7 +11,7 @@ import { crashResult, runCli } from '#src/cli/run-cli';
 const echoCommand: CommandDefinition = defineCommand({
   name: 'echo',
   summary: 'Echo the parsed input',
-  usage: 'n8nlift echo [options]',
+  usage: 'lift echo [options]',
   allowPositionals: false,
   options: {
     name: { type: 'string', short: 'n', description: 'Name to echo' },
@@ -25,7 +25,7 @@ const echoCommand: CommandDefinition = defineCommand({
 const throwingCommand: CommandDefinition = defineCommand({
   name: 'boom',
   summary: 'Throw',
-  usage: 'n8nlift boom',
+  usage: 'lift boom',
   allowPositionals: false,
   options: {},
   run: () => Promise.reject(new Error('EACCES: permission denied, scandir workflows')),
@@ -46,21 +46,22 @@ describe('runCli', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `Usage: n8nlift <command> [options]
+      stdout: `Usage: lift <command> [options]
 
 Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
 
 Commands:
-  help     Show help for n8nlift or for one command
-  version  Print the n8nlift version
+  help     Show help for Boilerlift or for one command
+  version  Print the Boilerlift version
   ping     Check the connection to your n8n instance
   deploy   Deliver your workflows to your n8n instance as drafts
 
 Options:
   -h, --help     Show this help
-  -v, --version  Print the n8nlift version
+  -v, --version  Print the Boilerlift version
 
-Run \`n8nlift help <command>\` for the options of one command.
+Run \`lift help <command>\` for the options of one command.
+\`boilerlift\` is an alias of \`lift\`.
 `,
     });
   });

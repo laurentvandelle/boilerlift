@@ -9,7 +9,7 @@ import { isRecord } from '#src/core/common/is-record';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
- * `fetch`, the n8nlift version, and the `.env` file and workflow files of `cwd`.
+ * `fetch`, the Boilerlift version, and the `.env` file and workflow files of `cwd`.
  */
 export function nodeContext(cwd: string): CommandContext {
   return {
@@ -23,7 +23,7 @@ export function nodeContext(cwd: string): CommandContext {
   };
 }
 
-/** The version in the n8nlift package.json, two folders above this file (`src/cli/` or `dist/cli/`). */
+/** The version in the boilerlift package.json, two folders above this file (`src/cli/` or `dist/cli/`). */
 function packageVersion(): string {
   const path = join(__dirname, '..', '..', 'package.json');
   const packageJson: unknown = JSON.parse(readFileSync(path, 'utf8'));

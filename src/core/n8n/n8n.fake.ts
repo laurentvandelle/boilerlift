@@ -93,9 +93,9 @@ export function fakeTag({ id, name }: FakeTag): N8nTag {
   return { id: fakeTagId(id), name };
 }
 
-/** The tag `n8nlift:{stableName}`, which identifies a workflow on the instance. */
+/** The tag `boilerlift:{stableName}`, which identifies a workflow on the instance. */
 export function fakeStableTag(stableName: string): N8nTag {
-  return fakeTag({ id: `tag-${stableName}`, name: `n8nlift:${stableName}` });
+  return fakeTag({ id: `tag-${stableName}`, name: `boilerlift:${stableName}` });
 }
 
 /**

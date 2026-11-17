@@ -4,8 +4,8 @@ import { defineCommand } from '#src/cli/define-command';
 
 export const helpCommand: CommandDefinition = defineCommand({
   name: 'help',
-  summary: 'Show help for n8nlift or for one command',
-  usage: 'n8nlift help [command]',
+  summary: 'Show help for Boilerlift or for one command',
+  usage: 'lift help [command]',
   allowPositionals: true,
   options: {},
   run: ({ positionals }, ctx) => Promise.resolve(help(positionals, ctx.registry)),

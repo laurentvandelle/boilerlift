@@ -4,8 +4,8 @@ import { defineCommand } from '#src/cli/define-command';
 
 export const versionCommand: CommandDefinition = defineCommand({
   name: 'version',
-  summary: 'Print the n8nlift version',
-  usage: 'n8nlift version',
+  summary: 'Print the Boilerlift version',
+  usage: 'lift version',
   allowPositionals: false,
   options: {},
   run: (_input, ctx) => Promise.resolve(renderVersion(ctx.version)),

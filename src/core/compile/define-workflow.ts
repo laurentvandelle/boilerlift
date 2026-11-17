@@ -6,7 +6,7 @@ import { Workflow, WorkflowDefinition, WorkflowNode } from '#src/core/compile/wo
  * a connection from or to a node that does not exist, and a node name used twice.
  *
  * ```ts
- * import { defineWorkflow } from 'n8nlift';
+ * import { defineWorkflow } from 'boilerlift';
  * export default defineWorkflow({ name: 'Invoice sync', nodes: [...], connections: {...} });
  * ```
  */
