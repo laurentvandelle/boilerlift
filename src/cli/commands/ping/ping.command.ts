@@ -1,15 +1,10 @@
-import { CliResult, CommandDefinition } from '#src/cli/cli.model';
+import { CommandDefinition } from '#src/cli/cli.model';
+import { renderConfigError, renderReport } from '#src/cli/commands/ping/ping.render';
 import { defineCommand } from '#src/cli/define-command';
-import { ConnectionConfig } from '#src/core/config/config.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
-import { describeConfigError } from '#src/core/config/config-error';
-import { CHECK_LABELS, MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/check-connection';
-import { Check, ConnectionReport } from '#src/core/connection/connection.model';
-import { EXIT_USAGE } from '#src/core/common/exit-codes';
+import { MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/check-connection';
 import { API_PATH } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/services/n8n/n8n-client';
-
-const STATUS_MARKS: Record<Check['status'], string> = { ok: '✓', failed: '✗', skipped: '–' };
 
 const USAGE = `n8nlift ping
 
@@ -34,35 +29,11 @@ export const pingCommand: CommandDefinition = defineCommand({
   run: async (_input, ctx) => {
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
-      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeConfigError(resolved.error) };
+      return renderConfigError(resolved.error);
     }
     const config = resolved.value;
     const client = createN8nClient({ config, fetch: ctx.fetch });
     const report = await checkConnection({ nodeVersion: ctx.nodeVersion, config, client });
-    return render(config, report);
+    return renderReport(config, report);
   },
 });
-
-function render(config: ConnectionConfig, report: ConnectionReport): CliResult {
-  const header = [
-    'n8nlift ping',
-    `  URL      ${config.url.value} (from ${config.url.source})`,
-    `  API key  •••• (set, from ${config.apiKey.source})`,
-    ...report.warnings.map((warning) => `  ! ${warning}`),
-  ];
-  const width = Math.max(...Object.values(CHECK_LABELS).map((label) => label.length)) + 2;
-  const checks = report.checks.flatMap((check) => {
-    const line = `${STATUS_MARKS[check.status]} ${CHECK_LABELS[check.name].padEnd(width)}${check.detail}`;
-    return check.status === 'failed' ? [line, `${' '.repeat(width + 2)}→ ${check.hint}`] : [line];
-  });
-  const failures = report.checks.filter((check) => check.status === 'failed').length;
-  const summary =
-    failures === 0
-      ? 'All checks passed.'
-      : `${failures} check${failures === 1 ? '' : 's'} failed. Exit code ${report.exitCode}.`;
-  return {
-    exitCode: report.exitCode,
-    stdout: `${header.join('\n')}\n\n${checks.join('\n')}\n\n${summary}\n`,
-    stderr: failures === 0 ? '' : `${summary}\n`,
-  };
-}

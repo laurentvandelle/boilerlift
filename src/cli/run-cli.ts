@@ -1,14 +1,8 @@
 import { parseArgs } from 'node:util';
 import { CliResult, CommandContext, CommandDefinition, CommandInput } from '#src/cli/cli.model';
-import {
-  GLOBAL_OPTIONS,
-  commandOptions,
-  renderCommandHelp,
-  renderGlobalHelp,
-  unknownCommand,
-  usageError,
-} from '#src/cli/commands/help/help.command';
-import { EXIT_OK, EXIT_UNEXPECTED } from '#src/core/common/exit-codes';
+import { GLOBAL_OPTIONS, commandOptions } from '#src/cli/commands/help/help.options';
+import { renderCommandHelp, renderGlobalHelp, renderHelp, unknownCommand, usageError } from '#src/cli/commands/help/help.render';
+import { EXIT_UNEXPECTED } from '#src/core/common/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 
 /** Each global option, long and short, and the command it runs: `--version` and `-v` run version. */
@@ -41,7 +35,7 @@ async function runCommand(command: CommandDefinition, args: string[], ctx: Comma
     return usageError(input.error, renderCommandHelp(command));
   }
   if (input.value.values.help === true) {
-    return { exitCode: EXIT_OK, stdout: renderCommandHelp(command), stderr: '' };
+    return renderHelp(renderCommandHelp(command));
   }
   return command.run(input.value, ctx);
 }

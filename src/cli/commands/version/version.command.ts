@@ -1,6 +1,6 @@
 import { CommandDefinition } from '#src/cli/cli.model';
+import { renderVersion } from '#src/cli/commands/version/version.render';
 import { defineCommand } from '#src/cli/define-command';
-import { EXIT_OK } from '#src/core/common/exit-codes';
 
 export const versionCommand: CommandDefinition = defineCommand({
   name: 'version',
@@ -8,5 +8,5 @@ export const versionCommand: CommandDefinition = defineCommand({
   usage: 'n8nlift version',
   allowPositionals: false,
   options: {},
-  run: (_input, ctx) => Promise.resolve({ exitCode: EXIT_OK, stdout: `${ctx.version}\n`, stderr: '' }),
+  run: (_input, ctx) => Promise.resolve(renderVersion(ctx.version)),
 });

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { fakeContext } from '#src/cli/cli.fake';
 import { CommandContext, CommandDefinition } from '#src/cli/cli.model';
-import { helpCommand, renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.command';
+import { helpCommand } from '#src/cli/commands/help/help.command';
+import { renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.render';
 import { versionCommand } from '#src/cli/commands/version/version.command';
 import { defineCommand } from '#src/cli/define-command';
 import { COMMANDS } from '#src/cli/registry';
