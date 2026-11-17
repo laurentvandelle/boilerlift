@@ -1,5 +1,5 @@
 ---
-status: accepted, amended by ADR-0005
+status: accepted, amended by ADR-0005 and ADR-0007
 ---
 
 # Split src into cli and core, with one folder per command
@@ -15,3 +15,4 @@ n8nlift is a CLI only: it compiles workflows written in TypeScript into n8n JSON
 
 - `runCli` and the CLI types are not public. `src/index.ts` exports nothing yet. `debug/` exercises the CLI by running `dist/bin.js`.
 - Help text is generated from each command's definition, so adding a command means adding a folder and one line in `src/cli/registry.ts`.
+- ADR-0007 adds a third layer, `src/services/`, for the adapters behind the ports of `core/`: `cli` → `services` → `core`.

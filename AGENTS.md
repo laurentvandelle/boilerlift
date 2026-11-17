@@ -34,6 +34,7 @@ Never hand back a failure: fix it, then run the command again.
 - Before editing `src/**`, read `src/AGENTS.md`.
 - Before editing `src/cli/**`, read `src/cli/AGENTS.md`.
 - Before editing `src/core/**`, read `src/core/AGENTS.md`.
+- Before editing `src/services/**`, read `src/services/AGENTS.md`.
 - Before adding a dependency or crossing a module boundary, read `ARCHITECTURE.md`.
 - Before naming a domain concept, read `GLOSSARY.md`.
 - Before writing or changing a test, read `docs/testing.md`.

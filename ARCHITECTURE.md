@@ -16,17 +16,21 @@ Operational rules for agents live in `AGENTS.md`. This file is background.
   - `compile/` reads and validates workflow files: `defineWorkflow` and its types for the editor, and a pure loader that checks each export's shape, nodes, connections and stable name before deploy.
   - `deliver/` is deploy: `plan-deploy.ts` reads the instance and decides each workflow's action (also behind `deploy --dry-run`), `apply-plan.ts` runs the writes, `deploy-failure.ts` says which failures stop the run and with which exit code, and `stable-tag.ts` matches workflows by their `n8nlift:<stable-name>` tag.
   - `connection/` is ping: the checks behind `n8nlift ping`.
-  - Shared folders: `config/` (reads `N8N_URL` and `N8N_API_KEY` from the environment and `.env`), `n8n/` (the client for the instance's public API, which parses every answer once) and `common/` (the exit codes of every command, `isRecord`, and the `Result` type of expected failures).
+  - Shared folders: `config/` (reads `N8N_URL` and `N8N_API_KEY` from the environment and `.env`), `n8n/` (the `N8nClient` port, the id guards and what n8nlift relies on in the public API) and `common/` (the exit codes of every command, `isRecord`, and the `Result` type of expected failures).
+- `src/services/` — the adapters that reach the outside world, behind the ports of `core/`. Only the commands use them:
+  - `http/` is the HTTP transport: one `fetch` per request, a timeout, and network errors described for a person. It knows no service.
+  - `n8n/` implements the `N8nClient` port over `http/`: the API key, the paths and paging of the public API, and the parsers that check every body once.
 - `debug/` — a separate npm package that depends on `file:../dist` and runs the built `dist/bin.js`, used to try the CLI as a user would.
 
-Why this split: `docs/adr/0001-cli-and-core-layers.md`. Why typed n8n exports: `docs/adr/0005-workflow-files-are-typed-n8n-exports.md`. Why tags and drafts: `docs/adr/0002-tag-identity-and-draft-updates.md`, amended by `docs/adr/0003-draft-support-from-spec-and-unarchive-restore.md`. Why deploy plans before it writes: `docs/adr/0004-deploy-plans-before-it-writes.md`. Why failures are returned: `docs/adr/0006-expected-failures-are-returned-results.md`.
+Why this split: `docs/adr/0001-cli-and-core-layers.md`. Why typed n8n exports: `docs/adr/0005-workflow-files-are-typed-n8n-exports.md`. Why tags and drafts: `docs/adr/0002-tag-identity-and-draft-updates.md`, amended by `docs/adr/0003-draft-support-from-spec-and-unarchive-restore.md`. Why deploy plans before it writes: `docs/adr/0004-deploy-plans-before-it-writes.md`. Why failures are returned: `docs/adr/0006-expected-failures-are-returned-results.md`. Why adapters live in `services/`: `docs/adr/0007-adapters-live-in-services.md`.
 
 ## Boundaries
 
-- `cli` may import `core`. `core` never imports `cli`.
+- `cli` may import `core`. Only the commands import `services`, and `services` may import `core`. `core` imports neither `cli` nor `services`.
+- In `services/`, `http/` imports only `core/common/`; `n8n/` may import `http/`, `core/n8n/`, `core/config/` and `core/common/`.
 - `deliver` may import `compile`. `compile` never imports `deliver`, `n8n` or `connection`. Shared `core/` folders import neither stage. `deliver` and `connection` do not import each other.
 - A command imports only its own folder, the CLI contracts and `core`. Never another command.
-- Commands and `core/` get the outside world through their parameters (the injected `CommandContext`, the `N8nClient` port) and return their output. `node-context.ts` and `bin.ts` do the I/O.
+- Commands, `services/` and `core/` get the outside world through their parameters (the injected `CommandContext`, the `N8nClient` port, an injected `fetch`) and return their output. `node-context.ts` and `bin.ts` do the I/O.
 - `debug/` sees only the published surface in `dist/`, never `src/`.
 
 `npm run lint:check` enforces the `src/` rules: `eslint-plugin-boundaries` the import directions, and the hidden-dependency bans of `eslint.config.mts` the I/O rule. No check enforces the `debug/` rule.

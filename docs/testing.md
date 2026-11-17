@@ -38,7 +38,7 @@ Use the real thing wherever the test can, and pick the stand-in by the kind of d
 | The n8n instance | The shared in-memory instance, `fakeN8n()` in `src/core/n8n/n8n.fake.ts` |
 | The outside world of a command (env, `.env`, Node.js version, workflow files) | A `CommandContext` from `fakeContext()` in `src/cli/cli.fake.ts` |
 
-`fakeN8n()` is one store with two doors: `.client`, the `N8nClient` port, for core tests, and `.fetch`, answering like the n8n public API, for command tests. `src/cli/AGENTS.md` and `src/core/AGENTS.md` say which door each test uses. Do not write another n8n stand-in: two of them drift apart.
+`fakeN8n()` is one store with two doors: `.client`, the `N8nClient` port, for core tests, and `.fetch`, answering like the n8n public API, for command tests. `src/services/` tests pass their own `fetch` stub: they test the HTTP adapter itself. `src/cli/AGENTS.md` and `src/core/AGENTS.md` say which door each test uses. Do not write another n8n stand-in: two of them drift apart.
 
 Do not `vi.mock` the repository's own modules: mocking your own code tests the mock, not the code.
 
