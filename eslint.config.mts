@@ -30,6 +30,12 @@ const inlineRecordCheck = {
   message: 'Use isRecord from #src/core/common/is-record: the object check is written once, there.',
 };
 
+/** A function's return type spells out `Result<T, E>`: no alias such as `ConfigResult` hides it. */
+const resultAlias = {
+  selector: "TSTypeAliasDeclaration > TSTypeReference.typeAnnotation[typeName.name='Result']",
+  message: 'Write Result<T, E> in the signature: do not alias it (no FooResult type).',
+};
+
 export default tseslint.config(
   {
     ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'debug/**', 'eslint.config.mts'],
@@ -75,10 +81,10 @@ export default tseslint.config(
   },
   {
     // Test lint and the hidden-dependency bans set no-restricted-syntax on their own files further down, and the
-    // later block wins, so both repeat inlineRecordCheck. This block covers the rest of src/.
+    // later block wins, so both repeat inlineRecordCheck and resultAlias. This block covers the rest of src/.
     files: ['src/**/*.ts'],
     rules: {
-      'no-restricted-syntax': ['error', inlineRecordCheck],
+      'no-restricted-syntax': ['error', inlineRecordCheck, resultAlias],
     },
   },
   {
@@ -120,6 +126,7 @@ export default tseslint.config(
           message: 'Mock only third-party services: use the real code, a fake (*.fake.ts) or an in-memory adapter.',
         },
         inlineRecordCheck,
+        resultAlias,
       ],
       // Blank lines separate given, when and then; no comment labels them.
       'no-warning-comments': ['error', { terms: ['given', 'when', 'then', 'arrange', 'act', 'assert'], location: 'start' }],
@@ -368,6 +375,7 @@ export default tseslint.config(
           message: 'Inject an IdGenerator.',
         },
         inlineRecordCheck,
+        resultAlias,
       ],
     },
   },

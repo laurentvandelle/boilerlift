@@ -20,6 +20,7 @@
 ## Errors and states
 
 - An expected failure is returned, never thrown: the function returns the one `Result<T, E>` of `core/common/result.ts` (`ok`, `err`), and the caller checks it. Do not add another result shape. Error objects are tagged by `kind`. A throw is for a bug or a broken environment only: it reaches `bin.ts`, which prints the stack and exits 1. No check enforces this. Why: `docs/adr/0006-expected-failures-are-returned-results.md`.
+- Write `Result<T, E>` in full where it is used, as in `Result<ConnectionConfig, ConfigError>`. Do not alias it (`type ConfigResult = Result<…>`): the signature then shows both the value and the error. Lint enforces it.
 - A value with several states is a union keyed by one field (`action`, `status`, `kind`), each member carrying only its own fields, not a flag plus optional fields. Examples: `PlannedStep` and `DeployResult` (`core/deliver/deploy.model.ts`), `Check` (`core/connection/connection.model.ts`). No check enforces the shape; lint makes every `switch` over it exhaustive.
 
 ## Example
