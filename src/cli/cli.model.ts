@@ -1,5 +1,5 @@
 import { WorkflowFile } from '#src/core/compile/workflow.model';
-import { ExitCode } from '#src/core/exit/exit-codes';
+import { ExitCode } from '#src/core/common/exit-codes';
 
 export type { WorkflowFile };
 

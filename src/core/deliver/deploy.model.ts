@@ -1,5 +1,5 @@
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/core/exit/exit-codes';
+import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/core/common/exit-codes';
 import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';

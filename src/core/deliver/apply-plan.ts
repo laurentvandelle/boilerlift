@@ -4,7 +4,7 @@ import { DeployError, DeployPlan, DeployReport, DeployResult, PlannedStep, Resul
 import { isSameContent } from '#src/core/deliver/normalize';
 import { StableTag, stableTag } from '#src/core/deliver/stable-tag';
 import { ApiResult, N8nClient, N8nTag, N8nWorkflowBody, WorkflowId } from '#src/core/n8n/n8n.model';
-import { Result, err, ok } from '#src/core/result/result';
+import { Result, err, ok } from '#src/core/common/result';
 
 type WriteStep = Extract<PlannedStep, { action: 'created' | 'updated' | 'restored' }>;
 

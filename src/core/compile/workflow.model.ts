@@ -1,4 +1,4 @@
-import { Result } from '#src/core/result/result';
+import { Result } from '#src/core/common/result';
 
 /** One file found under `./workflows`: its parsed content, or why it could not be read. */
 export type WorkflowFile =

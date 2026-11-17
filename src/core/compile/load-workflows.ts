@@ -1,6 +1,6 @@
 import { LoadProblem, LoadResult, LocalWorkflow, StableName, WorkflowFile, WorkflowNode } from '#src/core/compile/workflow.model';
-import { isRecord } from '#src/core/guard/is-record';
-import { Result, err, ok } from '#src/core/result/result';
+import { isRecord } from '#src/core/common/is-record';
+import { Result, err, ok } from '#src/core/common/result';
 
 export const STABLE_NAME_PATTERN = /^[a-z0-9-]{1,16}$/;
 

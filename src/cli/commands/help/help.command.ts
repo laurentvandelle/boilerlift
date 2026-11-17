@@ -1,6 +1,6 @@
 import { CliResult, CommandDefinition, CommandOption } from '#src/cli/cli.model';
 import { defineCommand } from '#src/cli/define-command';
-import { EXIT_OK, EXIT_USAGE } from '#src/core/exit/exit-codes';
+import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 
 const HELP_OPTION: CommandOption = { type: 'boolean', short: 'h', description: 'Show this help' };
 

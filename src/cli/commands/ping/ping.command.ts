@@ -5,7 +5,7 @@ import { resolveConnectionConfig } from '#src/core/config/connection-config';
 import { describeConfigError } from '#src/core/config/config-error';
 import { CHECK_LABELS, MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
-import { EXIT_USAGE } from '#src/core/exit/exit-codes';
+import { EXIT_USAGE } from '#src/core/common/exit-codes';
 import { API_PATH } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 

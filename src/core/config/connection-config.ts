@@ -1,6 +1,6 @@
 import { parseEnv } from 'node:util';
 import { ConfigKey, ConfigResult, ConfigValue } from '#src/core/config/config.model';
-import { err, ok } from '#src/core/result/result';
+import { err, ok } from '#src/core/common/result';
 
 const URL_PROTOCOLS = ['http:', 'https:'];
 

@@ -8,8 +8,8 @@ import {
   unknownCommand,
   usageError,
 } from '#src/cli/commands/help/help.command';
-import { EXIT_OK, EXIT_UNEXPECTED } from '#src/core/exit/exit-codes';
-import { Result, err, ok } from '#src/core/result/result';
+import { EXIT_OK, EXIT_UNEXPECTED } from '#src/core/common/exit-codes';
+import { Result, err, ok } from '#src/core/common/result';
 
 /** Each global option, long and short, and the command it runs: `--version` and `-v` run version. */
 const GLOBAL_ALIASES: Record<string, string> = Object.fromEntries(

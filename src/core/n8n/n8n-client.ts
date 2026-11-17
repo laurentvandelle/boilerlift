@@ -1,4 +1,4 @@
-import { isRecord } from '#src/core/guard/is-record';
+import { isRecord } from '#src/core/common/is-record';
 import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
 import {
   BodyParser,
@@ -18,7 +18,7 @@ import {
   ProbeResult,
   WorkflowId,
 } from '#src/core/n8n/n8n.model';
-import { Result, err, ok } from '#src/core/result/result';
+import { Result, err, ok } from '#src/core/common/result';
 
 const HEALTH_PATH = '/healthz';
 const API_KEY_PATH = `${API_PATH}/workflows?limit=1`;

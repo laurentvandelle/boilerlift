@@ -1,5 +1,5 @@
 import { ConnectionConfig } from '#src/core/config/config.model';
-import { Result } from '#src/core/result/result';
+import { Result } from '#src/core/common/result';
 
 /** A workflow id on the instance. Only the client's response parsing (isWorkflowId in n8n-ids.ts) produces one. */
 export type WorkflowId = string & { readonly __brand: 'WorkflowId' };

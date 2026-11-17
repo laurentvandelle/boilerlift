@@ -1,5 +1,5 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { isRecord } from '#src/core/guard/is-record';
+import { isRecord } from '#src/core/common/is-record';
 import { N8nWorkflow } from '#src/core/n8n/n8n.model';
 
 interface Comparable {

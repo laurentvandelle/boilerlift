@@ -16,7 +16,7 @@ const noBarrelOrRelative = {
 };
 
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
-const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'exit', 'guard', 'result'];
+const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'common'];
 
 const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (docs/testing.md).'];
 const noSleep = 'No sleeps in tests: use fake timers or await the event.';
@@ -24,7 +24,7 @@ const noSleep = 'No sleeps in tests: use fake timers or await the event.';
 /** One way per job: `typeof x === 'object'` is written once, in isRecord. */
 const inlineRecordCheck = {
   selector: "BinaryExpression:matches([left.operator='typeof'][right.value='object'], [right.operator='typeof'][left.value='object'])",
-  message: 'Use isRecord from #src/core/guard/is-record: the object check is written once, there.',
+  message: 'Use isRecord from #src/core/common/is-record: the object check is written once, there.',
 };
 
 export default tseslint.config(
@@ -80,7 +80,7 @@ export default tseslint.config(
   },
   {
     // Strict types: no explicit any, no type assertion but `as const`, no non-null `!`. Parse untrusted input with a
-    // type guard instead (isRecord from core/guard/). A switch over a union handles every member.
+    // type guard instead (isRecord from core/common/). A switch over a union handles every member.
     files: ['src/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
@@ -145,9 +145,7 @@ export default tseslint.config(
         { type: 'config', pattern: 'src/core/config' },
         { type: 'n8n', pattern: 'src/core/n8n' },
         { type: 'connection', pattern: 'src/core/connection' },
-        { type: 'exit', pattern: 'src/core/exit' },
-        { type: 'guard', pattern: 'src/core/guard' },
-        { type: 'result', pattern: 'src/core/result' },
+        { type: 'common', pattern: 'src/core/common' },
       ],
       'boundaries/files': [
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
@@ -172,14 +170,9 @@ export default tseslint.config(
           policies: [
             // 1. npm packages and Node core: allowed unless a later policy says otherwise.
             { allow: { to: { module: { origin: ['external', 'core'] } } } },
-            // 2. core/exit/ holds the exit codes of every command, and core/result/ the one Result type: every folder may
-            // import them. core/guard/ holds the shared type guards (isRecord): every core/ folder may import it, and
-            // cli/ through CORE.
-            { allow: { to: { element: { type: ['exit', 'result'] } } } },
-            {
-              from: { element: { type: CORE } },
-              allow: { to: { element: { type: 'guard' } } },
-            },
+            // 2. core/common/ holds what several folders use: the exit codes of every command, the one Result type and the
+            // shared type guards (isRecord). Every folder may import it.
+            { allow: { to: { element: { type: 'common' } } } },
             // 3. One allow per layer: itself plus the layers it may use (src/core/AGENTS.md).
             // compile/ reads and validates workflow files, with no network. deliver/ sends them to n8n and may
             // read what compile/ produces. config/ and n8n/ are shared folders that know neither stage; n8n/ builds
@@ -238,17 +231,17 @@ export default tseslint.config(
             {
               from: { element: { type: 'compile' } },
               disallow: { to: { element: { type: ['deliver', 'n8n', 'connection'] } } },
-              message: 'compile/ imports only compile/, config/, exit/, guard/ and result/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
+              message: 'compile/ imports only compile/, config/ and common/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
-              from: { element: { type: ['config', 'n8n', 'exit', 'guard', 'result'] } },
+              from: { element: { type: ['config', 'n8n', 'common'] } },
               disallow: { to: { element: { type: ['compile', 'deliver'] } } },
               message: 'A shared core/ folder imports neither compile/ nor deliver/ (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: 'deliver' } },
               disallow: { to: { element: { type: 'connection' } } },
-              message: 'deliver/ does not import connection/, the checks behind ping: exit codes come from core/exit/.',
+              message: 'deliver/ does not import connection/, the checks behind ping: exit codes come from core/common/.',
             },
             // 6. n8n-client.ts is the fetch adapter. Only n8n/ and the commands, which build the client from
             // ctx.fetch, import it. Every other folder uses the N8nClient port.

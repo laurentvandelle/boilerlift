@@ -1,4 +1,4 @@
-import { isRecord } from '#src/core/guard/is-record';
+import { isRecord } from '#src/core/common/is-record';
 import { API_PATH } from '#src/core/n8n/n8n-api';
 import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
 import {
@@ -12,7 +12,7 @@ import {
   TagId,
   WorkflowId,
 } from '#src/core/n8n/n8n.model';
-import { err, ok } from '#src/core/result/result';
+import { err, ok } from '#src/core/common/result';
 
 /** An API spec that lists `publishIfActive`: the instance saves drafts (MIN_N8N_VERSION or later). */
 const DRAFT_SPEC = 'paths:\n  /workflows/{id}:\n    put:\n      parameters:\n        - name: publishIfActive\n';

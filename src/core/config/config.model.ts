@@ -1,4 +1,4 @@
-import { Result } from '#src/core/result/result';
+import { Result } from '#src/core/common/result';
 
 export type ConfigSource = 'env' | '.env';
 

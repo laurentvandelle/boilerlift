@@ -1,6 +1,6 @@
 // Parsers for the bodies the n8n public API sends. The client runs each body through one of them once, so past the
 // client the types are trusted. A parser returns `undefined` when the body does not have the expected shape.
-import { isRecord } from '#src/core/guard/is-record';
+import { isRecord } from '#src/core/common/is-record';
 import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
 import { N8nTag, N8nWorkflow, N8nWorkflowSummary } from '#src/core/n8n/n8n.model';
 

@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { CommandContext, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
-import { isRecord } from '#src/core/guard/is-record';
+import { isRecord } from '#src/core/common/is-record';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
