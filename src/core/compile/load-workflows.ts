@@ -1,4 +1,4 @@
-import { LoadProblem, LoadResult, LocalWorkflow, StableName, WorkflowFile, WorkflowNode } from '#src/core/compile/workflow.model';
+import { LoadProblem, LocalWorkflow, StableName, WorkflowFile, WorkflowNode } from '#src/core/compile/workflow.model';
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
 
@@ -29,7 +29,7 @@ function baseNameOf(path: string): string {
  * name, connection to a node that does not exist) fails the whole load,
  * so nothing is sent while one file is wrong.
  */
-export function loadWorkflows(files: WorkflowFile[]): LoadResult {
+export function loadWorkflows(files: WorkflowFile[]): Result<LocalWorkflow[], LoadProblem[]> {
   const problems: LoadProblem[] = [];
   const workflows: LocalWorkflow[] = [];
   const seen = new Map<StableName, string>();

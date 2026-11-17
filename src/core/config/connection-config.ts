@@ -1,6 +1,6 @@
 import { parseEnv } from 'node:util';
-import { ConfigKey, ConfigResult, ConfigValue } from '#src/core/config/config.model';
-import { err, ok } from '#src/core/common/result';
+import { ConfigError, ConfigKey, ConfigValue, ConnectionConfig } from '#src/core/config/config.model';
+import { Result, err, ok } from '#src/core/common/result';
 
 const URL_PROTOCOLS = ['http:', 'https:'];
 
@@ -12,7 +12,7 @@ const URL_PROTOCOLS = ['http:', 'https:'];
 export function resolveConnectionConfig(
   env: Readonly<Record<string, string | undefined>>,
   dotEnvText: string | undefined,
-): ConfigResult {
+): Result<ConnectionConfig, ConfigError> {
   const dotEnv = dotEnvText === undefined ? {} : parseEnv(dotEnvText);
   const url = pick('N8N_URL', env, dotEnv);
   const apiKey = pick('N8N_API_KEY', env, dotEnv);

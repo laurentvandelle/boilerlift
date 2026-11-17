@@ -1,8 +1,8 @@
-import { err, ok } from '#src/core/common/result';
+import { Result, err, ok } from '#src/core/common/result';
 import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
-import { ApiResult, N8nClient, ProbeResult, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiAnswer, ApiFailure, N8nClient, ProbeAnswer, ProbeFailure, WorkflowId } from '#src/core/n8n/n8n.model';
 import { createHttp, jsonBody, textBody } from '#src/services/http/http';
-import { HttpResult, JsonParser } from '#src/services/http/http.model';
+import { HttpAnswer, HttpFailure, JsonParser } from '#src/services/http/http.model';
 import { N8nClientOptions } from '#src/services/n8n/n8n-client.model';
 import {
   Page,
@@ -27,7 +27,7 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
   const auth = { 'X-N8N-API-KEY': config.apiKey.value };
 
   /** A probe reads no body: any success status is an answer, whatever its body. */
-  const probe = async (answer: Promise<HttpResult<string>>): Promise<ProbeResult> => {
+  const probe = async (answer: Promise<Result<HttpAnswer<string>, HttpFailure>>): Promise<Result<ProbeAnswer, ProbeFailure>> => {
     const result = await answer;
     if (result.ok) {
       return ok({ call: result.value.call, status: result.value.status });
@@ -43,14 +43,14 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
     }
   };
 
-  const listAll = async <T>(url: string, item: JsonParser<T>): Promise<ApiResult<T[]>> => {
+  const listAll = async <T>(url: string, item: JsonParser<T>): Promise<Result<ApiAnswer<T[]>, ApiFailure>> => {
     const response = jsonBody(pageParser(item));
     const items: T[] = [];
     let cursor: string | undefined;
     let last: { call: string; status: number };
     do {
       const separator = url.includes('?') ? '&' : '?';
-      const page: ApiResult<Page<T>> = await http.getRequest(
+      const page: Result<ApiAnswer<Page<T>>, ApiFailure> = await http.getRequest(
         `${url}${separator}limit=${PAGE_LIMIT}${cursor === undefined ? '' : `&cursor=${encodeURIComponent(cursor)}`}`,
         { headers: auth, response },
       );

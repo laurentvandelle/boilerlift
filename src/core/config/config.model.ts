@@ -1,5 +1,3 @@
-import { Result } from '#src/core/common/result';
-
 export type ConfigSource = 'env' | '.env';
 
 export type ConfigKey = 'N8N_URL' | 'N8N_API_KEY';
@@ -21,5 +19,3 @@ export interface ConnectionConfig {
  * - `invalid-url`: N8N_URL is set but is not an http: or https: URL.
  */
 export type ConfigError = { kind: 'missing'; keys: ConfigKey[] } | { kind: 'invalid-url'; url: ConfigValue };
-
-export type ConfigResult = Result<ConnectionConfig, ConfigError>;

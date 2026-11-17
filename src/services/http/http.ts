@@ -3,9 +3,10 @@ import { Result, err, ok } from '#src/core/common/result';
 import {
   BodyReader,
   Http,
+  HttpAnswer,
+  HttpFailure,
   HttpMethod,
   HttpOptions,
-  HttpResult,
   JsonParser,
   SendOptions,
 } from '#src/services/http/http.model';
@@ -33,7 +34,7 @@ export function jsonBody<T>(parser: JsonParser<T>): BodyReader<T> {
  * act on.
  */
 export function createHttp({ fetch, timeoutMs = DEFAULT_TIMEOUT_MS }: HttpOptions): Http {
-  const send = async <T>(method: HttpMethod, url: string, { headers = {}, body, response: read }: SendOptions<T>): Promise<HttpResult<T>> => {
+  const send = async <T>(method: HttpMethod, url: string, { headers = {}, body, response: read }: SendOptions<T>): Promise<Result<HttpAnswer<T>, HttpFailure>> => {
     const call = `${method} ${URL.canParse(url) ? new URL(url).pathname : url}`;
     try {
       const response = await fetch(url, {

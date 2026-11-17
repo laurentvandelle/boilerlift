@@ -41,8 +41,6 @@ export type HttpFailure =
   | { kind: 'http-error'; call: string; status: number; message?: string }
   | { kind: 'invalid-response'; call: string; status: number; detail: string };
 
-export type HttpResult<T> = Result<HttpAnswer<T>, HttpFailure>;
-
 export interface HttpOptions {
   fetch: typeof fetch;
   timeoutMs?: number;
@@ -50,7 +48,7 @@ export interface HttpOptions {
 
 /** Sends requests over HTTP and reads their answers. It knows nothing of the service behind the URL. */
 export interface Http {
-  getRequest: <T>(url: string, options: GetOptions<T>) => Promise<HttpResult<T>>;
-  postRequest: <T>(url: string, options: SendOptions<T>) => Promise<HttpResult<T>>;
-  putRequest: <T>(url: string, options: SendOptions<T>) => Promise<HttpResult<T>>;
+  getRequest: <T>(url: string, options: GetOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
+  postRequest: <T>(url: string, options: SendOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
+  putRequest: <T>(url: string, options: SendOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
 }

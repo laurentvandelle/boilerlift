@@ -1,5 +1,3 @@
-import { Result } from '#src/core/common/result';
-
 /** One file found under `./workflows`: its parsed content, or why it could not be read. */
 export type WorkflowFile =
   | {
@@ -35,9 +33,6 @@ export interface LoadProblem {
   /** What is wrong, in one sentence. */
   detail: string;
 }
-
-/** The workflows of every file, or every problem found: one problem fails the whole load. */
-export type LoadResult = Result<LocalWorkflow[], LoadProblem[]>;
 
 /** One node of an n8n workflow export. Unknown keys (`credentials`, `disabled`, `webhookId`…) are kept. */
 export interface WorkflowNode<Name extends string = string> {

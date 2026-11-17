@@ -3,7 +3,7 @@ import { describeFailure, isFatal, runEnd } from '#src/core/deliver/deploy-failu
 import { DeployError, DeployPlan, DeployReport, DeployResult, PlannedStep, ResultAction } from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { StableTag, stableTag } from '#src/core/deliver/stable-tag';
-import { ApiResult, N8nClient, N8nTag, N8nWorkflowBody, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiAnswer, ApiFailure, N8nClient, N8nTag, N8nWorkflowBody, WorkflowId } from '#src/core/n8n/n8n.model';
 import { Result, err, ok } from '#src/core/common/result';
 
 type WriteStep = Extract<PlannedStep, { action: 'created' | 'updated' | 'restored' }>;
@@ -132,7 +132,7 @@ function tagFinder(client: N8nClient, planned: N8nTag[]): TagFinder {
 }
 
 /** The deploy failure of a call that failed, or `undefined` when it went through. */
-function failureOf(answer: ApiResult<unknown>): Result<never, DeployError> | undefined {
+function failureOf(answer: Result<ApiAnswer<unknown>, ApiFailure>): Result<never, DeployError> | undefined {
   return answer.ok ? undefined : err(describeFailure(answer.error));
 }
 

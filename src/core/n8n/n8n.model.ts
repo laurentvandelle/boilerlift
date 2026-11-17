@@ -16,9 +16,6 @@ export type ProbeFailure =
   | { kind: 'unreachable'; call: string; reason: string }
   | { kind: 'http-error'; call: string; status: number };
 
-/** The outcome of a read-only check. */
-export type ProbeResult = Result<ProbeAnswer, ProbeFailure>;
-
 /** A public API call that went through, with its parsed body. `call` names it, for example `PUT /api/v1/workflows/abc`. */
 export interface ApiAnswer<T> {
   call: string;
@@ -36,9 +33,6 @@ export type ApiFailure =
   | { kind: 'unreachable'; call: string; reason: string }
   | { kind: 'http-error'; call: string; status: number; message?: string }
   | { kind: 'invalid-response'; call: string; status: number; detail: string };
-
-/** The outcome of one public API call. */
-export type ApiResult<T> = Result<ApiAnswer<T>, ApiFailure>;
 
 export interface N8nTag {
   id: TagId;
@@ -71,23 +65,23 @@ export interface N8nWorkflowBody {
 
 export interface N8nClient {
   /** `GET /healthz`: is the instance up and reachable? */
-  checkHealth(): Promise<ProbeResult>;
+  checkHealth(): Promise<Result<ProbeAnswer, ProbeFailure>>;
   /** `GET /api/v1/workflows?limit=1` with `X-N8N-API-KEY`: does the public API accept the key? */
-  checkApiKey(): Promise<ProbeResult>;
+  checkApiKey(): Promise<Result<ProbeAnswer, ProbeFailure>>;
   /** `GET /api/v1/openapi.yml`, without the API key: the public API spec the instance serves, as text. */
-  readApiSpec(): Promise<ApiResult<string>>;
+  readApiSpec(): Promise<Result<ApiAnswer<string>, ApiFailure>>;
   /** Every workflow on the instance, archived ones included, following `nextCursor`. */
-  listWorkflows(): Promise<ApiResult<N8nWorkflowSummary[]>>;
-  getWorkflow(id: WorkflowId): Promise<ApiResult<N8nWorkflow>>;
+  listWorkflows(): Promise<Result<ApiAnswer<N8nWorkflowSummary[]>, ApiFailure>>;
+  getWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflow>, ApiFailure>>;
   /** `POST /api/v1/workflows`: the new workflow is never published. */
-  createWorkflow(body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflowSummary>>;
+  createWorkflow(body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `PUT /api/v1/workflows/{id}?publishIfActive=false`: the change lands as a draft. */
-  updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<ApiResult<N8nWorkflowSummary>>;
+  updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
-  unarchiveWorkflow(id: WorkflowId): Promise<ApiResult<N8nWorkflowSummary>>;
+  unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** Every tag on the instance, following `nextCursor`. */
-  listTags(): Promise<ApiResult<N8nTag[]>>;
-  createTag(name: string): Promise<ApiResult<N8nTag>>;
+  listTags(): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
+  createTag(name: string): Promise<Result<ApiAnswer<N8nTag>, ApiFailure>>;
   /** `PUT /api/v1/workflows/{id}/tags`: replaces the workflow's tags. */
-  setWorkflowTags(id: WorkflowId, tagIds: TagId[]): Promise<ApiResult<N8nTag[]>>;
+  setWorkflowTags(id: WorkflowId, tagIds: TagId[]): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
 }

@@ -2,17 +2,18 @@ import { isRecord } from '#src/core/common/is-record';
 import { API_PATH } from '#src/core/n8n/n8n-api';
 import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
 import {
+  ApiAnswer,
   ApiFailure,
-  ApiResult,
   N8nClient,
   N8nTag,
   N8nWorkflow,
   N8nWorkflowBody,
-  ProbeResult,
+  ProbeAnswer,
+  ProbeFailure,
   TagId,
   WorkflowId,
 } from '#src/core/n8n/n8n.model';
-import { err, ok } from '#src/core/common/result';
+import { Result, err, ok } from '#src/core/common/result';
 
 /** An API spec that lists `publishIfActive`: the instance saves drafts (MIN_N8N_VERSION or later). */
 const DRAFT_SPEC = 'paths:\n  /workflows/{id}:\n    put:\n      parameters:\n        - name: publishIfActive\n';
@@ -128,17 +129,17 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
   const failureOf = (call: string): ApiFailure | undefined => failures.find((failure) => failure.call === call);
 
   /** Records the call, then answers it with its configured failure, or with what `perform` returns. */
-  const answer = <T>(call: string, perform: (call: string) => ApiResult<T>): Promise<ApiResult<T>> => {
+  const answer = <T>(call: string, perform: (call: string) => Result<ApiAnswer<T>, ApiFailure>): Promise<Result<ApiAnswer<T>, ApiFailure>> => {
     calls.push(call);
     const failure = failureOf(call);
     return Promise.resolve(failure === undefined ? perform(call) : err(failure));
   };
-  const onWorkflow = <T>(call: string, id: WorkflowId, perform: (workflow: N8nWorkflow) => T): Promise<ApiResult<T>> =>
+  const onWorkflow = <T>(call: string, id: WorkflowId, perform: (workflow: N8nWorkflow) => T): Promise<Result<ApiAnswer<T>, ApiFailure>> =>
     answer(call, () => {
       const workflow = workflows.find((candidate) => candidate.id === id);
       return workflow === undefined ? err(httpError(call, 404, 'Not Found')) : answered(call, perform(workflow));
     });
-  const probe = (call: string): Promise<ProbeResult> => {
+  const probe = (call: string): Promise<Result<ProbeAnswer, ProbeFailure>> => {
     calls.push(call);
     const failure = failureOf(call);
     switch (failure?.kind) {
@@ -255,7 +256,7 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
   return { client, fetch: answerHttp, workflows, tags, calls, requests };
 }
 
-function answered<T>(call: string, body: T): ApiResult<T> {
+function answered<T>(call: string, body: T): Result<ApiAnswer<T>, ApiFailure> {
   return ok({ call, status: 200, body });
 }
 
@@ -263,7 +264,7 @@ function answered<T>(call: string, body: T): ApiResult<T> {
  * An answer as n8n sends it: JSON, or a `{ data, nextCursor }` page of one. Unreachable becomes a network error, and
  * an invalid response a body that is not JSON.
  */
-function respond<T>(result: ApiResult<T>, shape: 'json' | 'page' = 'json'): Response {
+function respond<T>(result: Result<ApiAnswer<T>, ApiFailure>, shape: 'json' | 'page' = 'json'): Response {
   if (result.ok) {
     const { body, status } = result.value;
     return new Response(JSON.stringify(shape === 'page' ? { data: body, nextCursor: null } : body), { status });
@@ -280,7 +281,7 @@ function respond<T>(result: ApiResult<T>, shape: 'json' | 'page' = 'json'): Resp
   }
 }
 
-function respondToProbe(result: ProbeResult): Response {
+function respondToProbe(result: Result<ProbeAnswer, ProbeFailure>): Response {
   if (result.ok) {
     return new Response('{"status":"ok"}', { status: result.value.status });
   }
