@@ -9,9 +9,11 @@
 ## Shape
 
 - One folder per command: `commands/<name>/<name>.command.ts` exports `<name>Command: CommandDefinition`, built with `defineCommand` (`define-command.ts`), next to `<name>.command.test.ts`. `defineCommand` types the option values by the declared `options`: `options.flag('dry-run')` compiles only when the command declares a boolean `dry-run`. Add `<name>.model.ts` only once the command has its own types.
+- Every command folder holds `<name>.render.ts`: the functions that turn what `core/` returns into the `CliResult` (marks, columns, wording, the `--json` payload, the stdout/stderr split). `<name>.command.ts` keeps the usage, the options and `run`, which calls `core/` and returns what a render function builds. A `stdout` or `stderr` property in a `*.command.ts` fails lint, and `registry.test.ts` fails when a registered command has no render file.
+- `core/` may write sentences about the domain (`describeConfigError`, `CHECK_LABELS`, the `detail` and `hint` of an error). The layout, and any wording that depends on a CLI flag, stays in the render file. No check enforces this split.
 - Register every command in `registry.ts`. It is the only list of commands.
 - `run-cli.ts` dispatches: the global options, command lookup, option parsing with `node:util` `parseArgs` from the command's `options`, and `<command> --help`.
-- Help is built by `commands/help/help.command.ts` from each definition's `summary`, `usage` and `options`. `usage` may hold the command's long help, exit codes included. The global options live in one table, `GLOBAL_OPTIONS` in `help.command.ts`, which dispatch and help both read. Do not write a list of commands or options by hand.
+- Help is built by `commands/help/help.render.ts` from each definition's `summary`, `usage` and `options`. `usage` may hold the command's long help, exit codes included. The global options live in one table, `GLOBAL_OPTIONS` in `commands/help/help.options.ts`, which dispatch and help both read. Do not write a list of commands or options by hand.
 - CLI contracts live in `cli.model.ts`: `CliResult`, `CommandDefinition`, `CommandContext`, and the typed inputs `defineCommand` uses (`CommandSpec`, `TypedCommandInput`, `OptionValues`).
 
 ## Tests

@@ -36,6 +36,25 @@ const resultAlias = {
   message: 'Write Result<T, E> in the signature: do not alias it (no FooResult type).',
 };
 
+/** Time and randomness come through parameters in core/, services/ and the commands (src/AGENTS.md). */
+const hiddenDependencySyntax = [
+  { selector: "NewExpression[callee.name='Date'][arguments.length=0]", message: 'Inject a Clock.' },
+  {
+    selector: "MemberExpression[object.property.name='crypto'][property.name='randomUUID']",
+    message: 'Inject an IdGenerator.',
+  },
+  {
+    selector: "ImportDeclaration[source.value=/^(node:)?crypto$/] ImportSpecifier[imported.name='randomUUID']",
+    message: 'Inject an IdGenerator.',
+  },
+];
+
+/** A command file returns what its <name>.render.ts builds: it never writes stdout or stderr itself. */
+const outputInCommand = {
+  selector: "Property[key.name=/^(stdout|stderr)$/]",
+  message: 'Build the CliResult in <name>.render.ts, next to this command (src/cli/AGENTS.md).',
+};
+
 export default tseslint.config(
   {
     ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'debug/**', 'eslint.config.mts'],
@@ -363,20 +382,15 @@ export default tseslint.config(
         { object: 'Math', property: 'random', message: 'Inject a random source or an IdGenerator.' },
         { object: 'crypto', property: 'randomUUID', message: 'Inject an IdGenerator.' },
       ],
-      'no-restricted-syntax': [
-        'error',
-        { selector: "NewExpression[callee.name='Date'][arguments.length=0]", message: 'Inject a Clock.' },
-        {
-          selector: "MemberExpression[object.property.name='crypto'][property.name='randomUUID']",
-          message: 'Inject an IdGenerator.',
-        },
-        {
-          selector: "ImportDeclaration[source.value=/^(node:)?crypto$/] ImportSpecifier[imported.name='randomUUID']",
-          message: 'Inject an IdGenerator.',
-        },
-        inlineRecordCheck,
-        resultAlias,
-      ],
+      'no-restricted-syntax': ['error', ...hiddenDependencySyntax, inlineRecordCheck, resultAlias],
+    },
+  },
+  {
+    // A command file defines the command and runs core; its <name>.render.ts builds the CliResult (src/cli/AGENTS.md).
+    // Replaces the block above for these files, so it repeats its syntax bans.
+    files: ['src/cli/commands/*/*.command.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...hiddenDependencySyntax, inlineRecordCheck, resultAlias, outputInCommand],
     },
   },
 );
