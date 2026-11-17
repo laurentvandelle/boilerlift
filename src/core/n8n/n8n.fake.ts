@@ -1,6 +1,8 @@
+import { isRecord } from '#src/core/guard/is-record';
+import { API_PATH } from '#src/core/n8n/n8n-api';
 import { ApiFailure, ApiResult, N8nClient, N8nTag, N8nWorkflow, N8nWorkflowBody, ProbeResult } from '#src/core/n8n/n8n.model';
 
-/** An API spec that lists `publishIfActive`: the instance saves drafts (n8n 2.35.0 or later). */
+/** An API spec that lists `publishIfActive`: the instance saves drafts (MIN_N8N_VERSION or later). */
 const DRAFT_SPEC = 'paths:\n  /workflows/{id}:\n    put:\n      parameters:\n        - name: publishIfActive\n';
 
 export interface FakeN8nOptions {
@@ -98,29 +100,29 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
 
   const client: N8nClient = {
     checkHealth: () => probe('GET /healthz'),
-    checkApiKey: () => probe('GET /api/v1/workflows'),
-    readApiSpec: () => answer('GET /api/v1/openapi.yml', (call) => ok(call, spec)),
+    checkApiKey: () => probe(`GET ${API_PATH}/workflows`),
+    readApiSpec: () => answer(`GET ${API_PATH}/openapi.yml`, (call) => ok(call, spec)),
     listWorkflows: () =>
-      answer('GET /api/v1/workflows', (call) =>
+      answer(`GET ${API_PATH}/workflows`, (call) =>
         ok(call, workflows.map(({ id, name, tags: workflowTags, isArchived }) => ({ id, name, tags: structuredClone(workflowTags), isArchived }))),
       ),
-    getWorkflow: (id) => onWorkflow(`GET /api/v1/workflows/${id}`, id, (workflow) => structuredClone(workflow)),
+    getWorkflow: (id) => onWorkflow(`GET ${API_PATH}/workflows/${id}`, id, (workflow) => structuredClone(workflow)),
     createWorkflow: (body) =>
-      answer('POST /api/v1/workflows', (call) => {
+      answer(`POST ${API_PATH}/workflows`, (call) => {
         const workflow: N8nWorkflow = { ...structuredClone(body), id: newId('w'), tags: [], isArchived: false };
         workflows.push(workflow);
         return ok(call, structuredClone(workflow));
       }),
     updateWorkflow: (id, body) =>
-      onWorkflow(`PUT /api/v1/workflows/${id}`, id, (workflow) => structuredClone(Object.assign(workflow, structuredClone(body)))),
+      onWorkflow(`PUT ${API_PATH}/workflows/${id}`, id, (workflow) => structuredClone(Object.assign(workflow, structuredClone(body)))),
     unarchiveWorkflow: (id) =>
-      onWorkflow(`POST /api/v1/workflows/${id}/unarchive`, id, (workflow) => {
+      onWorkflow(`POST ${API_PATH}/workflows/${id}/unarchive`, id, (workflow) => {
         workflow.isArchived = false;
         return structuredClone(workflow);
       }),
-    listTags: () => answer('GET /api/v1/tags', (call) => ok(call, structuredClone(tags))),
+    listTags: () => answer(`GET ${API_PATH}/tags`, (call) => ok(call, structuredClone(tags))),
     createTag: (name) =>
-      answer('POST /api/v1/tags', (call) => {
+      answer(`POST ${API_PATH}/tags`, (call) => {
         if (tags.some((tag) => tag.name === name)) {
           return httpError(call, 409, 'Tag already exists');
         }
@@ -129,7 +131,7 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
         return ok(call, { ...tag });
       }),
     setWorkflowTags: (id, tagIds) => {
-      const call = `PUT /api/v1/workflows/${id}/tags`;
+      const call = `PUT ${API_PATH}/workflows/${id}/tags`;
       const found = tagIds.flatMap((tagId) => tags.filter((tag) => tag.id === tagId));
       if (found.length !== tagIds.length) {
         return answer<N8nTag[]>(call, () => httpError(call, 404, 'Tag not found'));
@@ -149,8 +151,11 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
     if (url.pathname === '/healthz') {
       return respondToProbe(await client.checkHealth());
     }
-    const [api = '', version = '', resource = '', id = '', sub = '', ...rest] = url.pathname.split('/').slice(1).map(decodeURIComponent);
-    if (api !== 'api' || version !== 'v1' || rest.length > 0) {
+    if (!url.pathname.startsWith(`${API_PATH}/`)) {
+      return noRoute(method, url);
+    }
+    const [resource = '', id = '', sub = '', ...rest] = url.pathname.slice(API_PATH.length + 1).split('/').map(decodeURIComponent);
+    if (rest.length > 0) {
       return noRoute(method, url);
     }
     const body = parseBody(init);
@@ -244,8 +249,4 @@ function isWorkflowBody(value: unknown): value is N8nWorkflowBody {
 function tagIdsOf(body: unknown): string[] {
   const items: unknown[] = Array.isArray(body) ? body : [];
   return items.flatMap((item) => (isRecord(item) && typeof item.id === 'string' ? [item.id] : []));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { deploy, planDeploy, planToReport } from '#src/core/deliver/deploy';
+import { planToReport } from '#src/core/deliver/apply-plan';
+import { deploy } from '#src/core/deliver/deploy';
 import { DeployReport } from '#src/core/deliver/deploy.model';
+import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { FakeN8nOptions, fakeN8n, fakeN8nWorkflow, fakeStableTag, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { ApiFailure, N8nWorkflow } from '#src/core/n8n/n8n.model';
 
@@ -215,7 +217,7 @@ describe('deploy', () => {
 
     const report = await deploy({ workflows: [workflow], client: n8n.client });
 
-    expect(report.warnings).toEqual(['crm: workflow arc was archived in n8n; it is back as an unpublished draft']);
+    expect(report.warnings).toEqual([{ kind: 'restored', stableName: 'crm', id: 'arc' }]);
   });
 
   test('Should unarchive, then update as a draft when the archived workflow differs from the file', async () => {
@@ -263,7 +265,7 @@ describe('deploy', () => {
 
     const report = await deploy({ workflows: [workflow], client: n8n.client });
 
-    expect(report.warnings).toContain('crm: archived workflows arc1 and arc2 all carry the tag n8nlift:crm; deploy restored arc1');
+    expect(report.warnings).toContainEqual({ kind: 'several-archived', stableName: 'crm', archivedIds: ['arc1', 'arc2'], restoredId: 'arc1' });
   });
 
   test('Should fail only that workflow with the scope hint when the instance refuses to unarchive it', async () => {
@@ -314,7 +316,7 @@ describe('deploy', () => {
 
     const report = await deploy({ workflows: [workflow], client: n8n.client });
 
-    expect(report.warnings).toEqual(['crm: archived workflow arc still carries the tag n8nlift:crm; deploy used the live workflow live']);
+    expect(report.warnings).toEqual([{ kind: 'archived-copies', stableName: 'crm', archivedIds: ['arc'], liveId: 'live' }]);
   });
 
   test('Should keep delivering the others and exit 5 when one update fails', async () => {
@@ -496,7 +498,7 @@ describe('planDeploy', () => {
     expect(n8n.calls).not.toContain('GET /api/v1/tags');
   });
 
-  test('Should word the restore warnings as what deploy would do when it plans', async () => {
+  test('Should plan the restore warnings when several archived workflows carry the stable tag', async () => {
     const workflow = fakeLocalWorkflow('crm');
     const n8n = fakeN8n({
       workflows: [fakeN8nWorkflow(workflow, { id: 'arc1', isArchived: true }), fakeN8nWorkflow(workflow, { id: 'arc2', isArchived: true })],
@@ -505,8 +507,8 @@ describe('planDeploy', () => {
     const plan = await planDeploy({ workflows: [workflow], client: n8n.client });
 
     expect(plan.warnings).toEqual([
-      'crm: workflow arc1 was archived in n8n; deploy would bring it back as an unpublished draft',
-      'crm: archived workflows arc1 and arc2 all carry the tag n8nlift:crm; deploy would restore arc1',
+      { kind: 'restored', stableName: 'crm', id: 'arc1' },
+      { kind: 'several-archived', stableName: 'crm', archivedIds: ['arc1', 'arc2'], restoredId: 'arc1' },
     ]);
   });
 });

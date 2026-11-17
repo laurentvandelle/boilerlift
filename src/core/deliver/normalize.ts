@@ -1,7 +1,8 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
+import { isRecord } from '#src/core/guard/is-record';
 import { N8nWorkflow } from '#src/core/n8n/n8n.model';
 
-export interface Comparable {
+interface Comparable {
   name: string;
   nodes: unknown[];
   connections: unknown;
@@ -13,7 +14,7 @@ export interface Comparable {
  * only their name per type, nodes are sorted by name, and settings keep only the keys the local file sets,
  * so server defaults (for example `redactionPolicy`) never count as a change.
  */
-export function comparable(
+function comparable(
   workflow: Pick<N8nWorkflow, 'name' | 'nodes' | 'connections' | 'settings'>,
   settingsKeys: string[],
 ): Comparable {
@@ -29,35 +30,32 @@ export function comparable(
 }
 
 /** True when the instance's current draft already holds the local workflow. */
-export function isSameContent(local: LocalWorkflow, remote: N8nWorkflow): boolean {
+export function isSameContent(local: LocalWorkflow, draft: N8nWorkflow): boolean {
   const keys = Object.keys(local.settings);
-  return stableStringify(comparable(local, keys)) === stableStringify(comparable(remote, keys));
+  return stableStringify(comparable(local, keys)) === stableStringify(comparable(draft, keys));
 }
 
 function normalizeNode(node: unknown): unknown {
-  if (typeof node !== 'object' || node === null) {
+  if (!isRecord(node)) {
     return node;
   }
-  const { id: _id, webhookId: _webhookId, credentials, ...rest } = node as Record<string, unknown>;
-  if (typeof credentials !== 'object' || credentials === null) {
+  const { id: _id, webhookId: _webhookId, credentials, ...rest } = node;
+  if (!isRecord(credentials)) {
     return rest;
   }
   const reduced = Object.fromEntries(
-    Object.entries(credentials as Record<string, unknown>).map(([type, value]) => [
-      type,
-      { name: typeof value === 'object' && value !== null ? (value as { name?: unknown }).name : undefined },
-    ]),
+    Object.entries(credentials).map(([type, value]) => [type, { name: isRecord(value) ? value.name : undefined }]),
   );
   return { ...rest, credentials: reduced };
 }
 
 function nodeName(node: unknown): string {
-  const name = typeof node === 'object' && node !== null ? (node as { name?: unknown }).name : undefined;
+  const name = isRecord(node) ? node.name : undefined;
   return typeof name === 'string' ? name : '';
 }
 
 /** JSON with object keys sorted, so key order never counts as a change. */
-export function stableStringify(value: unknown): string {
+function stableStringify(value: unknown): string {
   return JSON.stringify(sortKeys(value));
 }
 
@@ -65,11 +63,11 @@ function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(sortKeys);
   }
-  if (typeof value === 'object' && value !== null) {
+  if (isRecord(value)) {
     return Object.fromEntries(
       Object.keys(value)
         .sort()
-        .map((key) => [key, sortKeys((value as Record<string, unknown>)[key])]),
+        .map((key) => [key, sortKeys(value[key])]),
     );
   }
   return value;

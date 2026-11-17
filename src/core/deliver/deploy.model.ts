@@ -28,11 +28,22 @@ export interface DeployError extends WorkflowError {
   exitCode: number;
 }
 
+/**
+ * Something that went through but that the user should know about. It is data: the deploy command words it as what
+ * deploy did, or for a dry run as what deploy would do.
+ * - `archived-copies`: archived workflows still carry the stable tag of the live workflow that deploy uses.
+ * - `restored`: only an archived workflow carries the stable tag, and deploy restores it as an unpublished draft.
+ * - `several-archived`: several archived workflows, and no live one, carry the stable tag; deploy restores the first.
+ */
+export type DeployWarning =
+  | { kind: 'archived-copies'; stableName: string; archivedIds: string[]; liveId: string }
+  | { kind: 'restored'; stableName: string; id: string }
+  | { kind: 'several-archived'; stableName: string; archivedIds: string[]; restoredId: string };
+
 export interface DeployReport {
   /** Every local workflow, in stable-name order. Empty when the run stopped before any workflow. */
   results: DeployResult[];
-  /** Things that went through but that the user should know about. */
-  warnings: string[];
+  warnings: DeployWarning[];
   /** Set only when a failure stopped the whole run. */
   error?: DeployError;
   exitCode: number;
@@ -57,13 +68,10 @@ export interface PlannedStep {
 export interface DeployPlan {
   /** Every local workflow, in stable-name order. Empty when the plan stopped before any workflow. */
   steps: PlannedStep[];
-  warnings: string[];
+  warnings: DeployWarning[];
   /** The instance tag list, read once when at least one workflow is created. */
   tags?: N8nTag[];
   /** Set only when a failure stopped the plan. */
   error?: DeployError;
   exitCode: number;
 }
-
-/** How warnings are worded: a dry run says what deploy would do, a deploy says what it did. */
-export type PlanMode = 'dry-run' | 'deploy';

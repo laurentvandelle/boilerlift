@@ -2,9 +2,10 @@ import { CliResult, CommandDefinition } from '#src/cli/cli.model';
 import { ConnectionConfig } from '#src/core/config/config.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
 import { describeMissingConfig } from '#src/core/config/missing-config';
-import { CHECK_LABELS, checkConnection } from '#src/core/connection/check-connection';
+import { CHECK_LABELS, MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
 import { EXIT_USAGE } from '#src/core/exit/exit-codes';
+import { API_PATH } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 
 const STATUS_MARKS: Record<Check['status'], string> = { ok: '✓', failed: '✗', skipped: '–' };
@@ -13,13 +14,13 @@ const USAGE = `n8nlift ping
 
 Reads N8N_URL and N8N_API_KEY from the environment, then from ./.env.
 A variable set in the environment wins over .env.
-  N8N_URL      Root URL of your n8n instance (n8nlift adds /api/v1)
+  N8N_URL      Root URL of your n8n instance (n8nlift adds ${API_PATH})
   N8N_API_KEY  n8n API key (n8n → Settings → n8n API)
 
 Exit codes:
   0  Every check passed
   1  Usage error or missing configuration
-  2  Node.js is older than 22.18
+  2  Node.js is older than ${MIN_NODE_VERSION_SHORT}
   3  The n8n instance or its public API cannot be reached
   4  The API key is rejected`;
 
@@ -35,7 +36,7 @@ export const pingCommand: CommandDefinition = {
       return { exitCode: EXIT_USAGE, stdout: '', stderr: describeMissingConfig(resolved.missing) };
     }
     const { config } = resolved;
-    const client = createN8nClient({ baseUrl: config.url.value, apiKey: config.apiKey.value, fetch: ctx.fetch });
+    const client = createN8nClient({ config, fetch: ctx.fetch });
     const report = await checkConnection({ nodeVersion: ctx.nodeVersion, config, client });
     return render(config, report);
   },

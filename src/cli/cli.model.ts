@@ -28,9 +28,9 @@ export interface CommandContext {
   nodeVersion: string;
   fetch: typeof fetch;
   /**
-   * Reads every `*.workflow.ts` and `*.json` file under `dir`, recursively. Paths are relative to the
-   * current folder. Resolves `[]` when `dir` does not exist. A file that cannot be parsed or imported
-   * comes back with an `error` instead of `content`.
+   * Reads every workflow file under `dir` (the paths `isWorkflowFilePath` accepts), recursively, skipping
+   * `node_modules`, sorted by path. Paths are relative to the current folder. Resolves `[]` when `dir` does not
+   * exist. A file that cannot be parsed or imported comes back with an `error` instead of `content`.
    */
   loadWorkflowFiles(dir: string): Promise<WorkflowFile[]>;
 }

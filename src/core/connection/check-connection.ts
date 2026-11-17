@@ -1,7 +1,12 @@
 import { Check, CheckConnectionInput, CheckName, ConnectionReport } from '#src/core/connection/connection.model';
 import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_UNREACHABLE } from '#src/core/exit/exit-codes';
+import { API_KEY_HINT, API_PATH, classifyHttpError } from '#src/core/n8n/n8n-api';
 
+/** The oldest Node.js that n8nlift runs on (`engines` in package.json). */
 export const MIN_NODE_VERSION = '22.18.0';
+
+/** MIN_NODE_VERSION as hints and usage texts write it, without a `.0` patch: `22.18`. */
+export const MIN_NODE_VERSION_SHORT = MIN_NODE_VERSION.replace(/\.0$/, '');
 
 export const CHECK_LABELS: Record<CheckName, string> = { node: 'Node', url: 'URL', apiKey: 'API key' };
 
@@ -38,7 +43,7 @@ function checkNode(nodeVersion: string): Check {
     name: 'node',
     status: 'failed',
     detail: `${nodeVersion} is too old (requires ≥ ${MIN_NODE_VERSION})`,
-    hint: 'Install Node 22.18 or later',
+    hint: `Install Node ${MIN_NODE_VERSION_SHORT} or later`,
     exitCode: EXIT_NODE_TOO_OLD,
   };
 }
@@ -77,31 +82,26 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
     };
   }
   const call = `${result.call} → ${result.status}`;
-  if (result.status === 401 || result.status === 403) {
+  switch (classifyHttpError(result.status)) {
+  case 'key-rejected':
+    return { name: 'apiKey', status: 'failed', detail: `rejected (${call})`, hint: API_KEY_HINT, exitCode: EXIT_API_KEY_REJECTED };
+  case 'not-found':
     return {
       name: 'apiKey',
       status: 'failed',
-      detail: `rejected (${call})`,
-      hint: 'Create a key in n8n → Settings → n8n API, then set N8N_API_KEY in .env',
-      exitCode: EXIT_API_KEY_REJECTED,
-    };
-  }
-  if (result.status === 404) {
-    return {
-      name: 'apiKey',
-      status: 'failed',
-      detail: `public API not found at /api/v1 (${call})`,
+      detail: `public API not found at ${API_PATH} (${call})`,
       hint: 'Check N8N_URL, or whether the public API is enabled on the instance',
       exitCode: EXIT_UNREACHABLE,
     };
+  case 'other':
+    return {
+      name: 'apiKey',
+      status: 'failed',
+      detail: `unexpected answer (${call})`,
+      hint: 'Check that N8N_URL points to an n8n instance and that it is running',
+      exitCode: EXIT_UNREACHABLE,
+    };
   }
-  return {
-    name: 'apiKey',
-    status: 'failed',
-    detail: `unexpected answer (${call})`,
-    hint: 'Check that N8N_URL points to an n8n instance and that it is running',
-    exitCode: EXIT_UNREACHABLE,
-  };
 }
 
 function warningsFor(url: string): string[] {
@@ -112,7 +112,7 @@ function warningsFor(url: string): string[] {
 }
 
 /** Compares two `x.y.z` versions (a leading `v` and any pre-release suffix are ignored). */
-export function compareVersions(left: string, right: string): number {
+function compareVersions(left: string, right: string): number {
   const parse = (version: string): number[] =>
     version
       .replace(/^v/, '')

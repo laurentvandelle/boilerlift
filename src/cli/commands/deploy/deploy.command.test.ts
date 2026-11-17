@@ -315,6 +315,50 @@ Nothing was written to n8n.
     expect(n8n.workflows[0]?.isArchived).toBe(false);
   });
 
+  test.each<[string, CommandInput, string]>([
+    [
+      'deploy',
+      TEXT,
+      `⚠ daily-report: workflow a1 was archived in n8n; it is back as an unpublished draft
+⚠ daily-report: archived workflows a1 and a2 all carry the tag n8nlift:daily-report; deploy restored a1
+`,
+    ],
+    [
+      'deploy --dry-run',
+      DRY_RUN,
+      `⚠ daily-report: workflow a1 was archived in n8n; deploy would bring it back as an unpublished draft
+⚠ daily-report: archived workflows a1 and a2 all carry the tag n8nlift:daily-report; deploy would restore a1
+`,
+    ],
+  ])('Should name the copy it restores in the warnings when %s meets several archived workflows with the stable tag', async (_command, input, warnings) => {
+    const n8n = fakeN8n({
+      workflows: [fakeN8nWorkflow(REPORT, { id: 'a1', isArchived: true }), fakeN8nWorkflow(REPORT, { id: 'a2', isArchived: true })],
+    });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(REPORT)]) });
+
+    const result = await deployCommand.run(input, ctx);
+
+    expect(result.stdout).toContain(warnings);
+  });
+
+  test.each<[string, CommandInput, string[], string]>([
+    ['deploy', TEXT, ['arc'], '⚠ daily-report: archived workflow arc still carries the tag n8nlift:daily-report; deploy used the live workflow rep1\n'],
+    [
+      'deploy --dry-run',
+      DRY_RUN,
+      ['a1', 'a2'],
+      '⚠ daily-report: archived workflows a1 and a2 still carry the tag n8nlift:daily-report; deploy would use the live workflow rep1\n',
+    ],
+  ])('Should warn about the archived copies when %s meets them next to the live workflow', async (_command, input, archivedIds, warning) => {
+    const archived = archivedIds.map((id) => fakeN8nWorkflow(REPORT, { id, isArchived: true }));
+    const n8n = fakeN8n({ workflows: [...archived, fakeN8nWorkflow(REPORT, { id: 'rep1' })] });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(REPORT)]) });
+
+    const result = await deployCommand.run(input, ctx);
+
+    expect(result.stdout).toContain(warning);
+  });
+
   test('Should exit 4 with the key hint when the first call is rejected', async () => {
     const n8n = fakeN8n({ failures: [httpError('GET /api/v1/workflows', 401, 'boom')] });
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES) });

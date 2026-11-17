@@ -31,8 +31,6 @@ Commands:
   help  Show help for n8nlift or for one command
   fake  Do fake things
 
-Coming: deploy, publish, status, secrets, sync
-
 Options:
   -h, --help     Show this help
   -v, --version  Print the n8nlift version

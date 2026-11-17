@@ -1,11 +1,17 @@
 import { LoadProblem, LoadResult, LocalWorkflow, WorkflowFile } from '#src/core/compile/workflow.model';
+import { isRecord } from '#src/core/guard/is-record';
 
 export const STABLE_NAME_PATTERN = /^[a-z0-9-]{1,16}$/;
 
 const EXTENSIONS = ['.workflow.ts', '.json'];
 
+/** True when `path` names a workflow file: a `.workflow.ts` module or a `.json` n8n export. */
+export function isWorkflowFilePath(path: string): boolean {
+  return EXTENSIONS.some((extension) => path.endsWith(extension));
+}
+
 /** The file base name without `.workflow.ts` / `.json`. */
-export function stableNameOf(path: string): string {
+function stableNameOf(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
   const extension = EXTENSIONS.find((candidate) => base.endsWith(candidate));
   return extension === undefined ? base : base.slice(0, -extension.length);
@@ -153,8 +159,4 @@ function connectionTargets(outputs: unknown): (string | undefined)[] {
 
 function isPosition(value: unknown): boolean {
   return Array.isArray(value) && value.length === 2 && value.every((item) => typeof item === 'number');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

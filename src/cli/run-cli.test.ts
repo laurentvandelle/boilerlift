@@ -41,8 +41,6 @@ Commands:
   ping     Check the connection to your n8n instance
   deploy   Deliver your workflows to your n8n instance as drafts
 
-Coming: deploy, publish, status, secrets, sync
-
 Options:
   -h, --help     Show this help
   -v, --version  Print the n8nlift version

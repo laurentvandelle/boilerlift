@@ -1,3 +1,5 @@
+import { isRecord } from '#src/core/guard/is-record';
+import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
 import {
   ApiResult,
   N8nClient,
@@ -9,10 +11,9 @@ import {
 } from '#src/core/n8n/n8n.model';
 
 const HEALTH_PATH = '/healthz';
-const API_KEY_PATH = '/api/v1/workflows?limit=1';
-const SPEC_PATH = '/api/v1/openapi.yml';
+const API_KEY_PATH = `${API_PATH}/workflows?limit=1`;
+const SPEC_PATH = `${API_PATH}/openapi.yml`;
 
-const API = '/api/v1';
 const PAGE_LIMIT = 250;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -24,12 +25,7 @@ interface Page<T> {
 }
 
 /** A minimal client for the n8n instance and its public API. */
-export function createN8nClient({
-  baseUrl,
-  apiKey,
-  fetch,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-}: N8nClientOptions): N8nClient {
+export function createN8nClient({ config, fetch, timeoutMs = DEFAULT_TIMEOUT_MS }: N8nClientOptions): N8nClient {
   const request = async <T>(
     method: Method,
     path: string,
@@ -37,11 +33,11 @@ export function createN8nClient({
   ): Promise<ApiResult<T>> => {
     const call = `${method} ${path.split('?')[0]}`;
     try {
-      const response = await fetch(`${baseUrl}${path}`, {
+      const response = await fetch(`${config.url.value}${path}`, {
         method,
         headers: {
           accept: 'application/json',
-          ...(auth ? { 'X-N8N-API-KEY': apiKey } : {}),
+          ...(auth ? { 'X-N8N-API-KEY': config.apiKey.value } : {}),
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -92,7 +88,7 @@ export function createN8nClient({
     return { kind: 'ok', call, status, body: items };
   };
 
-  const workflowPath = (id: string): string => `${API}/workflows/${encodeURIComponent(id)}`;
+  const workflowPath = (id: string): string => `${API_PATH}/workflows/${encodeURIComponent(id)}`;
 
   return {
     checkHealth: () => probe(HEALTH_PATH, false),
@@ -106,7 +102,7 @@ export function createN8nClient({
       return { ...result, body: typeof body === 'string' ? body : (JSON.stringify(body) ?? '') };
     },
     listWorkflows: async (): Promise<ApiResult<N8nWorkflowSummary[]>> => {
-      const result = await listAll<N8nWorkflowSummary>(`${API}/workflows?excludePinnedData=true`);
+      const result = await listAll<N8nWorkflowSummary>(`${API_PATH}/workflows?excludePinnedData=true`);
       if (result.kind !== 'ok') {
         return result;
       }
@@ -119,11 +115,11 @@ export function createN8nClient({
       return { ...result, body };
     },
     getWorkflow: (id) => request<N8nWorkflow>('GET', workflowPath(id)),
-    createWorkflow: (body) => request<N8nWorkflow>('POST', `${API}/workflows`, { body }),
-    updateWorkflow: (id, body) => request<N8nWorkflow>('PUT', `${workflowPath(id)}?publishIfActive=false`, { body }),
+    createWorkflow: (body) => request<N8nWorkflow>('POST', `${API_PATH}/workflows`, { body }),
+    updateWorkflow: (id, body) => request<N8nWorkflow>('PUT', `${workflowPath(id)}?${DRAFT_PARAM}=false`, { body }),
     unarchiveWorkflow: (id) => request<N8nWorkflow>('POST', `${workflowPath(id)}/unarchive`),
-    listTags: () => listAll<N8nTag>(`${API}/tags`),
-    createTag: (name) => request<N8nTag>('POST', `${API}/tags`, { body: { name } }),
+    listTags: () => listAll<N8nTag>(`${API_PATH}/tags`),
+    createTag: (name) => request<N8nTag>('POST', `${API_PATH}/tags`, { body: { name } }),
     setWorkflowTags: (id, tagIds) =>
       request<N8nTag[]>('PUT', `${workflowPath(id)}/tags`, { body: tagIds.map((tagId) => ({ id: tagId })) }),
   };
@@ -143,7 +139,7 @@ function parseJson(text: string): unknown {
 /** The `message` field of an n8n error body, when there is one. */
 function errorMessage(text: string): string | undefined {
   const body = parseJson(text);
-  if (typeof body === 'object' && body !== null && 'message' in body && typeof body.message === 'string') {
+  if (isRecord(body) && typeof body.message === 'string') {
     return body.message;
   }
   return undefined;
@@ -179,10 +175,8 @@ function describeNetworkError(error: unknown, timeoutMs: number): string {
 function errorCode(error: unknown): string | undefined {
   const cause = error instanceof Error ? error.cause : undefined;
   for (const candidate of [cause, error]) {
-    if (typeof candidate === 'object' && candidate !== null && 'code' in candidate) {
-      if (typeof candidate.code === 'string') {
-        return candidate.code;
-      }
+    if (isRecord(candidate) && typeof candidate.code === 'string') {
+      return candidate.code;
     }
   }
   return undefined;

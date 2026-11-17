@@ -1,10 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
+// Runs the built CLI as a user would, with this script's arguments: `node main.ts ping`, `node main.ts deploy --json`.
+// With no argument it runs deploy on ./workflows (demo.workflow.ts and sub/other.json): a second run skips both.
 const bin = join(import.meta.dirname, '..', 'dist', 'bin.js');
-// execFileSync(process.execPath, [bin, '--help'], { stdio: 'inherit' });
-// console.log('--------------------------------');
-// execFileSync(process.execPath, [bin, 'ping'], { stdio: 'inherit' });
-// console.log('--------------------------------');
-// Delivers ./workflows (demo.workflow.ts and sub/other.json). Run it twice: the second run skips both.
-execFileSync(process.execPath, [bin, 'deploy'], { stdio: 'inherit' });
+const args = process.argv.slice(2);
+execFileSync(process.execPath, [bin, ...(args.length > 0 ? args : ['deploy'])], { stdio: 'inherit' });

@@ -1,3 +1,5 @@
+import { ConnectionConfig } from '#src/core/config/config.model';
+
 /** The outcome of a read-only check. `call` names it, for example `GET /healthz`. */
 export type ProbeResult =
   | { kind: 'ok'; call: string; status: number }
@@ -13,9 +15,8 @@ export type ApiResult<T> =
 export type ApiFailure = Exclude<ApiResult<never>, { kind: 'ok' }>;
 
 export interface N8nClientOptions {
-  /** The instance root, without trailing slash (for example `https://n8n.example.com`). */
-  baseUrl: string;
-  apiKey: string;
+  /** N8N_URL, the instance root without trailing slash, and N8N_API_KEY, as resolveConnectionConfig returns them. */
+  config: ConnectionConfig;
   fetch: typeof fetch;
   timeoutMs?: number;
 }

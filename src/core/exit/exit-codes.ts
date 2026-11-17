@@ -16,5 +16,5 @@ export const EXIT_API_KEY_REJECTED = 4;
 /** At least one workflow failed; deploy still delivered the others. */
 export const EXIT_PARTIAL_FAILURE = 5;
 
-/** The instance cannot save drafts (older than n8n 2.35.0): nothing was written. */
+/** The instance cannot save drafts (older than MIN_N8N_VERSION in core/n8n/n8n-api.ts): nothing was written. */
 export const EXIT_DRAFTS_UNSUPPORTED = 6;

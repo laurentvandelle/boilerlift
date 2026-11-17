@@ -16,10 +16,16 @@ const noBarrelOrRelative = {
 };
 
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
-const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'exit'];
+const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'exit', 'guard'];
 
 const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (src/AGENTS.md).'];
 const noSleep = 'No sleeps in tests: use fake timers or await the event.';
+
+/** One way per job: `typeof x === 'object'` is written once, in isRecord. */
+const inlineRecordCheck = {
+  selector: "BinaryExpression:matches([left.operator='typeof'][right.value='object'], [right.operator='typeof'][left.value='object'])",
+  message: 'Use isRecord from #src/core/guard/is-record: the object check is written once, there.',
+};
 
 export default tseslint.config(
   {
@@ -65,6 +71,14 @@ export default tseslint.config(
     },
   },
   {
+    // Test lint and the hidden-dependency bans set no-restricted-syntax on their own files further down, and the
+    // later block wins, so both repeat inlineRecordCheck. This block covers the rest of src/.
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', inlineRecordCheck],
+    },
+  },
+  {
     // Test lint. *.test-d.ts files hold type tests, which Vitest checks with tsc (vitest.config.mts).
     files: ['src/**/*.test.ts', 'src/**/*.test-d.ts'],
     ...vitest.configs.recommended,
@@ -90,6 +104,7 @@ export default tseslint.config(
             "CallExpression[callee.object.name=/^(vi|jest)$/][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^(\\.|@\\/|#|~)/]",
           message: 'Mock only third-party services: use the real code, a fake (*.fake.ts) or an in-memory adapter.',
         },
+        inlineRecordCheck,
       ],
       // Blank lines separate given, when and then; no comment labels them.
       'no-warning-comments': ['error', { terms: ['given', 'when', 'then', 'arrange', 'act', 'assert'], location: 'start' }],
@@ -119,6 +134,7 @@ export default tseslint.config(
         { type: 'n8n', pattern: 'src/core/n8n' },
         { type: 'connection', pattern: 'src/core/connection' },
         { type: 'exit', pattern: 'src/core/exit' },
+        { type: 'guard', pattern: 'src/core/guard' },
       ],
       'boundaries/files': [
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
@@ -142,12 +158,17 @@ export default tseslint.config(
           policies: [
             // 1. npm packages and Node core: allowed unless a later policy says otherwise.
             { allow: { to: { module: { origin: ['external', 'core'] } } } },
-            // 2. core/exit/ holds the exit codes of every command: every folder may import it.
+            // 2. core/exit/ holds the exit codes of every command: every folder may import it. core/guard/ holds the
+            // shared type guards (isRecord): every core/ folder may import it, and cli/ through CORE.
             { allow: { to: { element: { type: 'exit' } } } },
+            {
+              from: { element: { type: CORE } },
+              allow: { to: { element: { type: 'guard' } } },
+            },
             // 3. One allow per layer: itself plus the layers it may use (src/core/AGENTS.md).
             // compile/ reads and validates workflow files, with no network. deliver/ sends them to n8n and may
-            // read what compile/ produces. config/ and n8n/ are shared folders that know neither stage.
-            // connection/ holds the checks behind ping.
+            // read what compile/ produces. config/ and n8n/ are shared folders that know neither stage; n8n/ builds
+            // its client from the ConnectionConfig of config/. connection/ holds the checks behind ping.
             {
               from: { element: { type: 'compile' } },
               allow: { to: { element: { type: ['compile', 'config'] } } },
@@ -162,7 +183,7 @@ export default tseslint.config(
             },
             {
               from: { element: { type: 'n8n' } },
-              allow: { to: { element: { type: 'n8n' } } },
+              allow: { to: { element: { type: ['n8n', 'config'] } } },
             },
             {
               from: { element: { type: 'connection' } },
@@ -201,10 +222,10 @@ export default tseslint.config(
             {
               from: { element: { type: 'compile' } },
               disallow: { to: { element: { type: ['deliver', 'n8n', 'connection'] } } },
-              message: 'compile/ imports only compile/, config/ and exit/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
+              message: 'compile/ imports only compile/, config/, exit/ and guard/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
-              from: { element: { type: ['config', 'n8n', 'exit'] } },
+              from: { element: { type: ['config', 'n8n', 'exit', 'guard'] } },
               disallow: { to: { element: { type: ['compile', 'deliver'] } } },
               message: 'A shared core/ folder imports neither compile/ nor deliver/ (src/core/AGENTS.md).',
             },
@@ -306,6 +327,7 @@ export default tseslint.config(
           selector: "ImportDeclaration[source.value=/^(node:)?crypto$/] ImportSpecifier[imported.name='randomUUID']",
           message: 'Inject an IdGenerator.',
         },
+        inlineRecordCheck,
       ],
     },
   },

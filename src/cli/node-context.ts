@@ -4,6 +4,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CommandContext, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
+import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
@@ -38,7 +39,7 @@ function readDotEnv(path: string): string | undefined {
   }
 }
 
-/** Reads every `*.workflow.ts` and `*.json` file under `dir` (resolved from `cwd`), recursively, sorted by path. */
+/** `CommandContext.loadWorkflowFiles`, with `dir` resolved from `cwd`. */
 async function loadWorkflowFiles(cwd: string, dir: string): Promise<WorkflowFile[]> {
   const root = resolve(cwd, dir);
   let entries: string[];
@@ -51,7 +52,7 @@ async function loadWorkflowFiles(cwd: string, dir: string): Promise<WorkflowFile
     throw error;
   }
   const files = entries
-    .filter((entry) => entry.endsWith('.workflow.ts') || entry.endsWith('.json'))
+    .filter(isWorkflowFilePath)
     .filter((entry) => !entry.split(sep).includes('node_modules'))
     .map((entry) => resolve(root, entry))
     .sort();

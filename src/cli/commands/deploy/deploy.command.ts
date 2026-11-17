@@ -3,9 +3,14 @@ import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
 import { describeMissingConfig } from '#src/core/config/missing-config';
-import { deploy, planDeploy, planToReport } from '#src/core/deliver/deploy';
-import { DeployAction, DeployReport, DeployResult } from '#src/core/deliver/deploy.model';
+import { planToReport } from '#src/core/deliver/apply-plan';
+import { deploy } from '#src/core/deliver/deploy';
+import { DeployAction, DeployReport, DeployResult, DeployWarning } from '#src/core/deliver/deploy.model';
+import { formatList } from '#src/core/deliver/format-list';
+import { planDeploy } from '#src/core/deliver/plan-deploy';
+import { stableTag } from '#src/core/deliver/stable-tag';
 import { EXIT_USAGE } from '#src/core/exit/exit-codes';
+import { MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 
 const WORKFLOWS_DIR = 'workflows';
@@ -20,7 +25,7 @@ pasted from an n8n export, to your n8n instance:
   workflows deleted (archived) in the n8n editor are restored as unpublished drafts.
 The stable name is the file name without .workflow.ts / .json: 1 to 16 of a-z, 0-9 and -.
 
-Nothing is written until the instance proves it saves drafts (n8n 2.35.0 or later).
+Nothing is written until the instance proves it saves drafts (n8n ${MIN_N8N_VERSION} or later).
 A failure on one workflow fails only that workflow; the others are still delivered.
 Reads N8N_URL and N8N_API_KEY like n8nlift ping.
 
@@ -33,7 +38,7 @@ Exit codes:
   3  The n8n instance cannot be reached
   4  The API key is rejected
   5  At least one workflow failed; the others were delivered
-  6  The instance is older than n8n 2.35.0: nothing was written`;
+  6  The instance is older than n8n ${MIN_N8N_VERSION}: nothing was written`;
 
 const MARKS: Record<DeployAction, string> = {
   created: '+',
@@ -44,18 +49,76 @@ const MARKS: Record<DeployAction, string> = {
   'not-processed': '-',
 };
 
-/** What a dry run calls each action. */
-const DRY_RUN_LABELS: Record<DeployAction, string> = {
-  created: 'would create',
-  updated: 'would update',
-  skipped: 'would skip',
-  restored: 'would restore',
-  failed: 'would fail',
-  'not-processed': 'not processed',
+interface Summary {
+  created: number;
+  updated: number;
+  restored: number;
+  skipped: number;
+  failed: number;
+  notProcessed: number;
+}
+
+/** The words that differ between a deploy, which says what it did, and a dry run, which says what deploy would do. */
+interface Wording {
+  /** The value of --dry-run, which the JSON report echoes. */
+  dryRun: boolean;
+  /** The command in the first line of the text report. */
+  command: string;
+  /** What the result lines call each action. */
+  labels: Record<DeployAction, string>;
+  /** The lines under the results. */
+  summary: (counts: Summary) => string[];
+  /** How the stderr recap introduces the failed workflows. */
+  failed: string;
+  /** What each warning says deploy did, or would do. */
+  outcomes: Record<DeployWarning['kind'], string>;
+}
+
+const DEPLOY_WORDING: Wording = {
+  dryRun: false,
+  command: 'n8nlift deploy',
+  labels: {
+    created: 'created',
+    updated: 'updated',
+    skipped: 'skipped',
+    restored: 'restored',
+    failed: 'failed',
+    'not-processed': 'not-processed',
+  },
+  summary: ({ created, updated, restored, skipped, failed }) => {
+    const drafts = created + updated + restored > 0 ? ' Drafts are not live until you publish them.' : '';
+    return [`${created} created, ${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`];
+  },
+  failed: 'Failed',
+  outcomes: { 'archived-copies': 'deploy used', restored: 'it is back', 'several-archived': 'deploy restored' },
 };
 
-/** The longest label, `not-processed` or `would restore`, plus one space. */
-const ACTION_WIDTH = 1 + Math.max(...Object.keys(MARKS).map((action) => action.length), ...Object.values(DRY_RUN_LABELS).map((label) => label.length));
+const DRY_RUN_WORDING: Wording = {
+  dryRun: true,
+  command: 'n8nlift deploy --dry-run',
+  labels: {
+    created: 'would create',
+    updated: 'would update',
+    skipped: 'would skip',
+    restored: 'would restore',
+    failed: 'would fail',
+    'not-processed': 'not processed',
+  },
+  summary: ({ created, updated, restored, skipped, failed }) => [
+    `Would: ${created} create, ${updated} update, ${restored} restore, ${skipped} skip, ${failed} fail.`,
+    'Dry run: nothing was written. Run n8nlift deploy to apply.',
+    'n8n can still reject a write; this preview covers what reads can show.',
+  ],
+  failed: 'Would fail',
+  outcomes: {
+    'archived-copies': 'deploy would use',
+    restored: 'deploy would bring it back',
+    'several-archived': 'deploy would restore',
+  },
+};
+
+const LABELS = [DEPLOY_WORDING, DRY_RUN_WORDING].flatMap(({ labels }) => Object.values(labels));
+const ACTION_WIDTH = 1 + Math.max(...LABELS.map((label) => label.length));
 const INDENT = ' '.repeat(2 + ACTION_WIDTH);
 
 export const deployCommand: CommandDefinition = {
@@ -70,6 +133,7 @@ export const deployCommand: CommandDefinition = {
   run: async (input, ctx) => {
     const json = input.values.json === true;
     const dryRun = input.values['dry-run'] === true;
+    const wording = dryRun ? DRY_RUN_WORDING : DEPLOY_WORDING;
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
       return { exitCode: EXIT_USAGE, stdout: '', stderr: describeMissingConfig(resolved.missing) };
@@ -82,13 +146,13 @@ export const deployCommand: CommandDefinition = {
     const instance = config.url.value;
     if (loaded.workflows.length === 0) {
       return json
-        ? renderJson(instance, { results: [], warnings: [], exitCode: 0 }, dryRun)
+        ? renderJson(instance, { results: [], warnings: [], exitCode: 0 }, wording)
         : { exitCode: 0, stdout: `Nothing to deploy: no workflow in ./${WORKFLOWS_DIR}.\n`, stderr: '' };
     }
-    const client = createN8nClient({ baseUrl: instance, apiKey: config.apiKey.value, fetch: ctx.fetch });
+    const client = createN8nClient({ config, fetch: ctx.fetch });
     const deployInput = { workflows: loaded.workflows, client };
     const report = dryRun ? planToReport(await planDeploy(deployInput)) : await deploy(deployInput);
-    return json ? renderJson(instance, report, dryRun) : renderText(instance, report, dryRun);
+    return json ? renderJson(instance, report, wording) : renderText(instance, report, wording);
   },
 };
 
@@ -99,15 +163,6 @@ function invalidFiles(problems: LoadProblem[]): CliResult {
     stdout: '',
     stderr: `Invalid workflow files. Nothing was sent to n8n.\n${lines.join('\n')}\n`,
   };
-}
-
-interface Summary {
-  created: number;
-  updated: number;
-  restored: number;
-  skipped: number;
-  failed: number;
-  notProcessed: number;
 }
 
 function summarize(results: DeployResult[]): Summary {
@@ -122,7 +177,7 @@ function summarize(results: DeployResult[]): Summary {
   };
 }
 
-function describe(result: DeployResult): string {
+function detailOf(result: DeployResult): string {
   switch (result.action) {
   case 'created':
     return result.path;
@@ -139,46 +194,50 @@ function describe(result: DeployResult): string {
   }
 }
 
-function renderText(instance: string, report: DeployReport, dryRun: boolean): CliResult {
+/** One warning as a sentence. The --json report keeps the sentences. */
+function warningText(warning: DeployWarning, wording: Wording): string {
+  const { stableName } = warning;
+  const outcome = wording.outcomes[warning.kind];
+  switch (warning.kind) {
+  case 'archived-copies': {
+    const one = warning.archivedIds.length === 1;
+    return `${stableName}: archived ${one ? 'workflow' : 'workflows'} ${formatList(warning.archivedIds)} still ${one ? 'carries' : 'carry'} the tag ${stableTag(stableName)}; ${outcome} the live workflow ${warning.liveId}`;
+  }
+  case 'restored':
+    return `${stableName}: workflow ${warning.id} was archived in n8n; ${outcome} as an unpublished draft`;
+  case 'several-archived':
+    return `${stableName}: archived workflows ${formatList(warning.archivedIds)} all carry the tag ${stableTag(stableName)}; ${outcome} ${warning.restoredId}`;
+  }
+}
+
+function renderText(instance: string, report: DeployReport, wording: Wording): CliResult {
   const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
-  const stdout = [`n8nlift deploy${dryRun ? ' --dry-run' : ''} → ${instance}`];
+  const stdout = [`${wording.command} → ${instance}`];
   for (const result of report.results) {
-    const label = dryRun ? DRY_RUN_LABELS[result.action] : result.action;
-    stdout.push(`${MARKS[result.action]} ${label.padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${describe(result)}`);
+    stdout.push(`${MARKS[result.action]} ${wording.labels[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
     if (result.error !== undefined) {
       stdout.push(`${INDENT}→ ${result.error.hint}`);
     }
   }
-  stdout.push(...report.warnings.map((warning) => `⚠ ${warning}`));
+  stdout.push(...report.warnings.map((warning) => `⚠ ${warningText(warning, wording)}`));
   const { error } = report;
   if (error !== undefined && report.results.length === 0) {
     const stderr = [`✗ ${error.call} → ${error.detail}`, `  → ${error.hint}`, 'Nothing was written to n8n.'];
     return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: `${stderr.join('\n')}\n` };
   }
-  const summary = summarize(report.results);
-  const { created, updated, restored, skipped, failed } = summary;
-  if (dryRun) {
-    stdout.push(
-      `Would: ${created} create, ${updated} update, ${restored} restore, ${skipped} skip, ${failed} fail.`,
-      'Dry run: nothing was written. Run n8nlift deploy to apply.',
-      'n8n can still reject a write; this preview covers what reads can show.',
-    );
-  } else {
-    const drafts = created + updated + restored > 0 ? ' Drafts are not live until you publish them.' : '';
-    stdout.push(`${created} created, ${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`);
-  }
-  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: recap(report, dryRun) };
+  stdout.push(...wording.summary(summarize(report.results)));
+  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: recap(report, wording) };
 }
 
 /** The stderr recap: which workflows need attention and what to do next. Empty when everything went through. */
-function recap(report: DeployReport, dryRun: boolean): string {
+function recap(report: DeployReport, wording: Wording): string {
   const names = (action: DeployAction): string[] =>
     report.results.filter((result) => result.action === action).map((result) => result.stableName);
   const failedNames = names('failed');
   const notProcessed = names('not-processed');
   const lines: string[] = [];
   if (failedNames.length > 0) {
-    lines.push(`${dryRun ? 'Would fail' : 'Failed'}: ${failedNames.join(', ')}.`);
+    lines.push(`${wording.failed}: ${failedNames.join(', ')}.`);
   }
   if (report.error !== undefined) {
     lines.push(`Stopped: ${report.error.call} → ${report.error.detail}`);
@@ -192,11 +251,11 @@ function recap(report: DeployReport, dryRun: boolean): string {
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
 }
 
-function renderJson(instance: string, report: DeployReport, dryRun: boolean): CliResult {
+function renderJson(instance: string, report: DeployReport, wording: Wording): CliResult {
   const { error } = report;
   const payload = {
     instance,
-    dryRun,
+    dryRun: wording.dryRun,
     results: report.results.map(({ stableName, path, action, id, name, error: failure }) => ({
       stableName,
       path,
@@ -206,7 +265,7 @@ function renderJson(instance: string, report: DeployReport, dryRun: boolean): Cl
       ...(failure === undefined ? {} : { error: failure }),
     })),
     summary: summarize(report.results),
-    warnings: report.warnings,
+    warnings: report.warnings.map((warning) => warningText(warning, wording)),
     error: error === undefined ? null : { call: error.call, detail: error.detail, hint: error.hint },
     exitCode: report.exitCode,
   };
