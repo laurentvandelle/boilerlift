@@ -1,51 +1,53 @@
-# n8nlift
+# Boilerlift
 
 **Code is the source. n8n is the runtime.**
 
 Write n8n workflows in TypeScript, test them like any other code, and lift them from dev to prod.
 
-n8nlift is a command-line tool for people who want their n8n workflows to live in Git, not only in the editor. You paste an n8n export into a typed `.workflow.ts` file, let the editor catch a broken shape, run unit tests, then deploy to your n8n instance. Updates land as drafts, so the published version keeps running until you choose to publish.
+Boilerlift is a command-line tool for people who want their n8n workflows to live in Git, not only in the editor. You paste an n8n export into a typed `.workflow.ts` file, let the editor catch a broken shape, run unit tests, then deploy to your n8n instance. Updates land as drafts, so the published version keeps running until you choose to publish.
 
-## Why n8nlift
+## Why Boilerlift
 
 - **Typed workflow files.** Paste an n8n export into `defineWorkflow`: the editor flags a missing node field, a connection to a node that does not exist, or a node name used twice, before anything is deployed.
 - **Tested before shipped.** Workflows are plain TypeScript: lint, typecheck and test them in CI.
 - **Safe delivery.** Deploy as draft, review, then publish. Requires n8n 2.35.0 or later.
 - **Built for AI coding agents.** Agents edit code and run the CLI instead of calling the n8n API directly.
-- **Your instance, your rules.** n8nlift talks to your own n8n instance through its public API. Nothing is hosted for you.
+- **Your instance, your rules.** Boilerlift talks to your own n8n instance through its public API. Nothing is hosted for you.
 
 ## Install
 
 ```sh
-npm install -g n8nlift
+npm install -g boilerlift
 ```
+
+This installs the `lift` command. `boilerlift` is an alias of `lift`, for a shell where `lift` is already taken.
 
 Requires Node.js 22.18 or later, and n8n 2.35.0 or later.
 
 In a project whose workflows are `.workflow.ts` files, also install it as a dev dependency, so the files can import `defineWorkflow`:
 
 ```sh
-npm install --save-dev n8nlift
+npm install --save-dev boilerlift
 ```
 
 ## Quick start
 
 ```sh
-n8nlift --help            # list the available commands
-n8nlift ping              # check the connection to your n8n instance
-n8nlift deploy            # deliver ./workflows to your instance as drafts
-n8nlift deploy --dry-run  # show what deploy would do, write nothing
-n8nlift help <command>    # show the options of one command
-n8nlift --version         # print the installed version
+lift --help            # list the available commands
+lift ping              # check the connection to your n8n instance
+lift deploy            # deliver ./workflows to your instance as drafts
+lift deploy --dry-run  # show what deploy would do, write nothing
+lift help <command>    # show the options of one command
+lift --version         # print the installed version
 ```
 
 ## Check your connection
 
-Before deploying anything, check that your project can reach your n8n instance. `n8nlift ping` reads two values from the environment, then from a `.env` file in the current folder. A variable set in the environment wins over `.env`.
+Before deploying anything, check that your project can reach your n8n instance. `lift ping` reads two values from the environment, then from a `.env` file in the current folder. A variable set in the environment wins over `.env`.
 
 | Variable      | Value                                                            |
 | ------------- | ---------------------------------------------------------------- |
-| `N8N_URL`     | Root URL of your n8n instance. n8nlift adds `/api/v1` itself.    |
+| `N8N_URL`     | Root URL of your n8n instance. Boilerlift adds `/api/v1` itself. |
 | `N8N_API_KEY` | An n8n API key, created in n8n → Settings → n8n API.             |
 
 ```sh
@@ -59,7 +61,7 @@ Add the script to your project's `package.json`, then run `npm run ping`:
 ```json
 {
   "scripts": {
-    "ping": "n8nlift ping"
+    "ping": "lift ping"
   }
 }
 ```
@@ -82,7 +84,7 @@ Export a workflow from n8n (editor → ⋯ → Download), then paste the JSON in
 
 ```ts
 // workflows/invoice-sync.workflow.ts
-import { defineWorkflow } from 'n8nlift';
+import { defineWorkflow } from 'boilerlift';
 
 export default defineWorkflow({
   name: 'Invoice sync',
@@ -104,7 +106,7 @@ Other keys of the export (`id`, `meta`, `pinData`, `versionId`, `credentials`…
 
 ## Deploy
 
-`n8nlift deploy` delivers every workflow under `./workflows` to your instance. It reads the same `N8N_URL` and `N8N_API_KEY` as `ping`.
+`lift deploy` delivers every workflow under `./workflows` to your instance. It reads the same `N8N_URL` and `N8N_API_KEY` as `ping`.
 
 ```text
 workflows/
@@ -114,10 +116,10 @@ workflows/
 
 Before anything is sent, `deploy` checks every file, `.workflow.ts` and `.json` alike, with the same rules as the editor: the workflow has a `name`, `nodes` and `connections`; every node has `name`, `type`, `typeVersion`, `position` and `parameters`; node names are unique; every connection goes from and to an existing node. One wrong file refuses the whole run, names the file and what is wrong, and exits 1.
 
-The file name without `.workflow.ts` / `.json` is the workflow's **stable name**: 1 to 16 lowercase letters, digits or dashes, unique across all folders. n8nlift tags the workflow `n8nlift:<stable-name>` on the instance and finds it again by that tag, so renaming the workflow in n8n keeps the link (the name in the file wins on the next update); renaming the file makes a new workflow.
+The file name without `.workflow.ts` / `.json` is the workflow's **stable name**: 1 to 16 lowercase letters, digits or dashes, unique across all folders. Boilerlift tags the workflow `boilerlift:<stable-name>` on the instance and finds it again by that tag, so renaming the workflow in n8n keeps the link (the name in the file wins on the next update); renaming the file makes a new workflow.
 
 ```text
-n8nlift deploy → https://your-n8n.example.com
+lift deploy → https://your-n8n.example.com
 ~ updated       crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = skipped       daily-report   unchanged
 + created       invoice-sync   workflows/invoice-sync.workflow.ts
@@ -132,7 +134,7 @@ n8nlift deploy → https://your-n8n.example.com
 - Workflows whose current draft already matches the file are skipped, so a rerun changes nothing.
 - A workflow deleted in the n8n editor is only archived. `deploy` unarchives it and updates it as a draft (`restored`), with a warning: it stays unpublished until you publish it. This needs the `workflow:delete` scope on the API key. A workflow deleted through the API is gone for good and is simply created again.
 - When an archived copy and an unarchived workflow carry the same tag, the unarchived one is used and a warning names the archived copy.
-- A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered. Two unarchived workflows with the same `n8nlift:` tag fail only that stable name.
+- A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered. Two unarchived workflows with the same `boilerlift:` tag fail only that stable name.
 - An unreachable instance or a rejected key stops the run: the workflows not yet processed are listed as `not-processed`.
 - After the summary, stderr recaps the failed and not-processed workflows and the next step.
 - `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `updated`, `skipped`, `restored`, `failed`, `not-processed`) and, when it failed, an `error` with `call`, `detail` and `hint`; plus `dryRun` (`true` under `--dry-run`), `summary`, `warnings`, `exitCode`, and a top-level `error` only when the whole run stopped.
@@ -148,15 +150,15 @@ n8nlift deploy → https://your-n8n.example.com
 
 ### Dry run
 
-`n8nlift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n older than 2.35.0) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
+`lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n older than 2.35.0) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
 
 ```text
-n8nlift deploy --dry-run → https://your-n8n.example.com
+lift deploy --dry-run → https://your-n8n.example.com
 ~ would update  crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = would skip    daily-report   unchanged
 + would create  invoice-sync   workflows/invoice-sync.workflow.ts
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
-Dry run: nothing was written. Run n8nlift deploy to apply.
+Dry run: nothing was written. Run lift deploy to apply.
 n8n can still reject a write; this preview covers what reads can show.
 ```
 
@@ -164,7 +166,7 @@ n8n can still reject a write; this preview covers what reads can show.
 
 Early stage, best-effort support. Multi-environment support (dev, staging, prod) and drift detection are on the roadmap.
 
-> n8nlift is an independent open source project. It is not affiliated with, endorsed by, or sponsored by n8n GmbH.
+> Boilerlift is an independent open source project. It is not affiliated with, endorsed by, or sponsored by n8n GmbH.
 
 ## Development
 
@@ -174,7 +176,7 @@ npm run verify   # lint, typecheck, tests
 npm run build    # compile into dist/
 ```
 
-`npm start` builds, then runs `debug/main.ts` against `dist/` as an external consumer would. With no argument it runs a real `n8nlift deploy` of `debug/workflows` to the instance in `debug/.env`: point that file at a test instance.
+`npm start` builds, then runs `debug/main.ts` against `dist/` as an external consumer would. With no argument it runs a real `lift deploy` of `debug/workflows` to the instance in `debug/.env`: point that file at a test instance.
 
 ## License
 

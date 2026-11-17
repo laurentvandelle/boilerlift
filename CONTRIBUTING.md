@@ -1,6 +1,6 @@
-# Contributing to n8nlift
+# Contributing to Boilerlift
 
-Thanks for your interest. n8nlift is an early-stage project with best-effort support, so small, focused contributions are the easiest to review.
+Thanks for your interest. Boilerlift is an early-stage project with best-effort support, so small, focused contributions are the easiest to review.
 
 ## Before you start
 
@@ -8,15 +8,15 @@ Thanks for your interest. n8nlift is an early-stage project with best-effort sup
 - **Features:** open an issue first to discuss the idea before writing code, so your work fits the roadmap.
 - **Security issues:** follow [SECURITY.md](SECURITY.md), not a public issue.
 
-Issues labelled [`good first issue`](https://github.com/laurentvandelle/n8nlift/labels/good%20first%20issue) are a good place to start.
+Issues labelled [`good first issue`](https://github.com/laurentvandelle/boilerlift/labels/good%20first%20issue) are a good place to start.
 
 ## Setup
 
 Requires Node.js 22.18 or later. Development uses the version in `.nvmrc` (24).
 
 ```sh
-git clone https://github.com/laurentvandelle/n8nlift.git
-cd n8nlift
+git clone https://github.com/laurentvandelle/boilerlift.git
+cd boilerlift
 npm install
 npm run verify   # lint, typecheck, tests
 ```

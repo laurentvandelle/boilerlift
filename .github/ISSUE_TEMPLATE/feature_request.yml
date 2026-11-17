@@ -4,7 +4,7 @@ labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
-      value: Please search [existing issues](https://github.com/laurentvandelle/n8nlift/issues) first. Multi-environment support, plan and drift detection are already on the roadmap.
+      value: Please search [existing issues](https://github.com/laurentvandelle/boilerlift/issues) first. Multi-environment support, plan and drift detection are already on the roadmap.
   - type: textarea
     id: problem
     attributes:
@@ -16,7 +16,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: How you would like n8nlift to behave. A sample command or code snippet helps.
+      description: How you would like Boilerlift to behave. A sample command or code snippet helps.
     validations:
       required: true
   - type: textarea

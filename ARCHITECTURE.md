@@ -4,19 +4,19 @@ Operational rules for agents live in `AGENTS.md`. This file is background.
 
 ## Intent
 
-`n8nlift` is a command-line tool written in TypeScript and published to npm. It reads and validates n8n workflows kept as typed `.workflow.ts` files (an n8n export passed to `defineWorkflow`) or `.json` exports, and delivers them to the user's n8n instance. n8n node definitions are not part of this repository. The CLI has `help`, `version`, `ping` (checks the instance connection) and `deploy` (delivers `./workflows` to the instance as drafts, or shows its plan with `--dry-run`).
+Boilerlift is a command-line tool written in TypeScript and published to npm. It reads and validates n8n workflows kept as typed `.workflow.ts` files (an n8n export passed to `defineWorkflow`) or `.json` exports, and delivers them to the user's n8n instance. n8n node definitions are not part of this repository. The CLI has `help`, `version`, `ping` (checks the instance connection) and `deploy` (delivers `./workflows` to the instance as drafts, or shows its plan with `--dry-run`).
 
 ## Modules
 
-- `src/bin.ts` — the `n8nlift` executable (`bin` in `package.json`). Awaits `runCli` with `process.argv` and the context of the process, then writes the result. An error that escapes a command is printed with its stack, exit 1.
-- `src/cli/node-context.ts` — builds the `CommandContext` of the real process: the n8nlift version, the environment, the `./.env` text, the Node.js version, `fetch`, and the reader of the workflow files. `src/cli/cli.model.ts` documents each field.
-- `src/index.ts` — the package entry point, imported by workflow files as `'n8nlift'`. Exports `defineWorkflow` and the workflow types (`Workflow`, `WorkflowNode`, `WorkflowConnection`, `WorkflowConnections`) from `core/compile/`.
+- `src/bin.ts` — the executable behind the `lift` and `boilerlift` commands (`bin` in `package.json`). Awaits `runCli` with `process.argv` and the context of the process, then writes the result. An error that escapes a command is printed with its stack, exit 1.
+- `src/cli/node-context.ts` — builds the `CommandContext` of the real process: the Boilerlift version, the environment, the `./.env` text, the Node.js version, `fetch`, and the reader of the workflow files. `src/cli/cli.model.ts` documents each field.
+- `src/index.ts` — the package entry point, imported by workflow files as `'boilerlift'`. Exports `defineWorkflow` and the workflow types (`Workflow`, `WorkflowNode`, `WorkflowConnection`, `WorkflowConnections`) from `core/compile/`.
 - `src/cli/` — the CLI: `run-cli.ts` (dispatch), `registry.ts` (the list of commands), `cli.model.ts` (contracts), `define-command.ts` (builds a command whose option values are typed by its options) and `commands/<name>/`, one folder per command: `<name>.command.ts` runs `core/`, `<name>.render.ts` turns the result into the text the user reads. Commands are async: `run` returns `Promise<CliResult>`.
 - `src/core/` — the work behind the commands, one folder per concern:
   - `compile/` reads and validates workflow files: `defineWorkflow` and its types for the editor, and a pure loader that checks each export's shape, nodes, connections and stable name before deploy.
-  - `deliver/` is deploy: `plan-deploy.ts` reads the instance and decides each workflow's action (also behind `deploy --dry-run`), `apply-plan.ts` runs the writes, `deploy-failure.ts` says which failures stop the run and with which exit code, and `stable-tag.ts` matches workflows by their `n8nlift:<stable-name>` tag.
-  - `connection/` is ping: the checks behind `n8nlift ping`.
-  - Shared folders: `config/` (reads `N8N_URL` and `N8N_API_KEY` from the environment and `.env`), `n8n/` (the `N8nClient` port, the id guards and what n8nlift relies on in the public API) and `common/` (the exit codes of every command, `isRecord`, and the `Result` type of expected failures).
+  - `deliver/` is deploy: `plan-deploy.ts` reads the instance and decides each workflow's action (also behind `deploy --dry-run`), `apply-plan.ts` runs the writes, `deploy-failure.ts` says which failures stop the run and with which exit code, and `stable-tag.ts` matches workflows by their `boilerlift:<stable-name>` tag.
+  - `connection/` is ping: the checks behind `lift ping`.
+  - Shared folders: `config/` (reads `N8N_URL` and `N8N_API_KEY` from the environment and `.env`), `n8n/` (the `N8nClient` port, the id guards and what Boilerlift relies on in the public API) and `common/` (the exit codes of every command, `isRecord`, and the `Result` type of expected failures).
 - `src/services/` — the adapters that reach the outside world, behind the ports of `core/`. Only the commands use them:
   - `http/` is the HTTP transport: `getRequest`, `postRequest` and `putRequest` with headers, a JSON body and a reader for the answer, a timeout, and network errors described for a person. It knows no service.
   - `n8n/` implements the `N8nClient` port by calling `http/` directly for each endpoint: the API key, the URLs and paging of the public API, and the parsers that check every body once.
@@ -37,7 +37,7 @@ Why this split: `docs/adr/0001-cli-and-core-layers.md`. Why typed n8n exports: `
 
 ## Runtime
 
-`npm run build` compiles `src/` with `tsc` (module `node20`, target `ES2024`, CommonJS output since `package.json` has no `"type"`) into `dist/`, emitting `.d.ts` and source maps. Imports keep the `#src/` alias in `dist/`: Node.js resolves it at runtime through the `imports` field of `package.json` (`#src/*` → `./dist/*.js`), so no rewrite step runs. `package.json` points `main` at `dist/index.js` and `types` at `dist/index.d.ts`. The minimum runtime is Node.js 22.18 (`engines` in `package.json`); development uses Node.js 24 (`.nvmrc`), and CI tests both. `npm start` builds, then runs `debug/main.ts` with `node` (Node.js 22.18 and later strip TypeScript types natively). With no argument, `debug/main.ts` runs a real `n8nlift deploy` of `debug/workflows` to the instance in `debug/.env`, so `npm start` writes to that instance.
+`npm run build` compiles `src/` with `tsc` (module `node20`, target `ES2024`, CommonJS output since `package.json` has no `"type"`) into `dist/`, emitting `.d.ts` and source maps. Imports keep the `#src/` alias in `dist/`: Node.js resolves it at runtime through the `imports` field of `package.json` (`#src/*` → `./dist/*.js`), so no rewrite step runs. `package.json` points `main` at `dist/index.js` and `types` at `dist/index.d.ts`. The minimum runtime is Node.js 22.18 (`engines` in `package.json`); development uses Node.js 24 (`.nvmrc`), and CI tests both. `npm start` builds, then runs `debug/main.ts` with `node` (Node.js 22.18 and later strip TypeScript types natively). With no argument, `debug/main.ts` runs a real `lift deploy` of `debug/workflows` to the instance in `debug/.env`, so `npm start` writes to that instance.
 
 ## Out of scope
 
