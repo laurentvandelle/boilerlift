@@ -1,5 +1,4 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/core/connection/check-connection';
 import {
   DeployError,
   DeployInput,
@@ -10,19 +9,18 @@ import {
   PlannedStep,
 } from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
-import { SPEC_PATH } from '#src/core/n8n/n8n-client';
+import {
+  EXIT_API_KEY_REJECTED,
+  EXIT_DRAFTS_UNSUPPORTED,
+  EXIT_PARTIAL_FAILURE,
+  EXIT_UNREACHABLE,
+} from '#src/core/exit/exit-codes';
 import { ApiFailure, ApiResult, N8nClient, N8nTag, N8nWorkflowBody, N8nWorkflowSummary } from '#src/core/n8n/n8n.model';
 
 export const STABLE_TAG_PREFIX = 'n8nlift:';
 
-/** Exit code when at least one workflow failed and nothing stopped the whole run. */
-export const EXIT_PARTIAL_FAILURE = 5;
-/** Exit code when the instance cannot save drafts (older than n8n 2.35.0). */
-export const EXIT_DRAFTS_UNSUPPORTED = 6;
-
 /** The query parameter that makes an update land as a draft. Its presence in the spec means drafts are supported. */
 const DRAFT_PARAM = 'publishIfActive';
-const LIST_CALL = 'GET /api/v1/workflows';
 
 /** The tag that identifies a workflow on the instance. */
 export function stableTag(stableName: string): string {
@@ -86,7 +84,7 @@ export async function planDeploy({ workflows, client }: DeployInput, mode: PlanM
     const target = resolveTarget(workflow.stableName, index.get(workflow.stableName), warnings, mode);
     switch (target.kind) {
     case 'duplicate':
-      steps.push(failedStep(workflow, duplicateTag(workflow.stableName, target.ids)));
+      steps.push(failedStep(workflow, duplicateTag(listed.call, workflow.stableName, target.ids)));
       break;
     case 'create':
       steps.push({ workflow, action: 'created' });
@@ -210,7 +208,7 @@ function writes(step: PlannedStep): step is PlannedStep & { action: 'created' | 
 function draftsUnsupported(spec: Exclude<ApiResult<string>, { kind: 'unreachable' }>): DeployError {
   const reason = spec.kind === 'http-error' ? `HTTP ${spec.status}` : `the API spec has no ${DRAFT_PARAM}`;
   return {
-    call: `GET ${SPEC_PATH}`,
+    call: spec.call,
     detail: `${reason}: n8n 2.35.0 or later is required`,
     hint: 'Upgrade the instance to n8n 2.35.0 or later, then run deploy again',
     exitCode: EXIT_DRAFTS_UNSUPPORTED,
@@ -362,10 +360,11 @@ function resultOf({ workflow, action, id, error }: PlannedStep): DeployResult {
   return { ...result(workflow, action, id), ...(error === undefined ? {} : { error }) };
 }
 
-function duplicateTag(stableName: string, ids: string[]): DeployError {
+/** The failure of a workflow whose stable tag several live workflows carry, as the list `call` showed them. */
+function duplicateTag(call: string, stableName: string, ids: string[]): DeployError {
   const tag = stableTag(stableName);
   return {
-    call: LIST_CALL,
+    call,
     detail: `workflows ${list(ids)} both carry the tag ${tag}`,
     hint: `Remove the tag ${tag} from one of them in the n8n editor, then run deploy again`,
     exitCode: EXIT_PARTIAL_FAILURE,

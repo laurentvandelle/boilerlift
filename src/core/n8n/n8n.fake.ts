@@ -74,41 +74,42 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
   let lastId = 0;
   const newId = (prefix: string): string => `${prefix}${(lastId += 1)}`;
 
-  const answer = <T>(call: string, perform: () => ApiResult<T>): Promise<ApiResult<T>> => {
+  /** Records the call, then answers it with its configured failure, or with what `perform` returns. */
+  const answer = <T>(call: string, perform: (call: string) => ApiResult<T>): Promise<ApiResult<T>> => {
     calls.push(call);
-    return Promise.resolve(failures.find((failure) => failure.call === call) ?? perform());
+    return Promise.resolve(failures.find((failure) => failure.call === call) ?? perform(call));
   };
   const onWorkflow = <T>(call: string, id: string, perform: (workflow: N8nWorkflow) => T): Promise<ApiResult<T>> =>
     answer(call, () => {
       const workflow = workflows.find((candidate) => candidate.id === id);
-      return workflow === undefined ? httpError(call, 404, 'Not Found') : ok(perform(workflow));
+      return workflow === undefined ? httpError(call, 404, 'Not Found') : ok(call, perform(workflow));
     });
   const probe = async (call: string): Promise<ProbeResult> => {
-    const result = await answer(call, () => ok(undefined));
+    const result = await answer(call, () => ok(call, undefined));
     switch (result.kind) {
     case 'ok':
-      return { kind: 'ok', status: result.status };
+      return { kind: 'ok', call, status: result.status };
     case 'http-error':
-      return { kind: 'http-error', status: result.status };
+      return { kind: 'http-error', call, status: result.status };
     case 'unreachable':
-      return { kind: 'unreachable', reason: result.reason };
+      return { kind: 'unreachable', call, reason: result.reason };
     }
   };
 
   const client: N8nClient = {
     checkHealth: () => probe('GET /healthz'),
     checkApiKey: () => probe('GET /api/v1/workflows'),
-    readApiSpec: () => answer('GET /api/v1/openapi.yml', () => ok(spec)),
+    readApiSpec: () => answer('GET /api/v1/openapi.yml', (call) => ok(call, spec)),
     listWorkflows: () =>
-      answer('GET /api/v1/workflows', () =>
-        ok(workflows.map(({ id, name, tags: workflowTags, isArchived }) => ({ id, name, tags: structuredClone(workflowTags), isArchived }))),
+      answer('GET /api/v1/workflows', (call) =>
+        ok(call, workflows.map(({ id, name, tags: workflowTags, isArchived }) => ({ id, name, tags: structuredClone(workflowTags), isArchived }))),
       ),
     getWorkflow: (id) => onWorkflow(`GET /api/v1/workflows/${id}`, id, (workflow) => structuredClone(workflow)),
     createWorkflow: (body) =>
-      answer('POST /api/v1/workflows', () => {
+      answer('POST /api/v1/workflows', (call) => {
         const workflow: N8nWorkflow = { ...structuredClone(body), id: newId('w'), tags: [], isArchived: false };
         workflows.push(workflow);
-        return ok(structuredClone(workflow));
+        return ok(call, structuredClone(workflow));
       }),
     updateWorkflow: (id, body) =>
       onWorkflow(`PUT /api/v1/workflows/${id}`, id, (workflow) => structuredClone(Object.assign(workflow, structuredClone(body)))),
@@ -117,15 +118,15 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
         workflow.isArchived = false;
         return structuredClone(workflow);
       }),
-    listTags: () => answer('GET /api/v1/tags', () => ok(structuredClone(tags))),
+    listTags: () => answer('GET /api/v1/tags', (call) => ok(call, structuredClone(tags))),
     createTag: (name) =>
-      answer('POST /api/v1/tags', () => {
+      answer('POST /api/v1/tags', (call) => {
         if (tags.some((tag) => tag.name === name)) {
-          return httpError('POST /api/v1/tags', 409, 'Tag already exists');
+          return httpError(call, 409, 'Tag already exists');
         }
         const tag = { id: newId('t'), name };
         tags.push(tag);
-        return ok({ ...tag });
+        return ok(call, { ...tag });
       }),
     setWorkflowTags: (id, tagIds) => {
       const call = `PUT /api/v1/workflows/${id}/tags`;
@@ -183,8 +184,8 @@ export function fakeN8n({ workflows: seed = [], tags: extraTags = [], spec = DRA
   return { client, fetch: answerHttp, workflows, tags, calls, requests };
 }
 
-function ok<T>(body: T): ApiResult<T> {
-  return { kind: 'ok', status: 200, body };
+function ok<T>(call: string, body: T): ApiResult<T> {
+  return { kind: 'ok', call, status: 200, body };
 }
 
 /** An answer as n8n sends it: JSON, or a `{ data, nextCursor }` page of one. Unreachable becomes a network error. */

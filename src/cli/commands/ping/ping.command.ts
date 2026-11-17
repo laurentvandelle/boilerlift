@@ -1,9 +1,10 @@
 import { CliResult, CommandDefinition } from '#src/cli/cli.model';
 import { ConnectionConfig } from '#src/core/config/config.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
-import { EXIT_MISSING_CONFIG, describeMissingConfig } from '#src/core/config/missing-config';
+import { describeMissingConfig } from '#src/core/config/missing-config';
 import { CHECK_LABELS, checkConnection } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
+import { EXIT_USAGE } from '#src/core/exit/exit-codes';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 
 const STATUS_MARKS: Record<Check['status'], string> = { ok: '✓', failed: '✗', skipped: '–' };
@@ -31,7 +32,7 @@ export const pingCommand: CommandDefinition = {
   run: async (_input, ctx) => {
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
-      return { exitCode: EXIT_MISSING_CONFIG, stdout: '', stderr: describeMissingConfig(resolved.missing) };
+      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeMissingConfig(resolved.missing) };
     }
     const { config } = resolved;
     const client = createN8nClient({ baseUrl: config.url.value, apiKey: config.apiKey.value, fetch: ctx.fetch });

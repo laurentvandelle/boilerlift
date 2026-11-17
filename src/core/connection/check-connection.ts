@@ -1,15 +1,9 @@
 import { Check, CheckConnectionInput, CheckName, ConnectionReport } from '#src/core/connection/connection.model';
-import { API_KEY_PATH, HEALTH_PATH } from '#src/core/n8n/n8n-client';
+import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_UNREACHABLE } from '#src/core/exit/exit-codes';
 
 export const MIN_NODE_VERSION = '22.18.0';
 
-export const EXIT_NODE_TOO_OLD = 2;
-export const EXIT_UNREACHABLE = 3;
-export const EXIT_API_KEY_REJECTED = 4;
-
 export const CHECK_LABELS: Record<CheckName, string> = { node: 'Node', url: 'URL', apiKey: 'API key' };
-
-const API_KEY_ENDPOINT = API_KEY_PATH.split('?')[0];
 
 type Step = () => Promise<Check>;
 
@@ -54,14 +48,14 @@ async function checkUrl(client: CheckConnectionInput['client']): Promise<Check> 
   const hint = 'Check N8N_URL: it must be the root URL of your n8n instance, for example https://your-n8n.example.com';
   switch (result.kind) {
   case 'ok':
-    return { name: 'url', status: 'ok', detail: `reachable (GET ${HEALTH_PATH} → ${result.status})` };
+    return { name: 'url', status: 'ok', detail: `reachable (${result.call} → ${result.status})` };
   case 'unreachable':
     return { name: 'url', status: 'failed', detail: `unreachable: ${result.reason}`, hint, exitCode: EXIT_UNREACHABLE };
   case 'http-error':
     return {
       name: 'url',
       status: 'failed',
-      detail: `not healthy (GET ${HEALTH_PATH} → ${result.status})`,
+      detail: `not healthy (${result.call} → ${result.status})`,
       hint,
       exitCode: EXIT_UNREACHABLE,
     };
@@ -71,7 +65,7 @@ async function checkUrl(client: CheckConnectionInput['client']): Promise<Check> 
 async function checkApiKey(client: CheckConnectionInput['client']): Promise<Check> {
   const result = await client.checkApiKey();
   if (result.kind === 'ok') {
-    return { name: 'apiKey', status: 'ok', detail: `accepted (GET ${API_KEY_ENDPOINT} → ${result.status})` };
+    return { name: 'apiKey', status: 'ok', detail: `accepted (${result.call} → ${result.status})` };
   }
   if (result.kind === 'unreachable') {
     return {
@@ -82,7 +76,7 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
       exitCode: EXIT_UNREACHABLE,
     };
   }
-  const call = `GET ${API_KEY_ENDPOINT} → ${result.status}`;
+  const call = `${result.call} → ${result.status}`;
   if (result.status === 401 || result.status === 403) {
     return {
       name: 'apiKey',

@@ -2,13 +2,13 @@ import { CliResult, CommandDefinition } from '#src/cli/cli.model';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
-import { EXIT_MISSING_CONFIG, describeMissingConfig } from '#src/core/config/missing-config';
+import { describeMissingConfig } from '#src/core/config/missing-config';
 import { deploy, planDeploy, planToReport } from '#src/core/deliver/deploy';
 import { DeployAction, DeployReport, DeployResult } from '#src/core/deliver/deploy.model';
+import { EXIT_USAGE } from '#src/core/exit/exit-codes';
 import { createN8nClient } from '#src/core/n8n/n8n-client';
 
 const WORKFLOWS_DIR = 'workflows';
-const EXIT_INVALID_FILES = 1;
 
 const USAGE = `n8nlift deploy [--dry-run] [--json]
 
@@ -72,7 +72,7 @@ export const deployCommand: CommandDefinition = {
     const dryRun = input.values['dry-run'] === true;
     const resolved = resolveConnectionConfig(ctx.env, ctx.dotEnv);
     if (!resolved.ok) {
-      return { exitCode: EXIT_MISSING_CONFIG, stdout: '', stderr: describeMissingConfig(resolved.missing) };
+      return { exitCode: EXIT_USAGE, stdout: '', stderr: describeMissingConfig(resolved.missing) };
     }
     const { config } = resolved;
     const loaded = loadWorkflows(await ctx.loadWorkflowFiles(WORKFLOWS_DIR));
@@ -95,7 +95,7 @@ export const deployCommand: CommandDefinition = {
 function invalidFiles(problems: LoadProblem[]): CliResult {
   const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
   return {
-    exitCode: EXIT_INVALID_FILES,
+    exitCode: EXIT_USAGE,
     stdout: '',
     stderr: `Invalid workflow files. Nothing was sent to n8n.\n${lines.join('\n')}\n`,
   };

@@ -1,4 +1,5 @@
 import { CliResult, CommandDefinition, CommandOption } from '#src/cli/cli.model';
+import { EXIT_USAGE } from '#src/core/exit/exit-codes';
 
 const HELP_OPTION: CommandOption = { type: 'boolean', short: 'h', description: 'Show this help' };
 const VERSION_OPTION: CommandOption = { type: 'boolean', short: 'v', description: 'Print the n8nlift version' };
@@ -19,7 +20,7 @@ function renderHelp(positionals: string[], registry: readonly CommandDefinition[
   }
   const command = registry.find((candidate) => candidate.name === target);
   if (command === undefined) {
-    return { exitCode: 1, stdout: '', stderr: `Unknown command: ${target}\n\n${renderGlobalHelp(registry)}` };
+    return { exitCode: EXIT_USAGE, stdout: '', stderr: `Unknown command: ${target}\n\n${renderGlobalHelp(registry)}` };
   }
   return { exitCode: 0, stdout: renderCommandHelp(command), stderr: '' };
 }

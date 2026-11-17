@@ -1,11 +1,12 @@
+/** The outcome of a read-only check. `call` names it, for example `GET /healthz`. */
 export type ProbeResult =
-  | { kind: 'ok'; status: number }
-  | { kind: 'unreachable'; reason: string }
-  | { kind: 'http-error'; status: number };
+  | { kind: 'ok'; call: string; status: number }
+  | { kind: 'unreachable'; call: string; reason: string }
+  | { kind: 'http-error'; call: string; status: number };
 
 /** The outcome of one public API call. `call` names it, for example `PUT /api/v1/workflows/abc`. */
 export type ApiResult<T> =
-  | { kind: 'ok'; status: number; body: T }
+  | { kind: 'ok'; call: string; status: number; body: T }
   | { kind: 'unreachable'; call: string; reason: string }
   | { kind: 'http-error'; call: string; status: number; message?: string };
 

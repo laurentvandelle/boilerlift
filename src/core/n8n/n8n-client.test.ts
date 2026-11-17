@@ -26,7 +26,7 @@ describe('createN8nClient', () => {
 
     const result = await client.checkHealth();
 
-    expect(result).toEqual({ kind: 'ok', status: 200 });
+    expect(result).toEqual({ kind: 'ok', call: 'GET /healthz', status: 200 });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('https://n8n.example.com/healthz');
     expect(calls[0]?.init?.method).toBe('GET');
@@ -39,7 +39,7 @@ describe('createN8nClient', () => {
 
     const result = await client.checkApiKey();
 
-    expect(result).toEqual({ kind: 'ok', status: 200 });
+    expect(result).toEqual({ kind: 'ok', call: 'GET /api/v1/workflows', status: 200 });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows?limit=1');
     expect(calls[0]?.init?.method).toBe('GET');
     expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
@@ -52,7 +52,7 @@ describe('createN8nClient', () => {
 
     const result = await client.checkApiKey();
 
-    expect(result).toEqual({ kind: 'http-error', status });
+    expect(result).toEqual({ kind: 'http-error', call: 'GET /api/v1/workflows', status });
   });
 
   test.each([
@@ -65,7 +65,7 @@ describe('createN8nClient', () => {
 
     const result = await client.checkHealth();
 
-    expect(result).toEqual({ kind: 'unreachable', reason });
+    expect(result).toEqual({ kind: 'unreachable', call: 'GET /healthz', reason });
   });
 
   test('Should report the cause when a network error has no code', async () => {
@@ -74,7 +74,7 @@ describe('createN8nClient', () => {
 
     const result = await client.checkHealth();
 
-    expect(result).toEqual({ kind: 'unreachable', reason: 'fetch failed: bad port' });
+    expect(result).toEqual({ kind: 'unreachable', call: 'GET /healthz', reason: 'fetch failed: bad port' });
   });
 
   test('Should report the instance unreachable when no answer comes before the timeout', async () => {
@@ -88,7 +88,7 @@ describe('createN8nClient', () => {
 
     const result = await client.checkHealth();
 
-    expect(result).toEqual({ kind: 'unreachable', reason: 'no answer after 0.005 s (timeout)' });
+    expect(result).toEqual({ kind: 'unreachable', call: 'GET /healthz', reason: 'no answer after 0.005 s (timeout)' });
   });
 });
 
@@ -104,7 +104,7 @@ describe('createN8nClient public API calls', () => {
 
     const result = await client.readApiSpec();
 
-    expect(result).toEqual({ kind: 'ok', status: 200, body: spec });
+    expect(result).toEqual({ kind: 'ok', call: 'GET /api/v1/openapi.yml', status: 200, body: spec });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/openapi.yml');
     expect(calls[0]?.init?.method).toBe('GET');
     expect(calls[0]?.init?.headers).not.toHaveProperty('X-N8N-API-KEY');
@@ -147,6 +147,7 @@ describe('createN8nClient public API calls', () => {
 
     expect(result).toEqual({
       kind: 'ok',
+      call: 'GET /api/v1/workflows',
       status: 200,
       body: [
         { id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], isArchived: true },
@@ -165,7 +166,12 @@ describe('createN8nClient public API calls', () => {
 
     const result = await client.listWorkflows();
 
-    expect(result).toEqual({ kind: 'ok', status: 200, body: [{ id: '2', name: 'B', tags: [], isArchived: false }] });
+    expect(result).toEqual({
+      kind: 'ok',
+      call: 'GET /api/v1/workflows',
+      status: 200,
+      body: [{ id: '2', name: 'B', tags: [], isArchived: false }],
+    });
   });
 
   test('Should send the update as a draft with publishIfActive=false when it updates a workflow', async () => {
@@ -175,7 +181,7 @@ describe('createN8nClient public API calls', () => {
 
     const result = await client.updateWorkflow('abc', body);
 
-    expect(result).toMatchObject({ kind: 'ok', body: { id: 'abc' } });
+    expect(result).toMatchObject({ kind: 'ok', call: 'PUT /api/v1/workflows/abc', body: { id: 'abc' } });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc?publishIfActive=false');
     expect(calls[0]?.init?.method).toBe('PUT');
     expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret', 'content-type': 'application/json' });

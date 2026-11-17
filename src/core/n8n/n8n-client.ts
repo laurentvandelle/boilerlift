@@ -8,9 +8,9 @@ import {
   ProbeResult,
 } from '#src/core/n8n/n8n.model';
 
-export const HEALTH_PATH = '/healthz';
-export const API_KEY_PATH = '/api/v1/workflows?limit=1';
-export const SPEC_PATH = '/api/v1/openapi.yml';
+const HEALTH_PATH = '/healthz';
+const API_KEY_PATH = '/api/v1/workflows?limit=1';
+const SPEC_PATH = '/api/v1/openapi.yml';
 
 const API = '/api/v1';
 const PAGE_LIMIT = 250;
@@ -49,7 +49,7 @@ export function createN8nClient({
       });
       const text = await response.text();
       if (response.ok) {
-        return { kind: 'ok', status: response.status, body: parseJson(text) as T };
+        return { kind: 'ok', call, status: response.status, body: parseJson(text) as T };
       }
       const message = errorMessage(text);
       return { kind: 'http-error', call, status: response.status, ...(message === undefined ? {} : { message }) };
@@ -62,17 +62,18 @@ export function createN8nClient({
     const result = await request<unknown>('GET', path, { auth });
     switch (result.kind) {
     case 'ok':
-      return { kind: 'ok', status: result.status };
+      return { kind: 'ok', call: result.call, status: result.status };
     case 'http-error':
-      return { kind: 'http-error', status: result.status };
+      return { kind: 'http-error', call: result.call, status: result.status };
     case 'unreachable':
-      return { kind: 'unreachable', reason: result.reason };
+      return { kind: 'unreachable', call: result.call, reason: result.reason };
     }
   };
 
   const listAll = async <T>(path: string): Promise<ApiResult<T[]>> => {
     const items: T[] = [];
     let cursor: string | undefined;
+    let call: string;
     let status: number;
     do {
       const separator = path.includes('?') ? '&' : '?';
@@ -83,11 +84,12 @@ export function createN8nClient({
       if (page.kind !== 'ok') {
         return page;
       }
+      call = page.call;
       status = page.status;
       items.push(...(page.body.data ?? []));
       cursor = page.body.nextCursor ?? undefined;
     } while (cursor !== undefined && cursor !== '');
-    return { kind: 'ok', status, body: items };
+    return { kind: 'ok', call, status, body: items };
   };
 
   const workflowPath = (id: string): string => `${API}/workflows/${encodeURIComponent(id)}`;

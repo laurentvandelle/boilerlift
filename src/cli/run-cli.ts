@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { CliResult, CommandContext, CommandDefinition } from '#src/cli/cli.model';
 import { renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.command';
+import { EXIT_USAGE } from '#src/core/exit/exit-codes';
 
 const GLOBAL_ALIASES: Record<string, string> = {
   '-h': 'help',
@@ -46,5 +47,5 @@ async function runCommand(command: CommandDefinition, args: string[], ctx: Comma
 }
 
 function failure(reason: string, help: string): CliResult {
-  return { exitCode: 1, stdout: '', stderr: `${reason}\n\n${help}` };
+  return { exitCode: EXIT_USAGE, stdout: '', stderr: `${reason}\n\n${help}` };
 }

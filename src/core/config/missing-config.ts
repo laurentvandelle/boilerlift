@@ -1,7 +1,5 @@
 import { ConfigKey } from '#src/core/config/config.model';
 
-export const EXIT_MISSING_CONFIG = 1;
-
 const EXAMPLE_LINES: Record<ConfigKey, string> = {
   N8N_URL: 'N8N_URL=https://your-n8n.example.com',
   N8N_API_KEY: 'N8N_API_KEY=your-n8n-api-key',
