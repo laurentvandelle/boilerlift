@@ -1,5 +1,10 @@
 import { isRecord } from '#src/core/common/is-record';
+import { Result, err, ok } from '#src/core/common/result';
 import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
+import { ApiAnswer, ApiFailure, ApiResult, N8nClient, ProbeResult, WorkflowId } from '#src/core/n8n/n8n.model';
+import { createHttp } from '#src/services/http/http';
+import { HttpMethod } from '#src/services/http/http.model';
+import { N8nClientOptions } from '#src/services/n8n/n8n-client.model';
 import {
   BodyParser,
   Page,
@@ -8,67 +13,54 @@ import {
   tagsParser,
   workflowParser,
   workflowSummaryParser,
-} from '#src/core/n8n/n8n-response';
-import {
-  ApiAnswer,
-  ApiFailure,
-  ApiResult,
-  N8nClient,
-  N8nClientOptions,
-  ProbeResult,
-  WorkflowId,
-} from '#src/core/n8n/n8n.model';
-import { Result, err, ok } from '#src/core/common/result';
+} from '#src/services/n8n/n8n-response';
 
 const HEALTH_PATH = '/healthz';
 const API_KEY_PATH = `${API_PATH}/workflows?limit=1`;
 const SPEC_PATH = `${API_PATH}/openapi.yml`;
 
 const PAGE_LIMIT = 250;
-const DEFAULT_TIMEOUT_MS = 10_000;
-
-type Method = 'GET' | 'POST' | 'PUT';
 
 /** What can go wrong before a body is parsed. */
 type TransportFailure = Exclude<ApiFailure, { kind: 'invalid-response' }>;
 
 /**
- * A minimal client for the n8n instance and its public API. Every JSON body is parsed once, here: a success status
- * whose body does not match comes back as an `invalid-response` failure.
+ * A minimal client for the n8n instance and its public API, over the HTTP transport of `services/http/`. Every JSON
+ * body is parsed once, here: a success status whose body does not match comes back as an `invalid-response` failure.
  */
-export function createN8nClient({ config, fetch, timeoutMs = DEFAULT_TIMEOUT_MS }: N8nClientOptions): N8nClient {
-  /** Sends one request. A success status comes back with the raw body text. */
+export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions): N8nClient {
+  const http = createHttp({ fetch, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+
+  /** Sends one request to the instance. A success status comes back with the raw body text. */
   const request = async (
-    method: Method,
+    method: HttpMethod,
     path: string,
     { body, auth = true }: { body?: unknown; auth?: boolean } = {},
   ): Promise<Result<ApiAnswer<string>, TransportFailure>> => {
-    const call = `${method} ${path.split('?')[0] ?? path}`;
-    try {
-      const response = await fetch(`${config.url.value}${path}`, {
-        method,
-        headers: {
-          accept: 'application/json',
-          ...(auth ? { 'X-N8N-API-KEY': config.apiKey.value } : {}),
-          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      const text = await response.text();
-      if (response.ok) {
-        return ok({ call, status: response.status, body: text });
-      }
-      const message = errorMessage(text);
-      return err({ kind: 'http-error', call, status: response.status, ...(message === undefined ? {} : { message }) });
-    } catch (error) {
-      return err({ kind: 'unreachable', call, reason: describeNetworkError(error, timeoutMs) });
+    const result = await http.send({
+      method,
+      url: `${config.url.value}${path}`,
+      call: `${method} ${path.split('?')[0] ?? path}`,
+      headers: auth ? { 'X-N8N-API-KEY': config.apiKey.value } : {},
+      ...(body === undefined ? {} : { body }),
+    });
+    if (result.ok) {
+      return result;
+    }
+    const failure = result.error;
+    switch (failure.kind) {
+    case 'unreachable':
+      return err(failure);
+    case 'http-error': {
+      const message = errorMessage(failure.body);
+      return err({ kind: 'http-error', call: failure.call, status: failure.status, ...(message === undefined ? {} : { message }) });
+    }
     }
   };
 
   /** Sends one request and parses its JSON body with `parser`. */
   const requestJson = async <T>(
-    method: Method,
+    method: HttpMethod,
     path: string,
     parser: BodyParser<T>,
     options: { body?: unknown } = {},
@@ -161,43 +153,6 @@ function errorMessage(text: string): string | undefined {
   const body = parseJson(text);
   if (body.ok && isRecord(body.value) && typeof body.value.message === 'string') {
     return body.value.message;
-  }
-  return undefined;
-}
-
-function describeNetworkError(error: unknown, timeoutMs: number): string {
-  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
-    return `no answer after ${timeoutMs / 1000} s (timeout)`;
-  }
-  const code = errorCode(error);
-  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
-    return 'host not found (DNS)';
-  }
-  if (code === 'ECONNREFUSED') {
-    return 'connection refused';
-  }
-  if (code === 'ECONNRESET') {
-    return 'connection reset';
-  }
-  if (code !== undefined && /^(CERT_|UNABLE_TO_|DEPTH_ZERO|SELF_SIGNED|ERR_TLS)/.test(code)) {
-    return `TLS error (${code})`;
-  }
-  if (code !== undefined) {
-    return `network error (${code})`;
-  }
-  if (error instanceof Error && error.cause instanceof Error && error.cause.message !== '') {
-    return `${error.message}: ${error.cause.message}`;
-  }
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** `fetch` wraps the system error in `cause`; read its `code` when there is one. */
-function errorCode(error: unknown): string | undefined {
-  const cause = error instanceof Error ? error.cause : undefined;
-  for (const candidate of [cause, error]) {
-    if (isRecord(candidate) && typeof candidate.code === 'string') {
-      return candidate.code;
-    }
   }
   return undefined;
 }

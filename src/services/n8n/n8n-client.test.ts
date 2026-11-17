@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { ConnectionConfig } from '#src/core/config/config.model';
-import { createN8nClient } from '#src/core/n8n/n8n-client';
+import { createN8nClient } from '#src/services/n8n/n8n-client';
 import { fakeTagId, fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 
 const CONFIG: ConnectionConfig = {
@@ -70,29 +70,7 @@ describe('createN8nClient', () => {
     expect(result).toEqual({ ok: false, error: { kind: 'http-error', call: 'GET /api/v1/workflows', status } });
   });
 
-  test.each([
-    ['ENOTFOUND', 'host not found (DNS)'],
-    ['ECONNREFUSED', 'connection refused'],
-    ['SELF_SIGNED_CERT_IN_CHAIN', 'TLS error (SELF_SIGNED_CERT_IN_CHAIN)'],
-  ])('Should report the instance unreachable when fetch fails with %s', async (code, reason) => {
-    const { fetch } = fakeFetch(() => Promise.reject(networkError(code)));
-    const client = createN8nClient({ config: CONFIG, fetch });
-
-    const result = await client.checkHealth();
-
-    expect(result).toEqual({ ok: false, error: { kind: 'unreachable', call: 'GET /healthz', reason } });
-  });
-
-  test('Should report the cause when a network error has no code', async () => {
-    const { fetch } = fakeFetch(() => Promise.reject(new TypeError('fetch failed', { cause: new Error('bad port') })));
-    const client = createN8nClient({ config: { ...CONFIG, url: { value: 'http://localhost:1', source: 'env' } }, fetch });
-
-    const result = await client.checkHealth();
-
-    expect(result).toEqual({ ok: false, error: { kind: 'unreachable', call: 'GET /healthz', reason: 'fetch failed: bad port' } });
-  });
-
-  test('Should report the instance unreachable when no answer comes before the timeout', async () => {
+  test('Should report the instance unreachable when no answer comes before its timeout', async () => {
     const fetch = (_input: string | URL | Request, init?: RequestInit): Promise<Response> =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => {

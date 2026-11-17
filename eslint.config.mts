@@ -18,6 +18,9 @@ const noBarrelOrRelative = {
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
 const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'common'];
 
+/** The src/services/ folders: adapters to the outside world. Only the commands import them (src/services/AGENTS.md). */
+const SERVICES = ['services-http', 'services-n8n'];
+
 const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (docs/testing.md).'];
 const noSleep = 'No sleeps in tests: use fake timers or await the event.';
 
@@ -146,13 +149,15 @@ export default tseslint.config(
         { type: 'n8n', pattern: 'src/core/n8n' },
         { type: 'connection', pattern: 'src/core/connection' },
         { type: 'common', pattern: 'src/core/common' },
+        { type: 'services-http', pattern: 'src/services/http' },
+        { type: 'services-n8n', pattern: 'src/services/n8n' },
       ],
       'boundaries/files': [
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
         { category: 'define-command', pattern: 'src/cli/define-command.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
-        { category: 'n8n-client', pattern: 'src/core/n8n/n8n-client.ts' },
+        { category: 'n8n-client', pattern: 'src/services/n8n/n8n-client.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },
         { category: 'index', pattern: 'src/index.ts' },
       ],
@@ -197,10 +202,25 @@ export default tseslint.config(
               from: { element: { type: 'connection' } },
               allow: { to: { element: { type: ['connection', 'config', 'n8n'] } } },
             },
+            // services/ adapts the outside world to the core ports. http/ is the generic transport and knows no
+            // service. n8n/ implements the N8nClient port of core/n8n/ over http/.
+            {
+              from: { element: { type: 'services-http' } },
+              allow: { to: { element: { type: 'services-http' } } },
+            },
+            {
+              from: { element: { type: 'services-n8n' } },
+              allow: { to: { element: { type: ['services-n8n', 'services-http', 'n8n', 'config'] } } },
+            },
             {
               // A command sees only itself, the CLI contracts (cli/*.model.ts and defineCommand) and core. Never another command.
               from: { element: { type: 'cli-command' } },
               allow: { to: { element: { type: CORE } } },
+            },
+            {
+              // A command builds the n8n client from ctx.fetch: commands are the only importers of services/.
+              from: { element: { type: 'cli-command' } },
+              allow: { to: { element: { type: 'services-n8n' } } },
             },
             {
               // defineCommand builds each command's CommandDefinition, with option values typed by its options.
@@ -243,14 +263,14 @@ export default tseslint.config(
               disallow: { to: { element: { type: 'connection' } } },
               message: 'deliver/ does not import connection/, the checks behind ping: exit codes come from core/common/.',
             },
-            // 6. n8n-client.ts is the fetch adapter. Only n8n/ and the commands, which build the client from
+            // 6. n8n-client.ts is the fetch adapter. Only services/n8n/ and the commands, which build the client from
             // ctx.fetch, import it. Every other folder uses the N8nClient port.
             {
               disallow: { to: { file: { categories: 'n8n-client' } } },
-              message: 'Import the N8nClient port from #src/core/n8n/n8n.model: only n8n/ and the commands import n8n-client.ts.',
+              message: 'Import the N8nClient port from #src/core/n8n/n8n.model: only services/n8n/ and the commands import n8n-client.ts.',
             },
             {
-              from: { element: { type: ['n8n', 'cli-command'] } },
+              from: { element: { type: ['services-n8n', 'cli-command'] } },
               allow: { to: { file: { categories: 'n8n-client' } } },
             },
             // 7. Test runner: nobody, then tests.
@@ -281,16 +301,27 @@ export default tseslint.config(
               disallow: { to: { file: { path: 'src/cli/**' } } },
               message: 'core/ never imports cli/, tests included (src/AGENTS.md).',
             },
+            {
+              // The allowlist already blocks these edges. These policies only name the rule in the error.
+              from: { file: { path: 'src/core/**' } },
+              disallow: { to: { file: { path: 'src/services/**' } } },
+              message: 'core/ never imports services/: it declares ports, services/ implements them (src/services/AGENTS.md).',
+            },
+            {
+              from: { element: { type: 'cli' } },
+              disallow: { to: { element: { type: SERVICES } } },
+              message: 'Only the commands import services/: they build the n8n client from ctx.fetch (src/cli/AGENTS.md).',
+            },
           ],
         },
       ],
     },
   },
   {
-    // Hidden-dependency bans. core/ and the commands take configuration, I/O, time and randomness through their
-    // parameters (CommandContext, the N8nClient port), so a test controls them (src/AGENTS.md). Tests keep
-    // the Test lint no-restricted-syntax, which this block would replace, and fakes are test code too.
-    files: ['src/core/**/*.ts', 'src/cli/commands/**/*.ts'],
+    // Hidden-dependency bans. core/, services/ and the commands take configuration, I/O, time and randomness through
+    // their parameters (CommandContext, the N8nClient port, an injected fetch), so a test controls them (src/AGENTS.md).
+    // Tests keep the Test lint no-restricted-syntax, which this block would replace, and fakes are test code too.
+    files: ['src/core/**/*.ts', 'src/services/**/*.ts', 'src/cli/commands/**/*.ts'],
     ignores: ['src/**/*.test.ts', 'src/**/*.test-d.ts', 'src/**/*.fake.ts'],
     rules: {
       'no-restricted-globals': [
@@ -298,7 +329,7 @@ export default tseslint.config(
         {
           globals: [
             { name: 'process', message: 'Read configuration and versions from CommandContext or a parameter.' },
-            { name: 'fetch', message: 'Reach n8n through the N8nClient port: a command builds it from ctx.fetch.' },
+            { name: 'fetch', message: 'Reach n8n through the N8nClient port: a command builds it from ctx.fetch, and services/ receive fetch as a parameter.' },
             { name: 'console', message: 'Return the output in the CliResult: bin.ts writes it.' },
           ],
           // Also reports globalThis.process, global.fetch and the like.

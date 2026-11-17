@@ -4,7 +4,7 @@
 
 - A command never imports another command. It may import its own folder, `#src/cli/*.model.ts`, `define-command.ts` and `core/`. Lint enforces this.
 - A command does no I/O of its own (`src/AGENTS.md` lists what lint bans). `run` returns a `Promise<CliResult>`; `bin.ts` writes it. Anything a command needs from the outside world is a field of `CommandContext` (`cli.model.ts`, which documents each field), added by the first command that needs it and filled for the real process in `node-context.ts`.
-- Only `core/n8n/` and the commands import `core/n8n/n8n-client.ts`: a command builds the client from `ctx.fetch` with `createN8nClient`. Lint enforces this.
+- Only `core/n8n/` and the commands import `services/n8n/n8n-client.ts`: a command builds the client from `ctx.fetch` with `createN8nClient`. Lint enforces this.
 
 ## Shape
 

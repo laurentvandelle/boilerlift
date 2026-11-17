@@ -1,4 +1,3 @@
-import { ConnectionConfig } from '#src/core/config/config.model';
 import { Result } from '#src/core/common/result';
 
 /** A workflow id on the instance. Only the client's response parsing (isWorkflowId in n8n-ids.ts) produces one. */
@@ -40,13 +39,6 @@ export type ApiFailure =
 
 /** The outcome of one public API call. */
 export type ApiResult<T> = Result<ApiAnswer<T>, ApiFailure>;
-
-export interface N8nClientOptions {
-  /** N8N_URL, the instance root without trailing slash, and N8N_API_KEY, as resolveConnectionConfig returns them. */
-  config: ConnectionConfig;
-  fetch: typeof fetch;
-  timeoutMs?: number;
-}
 
 export interface N8nTag {
   id: TagId;

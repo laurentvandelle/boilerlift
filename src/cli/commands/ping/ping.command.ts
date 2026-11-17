@@ -7,7 +7,7 @@ import { CHECK_LABELS, MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
 import { EXIT_USAGE } from '#src/core/common/exit-codes';
 import { API_PATH } from '#src/core/n8n/n8n-api';
-import { createN8nClient } from '#src/core/n8n/n8n-client';
+import { createN8nClient } from '#src/services/n8n/n8n-client';
 
 const STATUS_MARKS: Record<Check['status'], string> = { ok: '✓', failed: '✗', skipped: '–' };
 

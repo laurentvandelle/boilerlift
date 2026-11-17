@@ -12,7 +12,7 @@ import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { stableTag } from '#src/core/deliver/stable-tag';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
-import { createN8nClient } from '#src/core/n8n/n8n-client';
+import { createN8nClient } from '#src/services/n8n/n8n-client';
 
 const WORKFLOWS_DIR = 'workflows';
 
