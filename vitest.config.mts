@@ -11,5 +11,10 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     environment: 'node',
     clearMocks: true,
+    // Type tests (*.test-d.ts) run through tsc, so npm test fails when a type rule breaks.
+    typecheck: {
+      enabled: true,
+      include: ['src/**/*.test-d.ts'],
+    },
   },
 });

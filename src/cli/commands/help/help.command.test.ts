@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { fakeContext } from '#src/cli/cli.fake';
 import { CommandContext, CommandDefinition } from '#src/cli/cli.model';
-import { helpCommand, renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.command';
+import { helpCommand } from '#src/cli/commands/help/help.command';
 
 const fakeCommand: CommandDefinition = {
   name: 'fake',
@@ -16,41 +16,56 @@ const ctx: CommandContext = fakeContext({ version: '1.2.3', registry: [helpComma
 
 describe('helpCommand', () => {
   test('Should list every registered command when called without a target', async () => {
-    // Given
     const input = { positionals: [], values: {} };
 
-    // When
     const result = await helpCommand.run(input, ctx);
 
-    // Then
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe(renderGlobalHelp(ctx.registry));
-    expect(result.stdout).toContain('help  Show help for n8nlift or for one command');
-    expect(result.stdout).toContain('fake  Do fake things');
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: '',
+      stdout: `Usage: n8nlift <command> [options]
+
+Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
+
+Commands:
+  help  Show help for n8nlift or for one command
+  fake  Do fake things
+
+Coming: deploy, publish, status, secrets, sync
+
+Options:
+  -h, --help     Show this help
+  -v, --version  Print the n8nlift version
+
+Run \`n8nlift help <command>\` for the options of one command.
+`,
+    });
   });
 
   test('Should print the help of one command when called with its name', async () => {
-    // Given
     const input = { positionals: ['fake'], values: {} };
 
-    // When
     const result = await helpCommand.run(input, ctx);
 
-    // Then
-    expect(result).toEqual({ exitCode: 0, stdout: renderCommandHelp(fakeCommand), stderr: '' });
-    expect(result.stdout).toContain('Usage: n8nlift fake [options]');
-    expect(result.stdout).toContain('-t, --target <target>  Where to go');
-    expect(result.stdout).toContain('-h, --help');
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: '',
+      stdout: `Usage: n8nlift fake [options]
+
+Do fake things
+
+Options:
+  -t, --target <target>  Where to go
+  -h, --help             Show this help
+`,
+    });
   });
 
   test('Should fail when the target command is unknown', async () => {
-    // Given
     const input = { positionals: ['nope'], values: {} };
 
-    // When
     const result = await helpCommand.run(input, ctx);
 
-    // Then
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Unknown command: nope');
   });

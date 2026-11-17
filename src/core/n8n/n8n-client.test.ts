@@ -20,15 +20,12 @@ function networkError(code: string): Error {
 }
 
 describe('createN8nClient', () => {
-  test('Should call GET /healthz without the API key', async () => {
-    // Given
+  test('Should call GET /healthz without the API key when it checks health', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response('{}', { status: 200 })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.checkHealth();
 
-    // Then
     expect(result).toEqual({ kind: 'ok', status: 200 });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('https://n8n.example.com/healthz');
@@ -36,15 +33,12 @@ describe('createN8nClient', () => {
     expect(calls[0]?.init?.headers).not.toHaveProperty('X-N8N-API-KEY');
   });
 
-  test('Should send the API key to the workflows endpoint', async () => {
-    // Given
+  test('Should send the API key to the workflows endpoint when it checks the key', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response('{"data":[]}', { status: 200 })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.checkApiKey();
 
-    // Then
     expect(result).toEqual({ kind: 'ok', status: 200 });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows?limit=1');
     expect(calls[0]?.init?.method).toBe('GET');
@@ -52,15 +46,12 @@ describe('createN8nClient', () => {
     expect(calls[0]?.init?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  test.each([[401], [404], [500]])('Should report HTTP status %s as an http-error', async (status) => {
-    // Given
+  test.each([[401], [404], [500]])('Should report an http-error when the key check gets HTTP %s', async (status) => {
     const { fetch } = fakeFetch(() => Promise.resolve(new Response('', { status })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.checkApiKey();
 
-    // Then
     expect(result).toEqual({ kind: 'http-error', status });
   });
 
@@ -68,32 +59,25 @@ describe('createN8nClient', () => {
     ['ENOTFOUND', 'host not found (DNS)'],
     ['ECONNREFUSED', 'connection refused'],
     ['SELF_SIGNED_CERT_IN_CHAIN', 'TLS error (SELF_SIGNED_CERT_IN_CHAIN)'],
-  ])('Should report a %s network error as unreachable', async (code, reason) => {
-    // Given
+  ])('Should report the instance unreachable when fetch fails with %s', async (code, reason) => {
     const { fetch } = fakeFetch(() => Promise.reject(networkError(code)));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.checkHealth();
 
-    // Then
     expect(result).toEqual({ kind: 'unreachable', reason });
   });
 
-  test('Should report the cause of a network error that has no code', async () => {
-    // Given
+  test('Should report the cause when a network error has no code', async () => {
     const { fetch } = fakeFetch(() => Promise.reject(new TypeError('fetch failed', { cause: new Error('bad port') })));
     const client = createN8nClient({ baseUrl: 'http://localhost:1', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.checkHealth();
 
-    // Then
     expect(result).toEqual({ kind: 'unreachable', reason: 'fetch failed: bad port' });
   });
 
-  test('Should report a timeout as unreachable', async () => {
-    // Given
+  test('Should report the instance unreachable when no answer comes before the timeout', async () => {
     const fetch = (_input: string | URL | Request, init?: RequestInit): Promise<Response> =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => {
@@ -102,10 +86,8 @@ describe('createN8nClient', () => {
       });
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch, timeoutMs: 5 });
 
-    // When
     const result = await client.checkHealth();
 
-    // Then
     expect(result).toEqual({ kind: 'unreachable', reason: 'no answer after 0.005 s (timeout)' });
   });
 });
@@ -115,43 +97,34 @@ describe('createN8nClient public API calls', () => {
     return new Response(JSON.stringify(body), { status });
   }
 
-  test('Should read the API spec as text without the API key', async () => {
-    // Given
+  test('Should read the API spec as text without the API key when the instance serves it', async () => {
     const spec = 'openapi: 3.0.0\npaths: {}\n';
     const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response(spec, { status: 200 })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.readApiSpec();
 
-    // Then
     expect(result).toEqual({ kind: 'ok', status: 200, body: spec });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/openapi.yml');
     expect(calls[0]?.init?.method).toBe('GET');
     expect(calls[0]?.init?.headers).not.toHaveProperty('X-N8N-API-KEY');
   });
 
-  test('Should report a missing API spec as an http-error', async () => {
-    // Given
+  test('Should report an http-error when the API spec is missing', async () => {
     const { fetch } = fakeFetch(() => Promise.resolve(new Response('Not Found', { status: 404 })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.readApiSpec();
 
-    // Then
     expect(result).toEqual({ kind: 'http-error', call: 'GET /api/v1/openapi.yml', status: 404 });
   });
 
-  test('Should unarchive a workflow with POST and the API key', async () => {
-    // Given
+  test('Should POST with the API key and no body when it unarchives a workflow', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', isArchived: false })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.unarchiveWorkflow('abc');
 
-    // Then
     expect(result).toMatchObject({ kind: 'ok', body: { id: 'abc', isArchived: false } });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/unarchive');
     expect(calls[0]?.init?.method).toBe('POST');
@@ -159,22 +132,19 @@ describe('createN8nClient public API calls', () => {
     expect(calls[0]?.init?.body).toBeUndefined();
   });
 
-  test('Should follow nextCursor when listing workflows', async () => {
-    // Given
+  test('Should follow nextCursor when the workflow list has several pages', async () => {
     const pages = [
       json({
         data: [{ id: '1', name: 'A', tags: [{ id: 't', name: 'n8nlift:a' }], nodes: [], isArchived: true }],
         nextCursor: 'next=1',
       }),
-      json({ data: [{ id: '2', name: 'B' }], nextCursor: null }),
+      json({ data: [{ id: '2', name: 'B', tags: [], isArchived: false }], nextCursor: null }),
     ];
     const { fetch, calls } = fakeFetch(() => Promise.resolve(pages.shift() ?? json({ data: [] })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.listWorkflows();
 
-    // Then
     expect(result).toEqual({
       kind: 'ok',
       status: 200,
@@ -189,16 +159,22 @@ describe('createN8nClient public API calls', () => {
     ]);
   });
 
-  test('Should update a workflow as a draft with publishIfActive=false', async () => {
-    // Given
+  test('Should default tags to [] and isArchived to false when a listed workflow has neither', async () => {
+    const { fetch } = fakeFetch(() => Promise.resolve(json({ data: [{ id: '2', name: 'B' }], nextCursor: null })));
+    const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
+
+    const result = await client.listWorkflows();
+
+    expect(result).toEqual({ kind: 'ok', status: 200, body: [{ id: '2', name: 'B', tags: [], isArchived: false }] });
+  });
+
+  test('Should send the update as a draft with publishIfActive=false when it updates a workflow', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc' })));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
     const body = { name: 'A', nodes: [], connections: {}, settings: {} };
 
-    // When
     const result = await client.updateWorkflow('abc', body);
 
-    // Then
     expect(result).toMatchObject({ kind: 'ok', body: { id: 'abc' } });
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc?publishIfActive=false');
     expect(calls[0]?.init?.method).toBe('PUT');
@@ -207,27 +183,21 @@ describe('createN8nClient public API calls', () => {
   });
 
   test('Should send tag ids as objects when setting workflow tags', async () => {
-    // Given
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json([])));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     await client.setWorkflowTags('abc', ['t1', 't2']);
 
-    // Then
     expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/tags');
     expect(JSON.parse(calls[0]?.init?.body as string)).toEqual([{ id: 't1' }, { id: 't2' }]);
   });
 
-  test('Should name the call and keep the n8n message on an HTTP error', async () => {
-    // Given
+  test('Should name the call and keep the n8n message when the instance answers an HTTP error', async () => {
     const { fetch } = fakeFetch(() => Promise.resolve(json({ message: 'request/body must have name' }, 400)));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.createWorkflow({ name: '', nodes: [], connections: {}, settings: {} });
 
-    // Then
     expect(result).toEqual({
       kind: 'http-error',
       call: 'POST /api/v1/workflows',
@@ -237,14 +207,11 @@ describe('createN8nClient public API calls', () => {
   });
 
   test('Should name the call when the instance is unreachable', async () => {
-    // Given
     const { fetch } = fakeFetch(() => Promise.reject(networkError('ECONNREFUSED')));
     const client = createN8nClient({ baseUrl: 'https://n8n.example.com', apiKey: 'secret', fetch });
 
-    // When
     const result = await client.getWorkflow('abc');
 
-    // Then
     expect(result).toEqual({ kind: 'unreachable', call: 'GET /api/v1/workflows/abc', reason: 'connection refused' });
   });
 });

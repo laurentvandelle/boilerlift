@@ -15,6 +15,9 @@ const noBarrelOrRelative = {
   ],
 };
 
+const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (src/AGENTS.md).'];
+const noSleep = 'No sleeps in tests: use fake timers or await the event.';
+
 export default tseslint.config(
   {
     ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'debug/**', 'eslint.config.mts'],
@@ -59,13 +62,34 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.test.ts'],
+    // Test lint. *.test-d.ts files hold type tests, which Vitest checks with tsc (vitest.config.mts).
+    files: ['src/**/*.test.ts', 'src/**/*.test-d.ts'],
     ...vitest.configs.recommended,
+    // Lets expect-expect count assertType and expectTypeOf as assertions.
+    settings: { vitest: { typecheck: true } },
     rules: {
       ...vitest.configs.recommended.rules,
-      'vitest/no-disabled-tests': 'warn',
       'vitest/no-focused-tests': 'error',
+      'vitest/no-disabled-tests': 'error',
       'vitest/no-identical-title': 'error',
+      'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'assert'] }],
+      'vitest/valid-title': ['error', { mustMatch: { it: testTitle, test: testTitle } }],
+      'no-restricted-syntax': [
+        'error',
+        { selector: "NewExpression[callee.name='Promise'] CallExpression[callee.name='setTimeout']", message: noSleep },
+        { selector: 'AwaitExpression > CallExpression[callee.name=/^(setTimeout|sleep|delay|wait)$/]', message: noSleep },
+        {
+          selector: "MemberExpression[object.name=/^(it|test|describe)$/][property.name='todo']",
+          message: 'No placeholder tests: write the test or leave it out.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name=/^(vi|jest)$/][callee.property.name=/^(mock|doMock)$/][arguments.0.value=/^(\\.|@\\/|#|~)/]",
+          message: 'Mock only third-party services: use the real code, a fake (*.fake.ts) or an in-memory adapter.',
+        },
+      ],
+      // Blank lines separate given, when and then; no comment labels them.
+      'no-warning-comments': ['error', { terms: ['given', 'when', 'then', 'arrange', 'act', 'assert'], location: 'start' }],
     },
   },
   {
@@ -89,7 +113,7 @@ export default tseslint.config(
         { type: 'core', pattern: 'src/core' },
       ],
       'boundaries/files': [
-        { category: 'test', pattern: '**/*.test.ts' },
+        { category: 'test', pattern: '**/*.{test,test-d}.ts' },
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },

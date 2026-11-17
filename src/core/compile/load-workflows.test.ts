@@ -1,69 +1,50 @@
 import { describe, expect, test } from 'vitest';
-import { loadWorkflows, stableNameOf } from '#src/core/compile/load-workflows';
+import { loadWorkflows } from '#src/core/compile/load-workflows';
+import { fakeLocalWorkflow, fakeNode, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 
-const EXPORT = { name: 'Invoice sync', nodes: [], connections: {} };
-
-describe('stableNameOf', () => {
-  test.each([
-    ['workflows/invoice-sync.workflow.ts', 'invoice-sync'],
-    ['workflows/crm/crm-import.json', 'crm-import'],
-    ['workflows\\win\\daily.json', 'daily'],
-  ])('Should derive the stable name of %s', (path, expected) => {
-    // Given
-    const file = path;
-
-    // When
-    const name = stableNameOf(file);
-
-    // Then
-    expect(name).toBe(expected);
-  });
-});
-
 describe('loadWorkflows', () => {
-  test('Should load every file, sorted by stable name, with settings defaulting to {}', () => {
-    // Given
-    const files: WorkflowFile[] = [
-      { path: 'workflows/sub/zeta.json', content: { ...EXPORT, name: 'Zeta', settings: { timezone: 'UTC' } } },
-      { path: 'workflows/alpha.workflow.ts', content: { ...EXPORT, id: 'ignored', active: true } },
-    ];
+  test('Should return the workflows sorted by stable name when every file is valid', () => {
+    const zeta = fakeLocalWorkflow('zeta', { path: 'workflows/a/zeta.json' });
+    const alpha = fakeLocalWorkflow('alpha', { path: 'workflows/b/alpha.workflow.ts' });
 
-    // When
-    const result = loadWorkflows(files);
+    const result = loadWorkflows([fakeWorkflowFile(zeta), fakeWorkflowFile(alpha)]);
 
-    // Then
-    expect(result).toEqual({
-      ok: true,
-      workflows: [
-        { stableName: 'alpha', path: 'workflows/alpha.workflow.ts', ...EXPORT, settings: {} },
-        { stableName: 'zeta', path: 'workflows/sub/zeta.json', ...EXPORT, name: 'Zeta', settings: { timezone: 'UTC' } },
-      ],
-    });
+    expect(result).toEqual({ ok: true, workflows: [alpha, zeta] });
   });
 
-  test.each(['Invoice', 'with_underscore', 'seventeen-chars-x'])('Should reject the stable name %s', (name) => {
-    // Given
-    const files: WorkflowFile[] = [{ path: `workflows/${name}.json`, content: EXPORT }];
+  test('Should default settings to {} when the export has none', () => {
+    const files: WorkflowFile[] = [{ path: 'workflows/plain.json', content: { name: 'Plain', nodes: [], connections: {} } }];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
+    expect(result).toMatchObject({ ok: true, workflows: [{ stableName: 'plain', settings: {} }] });
+  });
+
+  test('Should take the stable name from the base name when the path uses backslashes', () => {
+    const workflow = fakeLocalWorkflow('daily', { path: 'workflows\\win\\daily.json' });
+
+    const result = loadWorkflows([fakeWorkflowFile(workflow)]);
+
+    expect(result).toEqual({ ok: true, workflows: [workflow] });
+  });
+
+  test.each(['Invoice', 'with_underscore', 'seventeen-chars-x'])('Should reject the file when its stable name is %s', (name) => {
+    const files = [fakeWorkflowFile(fakeLocalWorkflow(name))];
+
+    const result = loadWorkflows(files);
+
     expect(result).toMatchObject({ ok: false, problems: [{ kind: 'invalid-name', path: `workflows/${name}.json` }] });
   });
 
-  test('Should reject a stable name used twice, naming both paths, across folders and extensions', () => {
-    // Given
-    const files: WorkflowFile[] = [
-      { path: 'workflows/crm/sync.json', content: EXPORT },
-      { path: 'workflows/sync.workflow.ts', content: EXPORT },
+  test('Should reject the second file and name the first when two files share a stable name across folders and extensions', () => {
+    const files = [
+      fakeWorkflowFile(fakeLocalWorkflow('sync', { path: 'workflows/crm/sync.json' })),
+      fakeWorkflowFile(fakeLocalWorkflow('sync', { path: 'workflows/sync.workflow.ts' })),
     ];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: false,
       problems: [
@@ -76,28 +57,22 @@ describe('loadWorkflows', () => {
     });
   });
 
-  test('Should report an unreadable file', () => {
-    // Given
+  test('Should report the read error when a file cannot be read', () => {
     const files: WorkflowFile[] = [{ path: 'workflows/broken.json', error: 'Unexpected token } in JSON' }];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: false,
       problems: [{ kind: 'unreadable', path: 'workflows/broken.json', detail: 'cannot be read: Unexpected token } in JSON' }],
     });
   });
 
-  test('Should name every missing field', () => {
-    // Given
+  test('Should name every missing field when the export lacks them', () => {
     const files: WorkflowFile[] = [{ path: 'workflows/empty.json', content: { nodes: {} } }];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: false,
       problems: [
@@ -110,50 +85,34 @@ describe('loadWorkflows', () => {
     });
   });
 
-  test('Should reject a module without a default export', () => {
-    // Given
+  test('Should reject a .workflow.ts module when it has no default export', () => {
     const files: WorkflowFile[] = [{ path: 'workflows/nothing.workflow.ts', content: undefined }];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toMatchObject({ ok: false, problems: [{ kind: 'invalid-shape' }] });
   });
 
-  test('Should accept a full n8n export unchanged, unknown keys included', () => {
-    // Given
-    const nodes = [
-      { parameters: {}, id: 'n1', name: 'Start', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0] },
-      { parameters: {}, id: 'n2', name: 'Done', type: 'n8n-nodes-base.noOp', typeVersion: 1, position: [220, 0], disabled: true },
-    ];
+  test('Should keep the nodes and connections as they are when a full n8n export has unknown keys', () => {
+    const nodes = [fakeNode(), fakeNode({ id: 'n2', name: 'Done', type: 'n8n-nodes-base.noOp', position: [220, 0], disabled: true })];
     const connections = { Start: { main: [[{ node: 'Done', type: 'main', index: 0 }], null] } };
     const content = { name: 'Full', nodes, connections, id: 'wf1', meta: { instanceId: 'x' }, pinData: {}, versionId: 'v1' };
     const files: WorkflowFile[] = [{ path: 'workflows/full.json', content }];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: true,
       workflows: [{ stableName: 'full', path: 'workflows/full.json', name: 'Full', nodes, connections, settings: {} }],
     });
   });
 
-  test('Should name each node with a missing or invalid field, by name or else by index', () => {
-    // Given
-    const nodes = [
-      { name: 'Start', type: 'n8n-nodes-base.manualTrigger', position: [0], parameters: {} },
-      { type: 'n8n-nodes-base.noOp', typeVersion: 1, position: [0, 0], parameters: {} },
-      'not a node',
-    ];
-    const files: WorkflowFile[] = [{ path: 'workflows/nodes.json', content: { ...EXPORT, nodes } }];
+  test('Should name each invalid node by name, or else by index, when nodes lack fields', () => {
+    const nodes = [{ ...fakeNode(), typeVersion: undefined, position: [0] }, { ...fakeNode({ type: 'n8n-nodes-base.noOp' }), name: undefined }, 'not a node'];
+    const files = [fakeWorkflowFile(fakeLocalWorkflow('nodes', { nodes }))];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: false,
       problems: [
@@ -169,35 +128,27 @@ describe('loadWorkflows', () => {
     });
   });
 
-  test('Should reject a node name used twice, once', () => {
-    // Given
-    const node = { name: 'Start', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} };
-    const files: WorkflowFile[] = [{ path: 'workflows/twice.json', content: { ...EXPORT, nodes: [node, node, node] } }];
+  test('Should report a duplicate node name once when three nodes share it', () => {
+    const files = [fakeWorkflowFile(fakeLocalWorkflow('twice', { nodes: [fakeNode(), fakeNode(), fakeNode()] }))];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: false,
       problems: [{ kind: 'invalid-shape', path: 'workflows/twice.json', detail: 'node name "Start" is used twice' }],
     });
   });
 
-  test('Should reject a connection from or to a node that does not exist, and a malformed one', () => {
-    // Given
-    const node = { name: 'Start', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} };
+  test('Should name every bad connection when edges point to missing nodes or are malformed', () => {
     const connections = {
       Start: { main: [[{ node: 'Missing', type: 'main', index: 0 }]] },
       Ghost: { main: [[{ node: 'Start', type: 'main', index: 0 }]] },
       Broken: 'nope',
     };
-    const files: WorkflowFile[] = [{ path: 'workflows/edges.workflow.ts', content: { ...EXPORT, nodes: [node], connections } }];
+    const files = [fakeWorkflowFile(fakeLocalWorkflow('edges', { path: 'workflows/edges.workflow.ts', connections }))];
 
-    // When
     const result = loadWorkflows(files);
 
-    // Then
     expect(result).toEqual({
       ok: false,
       problems: [

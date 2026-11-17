@@ -1,26 +1,21 @@
 import { describe, expect, test } from 'vitest';
-import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { isSameContent, stableStringify } from '#src/core/deliver/normalize';
+import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
+import { isSameContent } from '#src/core/deliver/normalize';
+import { fakeN8nWorkflow } from '#src/core/n8n/n8n.fake';
 import { N8nWorkflow } from '#src/core/n8n/n8n.model';
 
-const LOCAL: LocalWorkflow = {
-  stableName: 'crm',
-  path: 'workflows/crm.json',
+const LOCAL = fakeLocalWorkflow('crm', {
   name: 'CRM',
   nodes: [
     { id: 'l2', name: 'Slack', type: 'slack', credentials: { slackApi: { id: 'dev-1', name: 'Slack bot' } } },
     { id: 'l1', name: 'Hook', type: 'webhook', webhookId: 'local-hook' },
   ],
   connections: { Hook: { main: [[{ node: 'Slack', type: 'main', index: 0 }]] } },
-  settings: { executionOrder: 'v1' },
-};
+});
 
-function remote(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
-  return {
-    id: 'abc',
-    name: 'CRM',
-    tags: [],
-    isArchived: false,
+/** The instance's current draft of LOCAL: other ids, nodes and keys in another order, and server-only settings. */
+function draftOfLocal(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
+  return fakeN8nWorkflow(LOCAL, {
     nodes: [
       { webhookId: 'server-hook', type: 'webhook', name: 'Hook', id: 's1' },
       { name: 'Slack', type: 'slack', id: 's2', credentials: { slackApi: { id: 'prod-9', name: 'Slack bot' } } },
@@ -28,18 +23,15 @@ function remote(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
     connections: { Hook: { main: [[{ index: 0, type: 'main', node: 'Slack' }]] } },
     settings: { executionOrder: 'v1', redactionPolicy: 'none', saveManualExecutions: true },
     ...overrides,
-  };
+  });
 }
 
 describe('isSameContent', () => {
-  test('Should ignore node ids, webhook ids, credential ids, node order, key order and server-only settings', () => {
-    // Given
-    const draft = remote();
+  test('Should find the same content when the draft differs only in ids, node and key order and server-only settings', () => {
+    const draft = draftOfLocal();
 
-    // When
     const same = isSameContent(LOCAL, draft);
 
-    // Then
     expect(same).toBe(true);
   });
 
@@ -48,27 +40,11 @@ describe('isSameContent', () => {
     ['a setting the file sets', { settings: { executionOrder: 'v0' } }],
     ['the connections', { connections: {} }],
     ['a credential name', { nodes: [{ name: 'Hook', type: 'webhook' }, { name: 'Slack', type: 'slack', credentials: { slackApi: { name: 'Other' } } }] }],
-  ])('Should see a change in %s', (_label, overrides) => {
-    // Given
-    const draft = remote(overrides);
+  ])('Should see a change when the draft differs in %s', (_difference, overrides) => {
+    const draft = draftOfLocal(overrides);
 
-    // When
     const same = isSameContent(LOCAL, draft);
 
-    // Then
     expect(same).toBe(false);
-  });
-});
-
-describe('stableStringify', () => {
-  test('Should sort object keys at every depth', () => {
-    // Given
-    const value = { b: 1, a: { d: [{ z: 1, y: 2 }], c: 3 } };
-
-    // When
-    const text = stableStringify(value);
-
-    // Then
-    expect(text).toBe('{"a":{"c":3,"d":[{"y":2,"z":1}]},"b":1}');
   });
 });

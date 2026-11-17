@@ -21,9 +21,9 @@
 
 ## Tests
 
-- Tests sit next to the code as `*.test.ts`. Vitest only picks up `src/**/*.test.ts`.
+- Tests sit next to the code as `*.test.ts`. Vitest only picks up `src/**/*.test.ts`, and the type tests in `src/**/*.test-d.ts`, which it checks with `tsc`.
 - Import `describe`, `expect`, `test` from `vitest` explicitly.
-- Each test is written as `// Given`, `// When`, `// Then` blocks, with a title starting with "Should".
+- A test title reads `Should {outcome} when {condition}`. Blank lines, not `// Given`, `// When`, `// Then` comments, separate its three blocks: given, when, then. Lint enforces both.
 
 ## Example
 

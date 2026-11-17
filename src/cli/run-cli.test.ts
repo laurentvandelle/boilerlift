@@ -3,6 +3,7 @@ import { fakeContext } from '#src/cli/cli.fake';
 import { CommandContext, CommandDefinition } from '#src/cli/cli.model';
 import { helpCommand, renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.command';
 import { versionCommand } from '#src/cli/commands/version/version.command';
+import { COMMANDS } from '#src/cli/registry';
 import { runCli } from '#src/cli/run-cli';
 
 const echoCommand: CommandDefinition = {
@@ -22,80 +23,88 @@ const ctx: CommandContext = fakeContext({ version: '1.2.3', registry: [helpComma
 const GLOBAL_HELP = renderGlobalHelp(ctx.registry);
 
 describe('runCli', () => {
+  test('Should list every command of the CLI when called with --help', async () => {
+    const cli = fakeContext({ registry: COMMANDS });
+
+    const result = await runCli(['--help'], cli);
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: '',
+      stdout: `Usage: n8nlift <command> [options]
+
+Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
+
+Commands:
+  help     Show help for n8nlift or for one command
+  version  Print the n8nlift version
+  ping     Check the connection to your n8n instance
+  deploy   Deliver your workflows to your n8n instance as drafts
+
+Coming: deploy, publish, status, secrets, sync
+
+Options:
+  -h, --help     Show this help
+  -v, --version  Print the n8nlift version
+
+Run \`n8nlift help <command>\` for the options of one command.
+`,
+    });
+  });
+
   test.each([['--version'], ['-v'], ['version']])('Should print the version when called with %s', async (arg) => {
-    // Given
     const args = [arg];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result).toEqual({ exitCode: 0, stdout: '1.2.3\n', stderr: '' });
   });
 
   test.each([['--help'], ['-h'], ['help']])('Should print the global help when called with %s', async (arg) => {
-    // Given
     const args = [arg];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result).toEqual({ exitCode: 0, stdout: GLOBAL_HELP, stderr: '' });
   });
 
   test('Should print the global help when called without arguments', async () => {
-    // Given
     const args: string[] = [];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result).toEqual({ exitCode: 0, stdout: GLOBAL_HELP, stderr: '' });
   });
 
   test('Should print the help of a command when called with --help after it', async () => {
-    // Given
     const args = ['version', '--help'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result).toEqual({ exitCode: 0, stdout: renderCommandHelp(versionCommand), stderr: '' });
   });
 
-  test('Should parse the options of a command and pass them to it', async () => {
-    // Given
+  test('Should pass an option to the command when it is given by its short alias', async () => {
     const args = ['echo', '-n', 'lift'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result).toEqual({ exitCode: 0, stdout: 'lift\n', stderr: '' });
   });
 
-  test('Should parse an option that has no short alias', async () => {
-    // Given
+  test('Should pass the options to the command when they are given by their long names', async () => {
     const args = ['echo', '--name', 'lift', '--loud'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result).toEqual({ exitCode: 0, stdout: 'lift!\n', stderr: '' });
   });
 
   test('Should print the global help and fail when the command is unknown', async () => {
-    // Given
     const args = ['foo'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('Unknown command: foo');
@@ -103,39 +112,30 @@ describe('runCli', () => {
   });
 
   test('Should print the global help and fail when the global option is unknown', async () => {
-    // Given
     const args = ['--nope'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Unknown option: --nope');
     expect(result.stderr).toContain(GLOBAL_HELP);
   });
 
   test('Should print the command help and fail when a command option is unknown', async () => {
-    // Given
     const args = ['echo', '--nope'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(renderCommandHelp(echoCommand));
   });
 
   test('Should fail when a command that takes no arguments gets one', async () => {
-    // Given
     const args = ['version', 'extra'];
 
-    // When
     const result = await runCli(args, ctx);
 
-    // Then
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(renderCommandHelp(versionCommand));
   });
