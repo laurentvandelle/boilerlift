@@ -18,8 +18,8 @@ Operational rules for agents live in `AGENTS.md`. This file is background.
   - `connection/` is ping: the checks behind `n8nlift ping`.
   - Shared folders: `config/` (reads `N8N_URL` and `N8N_API_KEY` from the environment and `.env`), `n8n/` (the `N8nClient` port, the id guards and what n8nlift relies on in the public API) and `common/` (the exit codes of every command, `isRecord`, and the `Result` type of expected failures).
 - `src/services/` — the adapters that reach the outside world, behind the ports of `core/`. Only the commands use them:
-  - `http/` is the HTTP transport: one `fetch` per request, a timeout, and network errors described for a person. It knows no service.
-  - `n8n/` implements the `N8nClient` port over `http/`: the API key, the paths and paging of the public API, and the parsers that check every body once.
+  - `http/` is the HTTP transport: `getRequest`, `postRequest` and `putRequest` with headers, a JSON body and a reader for the answer, a timeout, and network errors described for a person. It knows no service.
+  - `n8n/` implements the `N8nClient` port by calling `http/` directly for each endpoint: the API key, the URLs and paging of the public API, and the parsers that check every body once.
 - `debug/` — a separate npm package that depends on `file:../dist` and runs the built `dist/bin.js`, used to try the CLI as a user would.
 
 Why this split: `docs/adr/0001-cli-and-core-layers.md`. Why typed n8n exports: `docs/adr/0005-workflow-files-are-typed-n8n-exports.md`. Why tags and drafts: `docs/adr/0002-tag-identity-and-draft-updates.md`, amended by `docs/adr/0003-draft-support-from-spec-and-unarchive-restore.md`. Why deploy plans before it writes: `docs/adr/0004-deploy-plans-before-it-writes.md`. Why failures are returned: `docs/adr/0006-expected-failures-are-returned-results.md`. Why adapters live in `services/`: `docs/adr/0007-adapters-live-in-services.md`.

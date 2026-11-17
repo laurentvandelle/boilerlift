@@ -2,40 +2,55 @@ import { Result } from '#src/core/common/result';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT';
 
-export interface HttpRequest {
-  method: HttpMethod;
-  url: string;
-  /** Names the request in answers and failures, for example `GET /healthz`. */
-  call: string;
+/** Reads the text of a success answer into a value, or says why it cannot (the `invalid-response` detail). */
+export type BodyReader<T> = (text: string) => Result<T, string>;
+
+/** Checks one JSON value, and says what it expects so that a mismatch can be reported. */
+export interface JsonParser<T> {
+  /** What the value should be, for the `invalid-response` detail: `a workflow`. */
+  expected: string;
+  parse: (value: unknown) => T | undefined;
+}
+
+export interface GetOptions<T> {
   headers?: Record<string, string>;
+  /** Reads the answer body: `jsonBody(parser)` or `textBody`. */
+  response: BodyReader<T>;
+}
+
+export interface SendOptions<T> extends GetOptions<T> {
   /** Sent as JSON, with its `content-type`. Leave it out for a request without a body. */
   body?: unknown;
 }
 
-/** An answer with a success status, with its body as text. */
-export interface HttpAnswer {
+/** An answer with a success status, with its body read. `call` names the request: `GET /healthz`. */
+export interface HttpAnswer<T> {
   call: string;
   status: number;
-  body: string;
+  body: T;
 }
 
 /**
  * Why a request failed.
  * - `unreachable`: no answer, or a network error, described for a person in `reason`.
- * - `http-error`: an error status, with the body as text.
+ * - `http-error`: an error status, with the `message` field of a JSON error body when there is one.
+ * - `invalid-response`: a success status whose body the reader rejected.
  */
 export type HttpFailure =
   | { kind: 'unreachable'; call: string; reason: string }
-  | { kind: 'http-error'; call: string; status: number; body: string };
+  | { kind: 'http-error'; call: string; status: number; message?: string }
+  | { kind: 'invalid-response'; call: string; status: number; detail: string };
 
-export type HttpResult = Result<HttpAnswer, HttpFailure>;
+export type HttpResult<T> = Result<HttpAnswer<T>, HttpFailure>;
 
 export interface HttpOptions {
   fetch: typeof fetch;
   timeoutMs?: number;
 }
 
-/** Sends JSON requests over HTTP. It knows nothing of the service behind the URL. */
+/** Sends requests over HTTP and reads their answers. It knows nothing of the service behind the URL. */
 export interface Http {
-  send: (request: HttpRequest) => Promise<HttpResult>;
+  getRequest: <T>(url: string, options: GetOptions<T>) => Promise<HttpResult<T>>;
+  postRequest: <T>(url: string, options: SendOptions<T>) => Promise<HttpResult<T>>;
+  putRequest: <T>(url: string, options: SendOptions<T>) => Promise<HttpResult<T>>;
 }

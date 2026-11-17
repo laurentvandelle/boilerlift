@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { createHttp } from '#src/services/http/http';
-import { HttpRequest } from '#src/services/http/http.model';
+import { isRecord } from '#src/core/common/is-record';
+import { createHttp, jsonBody, textBody } from '#src/services/http/http';
+import { JsonParser } from '#src/services/http/http.model';
 
 interface Call {
   url: string;
@@ -16,40 +17,98 @@ function fakeFetch(answer: () => Promise<Response>): { fetch: typeof fetch; call
   return { fetch, calls };
 }
 
+function answering(body: string, status = 200): { fetch: typeof fetch; calls: Call[] } {
+  return fakeFetch(() => Promise.resolve(new Response(body, { status })));
+}
+
 function networkError(code: string): Error {
   return new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
 }
 
-const GET: HttpRequest = { method: 'GET', url: 'https://example.com/items?limit=1', call: 'GET /items' };
+const ITEMS_URL = 'https://example.com/items?limit=1';
+
+const itemParser: JsonParser<{ a: number }> = {
+  expected: 'an item',
+  parse: (value) => (isRecord(value) && typeof value.a === 'number' ? { a: value.a } : undefined),
+};
 
 describe('createHttp', () => {
-  test('Should return the status and body text when the answer has a success status', async () => {
-    const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response('{"a":1}', { status: 200 })));
+  test('Should send a GET with the given headers and name the call by its path when it gets a URL', async () => {
+    const { fetch, calls } = answering('ok');
 
-    const result = await createHttp({ fetch }).send(GET);
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { headers: { 'x-key': 'k' }, response: textBody });
 
-    expect(result).toEqual({ ok: true, value: { call: 'GET /items', status: 200, body: '{"a":1}' } });
-    expect(calls[0]?.url).toBe('https://example.com/items?limit=1');
-    expect(calls[0]?.init?.headers).toEqual({ accept: 'application/json' });
+    expect(result).toEqual({ ok: true, value: { call: 'GET /items', status: 200, body: 'ok' } });
+    expect(calls[0]?.url).toBe(ITEMS_URL);
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[0]?.init?.headers).toEqual({ accept: 'application/json', 'x-key': 'k' });
     expect(calls[0]?.init?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  test('Should send the body as JSON with its content type when the request has a body', async () => {
-    const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response('', { status: 201 })));
+  test('Should send the body as JSON with its content type when it posts a body', async () => {
+    const { fetch, calls } = answering('', 201);
 
-    await createHttp({ fetch }).send({ method: 'POST', url: 'https://example.com/items', call: 'POST /items', headers: { 'x-key': 'k' }, body: { name: 'a' } });
+    await createHttp({ fetch }).postRequest('https://example.com/items', { body: { name: 'a' }, response: textBody });
 
     expect(calls[0]?.init?.method).toBe('POST');
-    expect(calls[0]?.init?.headers).toEqual({ accept: 'application/json', 'x-key': 'k', 'content-type': 'application/json' });
+    expect(calls[0]?.init?.headers).toEqual({ accept: 'application/json', 'content-type': 'application/json' });
     expect(calls[0]?.init?.body).toBe('{"name":"a"}');
   });
 
-  test('Should return an http-error with the body text when the answer has an error status', async () => {
-    const { fetch } = fakeFetch(() => Promise.resolve(new Response('{"message":"nope"}', { status: 404 })));
+  test('Should send a PUT without a content type when it puts no body', async () => {
+    const { fetch, calls } = answering('');
 
-    const result = await createHttp({ fetch }).send(GET);
+    const result = await createHttp({ fetch }).putRequest('https://example.com/items/1', { response: textBody });
 
-    expect(result).toEqual({ ok: false, error: { kind: 'http-error', call: 'GET /items', status: 404, body: '{"message":"nope"}' } });
+    expect(result).toEqual({ ok: true, value: { call: 'PUT /items/1', status: 200, body: '' } });
+    expect(calls[0]?.init?.headers).toEqual({ accept: 'application/json' });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
+  test('Should return the parsed body when a JSON answer matches its parser', async () => {
+    const { fetch } = answering('{"a":1}');
+
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: jsonBody(itemParser) });
+
+    expect(result).toEqual({ ok: true, value: { call: 'GET /items', status: 200, body: { a: 1 } } });
+  });
+
+  test('Should report an invalid response when a success answer is not JSON', async () => {
+    const { fetch } = answering('<html>');
+
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: jsonBody(itemParser) });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'invalid-response', call: 'GET /items', status: 200, detail: 'the body is not JSON' },
+    });
+  });
+
+  test('Should report an invalid response naming what it expects when the JSON does not match its parser', async () => {
+    const { fetch } = answering('42');
+
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: jsonBody(itemParser) });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'invalid-response', call: 'GET /items', status: 200, detail: 'the body is not an item' },
+    });
+  });
+
+  test('Should keep the message of the body when the answer has an error status', async () => {
+    const { fetch } = answering('{"message":"nope"}', 404);
+
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: textBody });
+
+    expect(result).toEqual({ ok: false, error: { kind: 'http-error', call: 'GET /items', status: 404, message: 'nope' } });
+  });
+
+  test('Should report an http-error without a message when the error body has none', async () => {
+    const { fetch } = answering('', 500);
+
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: textBody });
+
+    expect(result).toEqual({ ok: false, error: { kind: 'http-error', call: 'GET /items', status: 500 } });
   });
 
   test.each([
@@ -61,7 +120,7 @@ describe('createHttp', () => {
   ])('Should report the host unreachable when fetch fails with %s', async (code, reason) => {
     const { fetch } = fakeFetch(() => Promise.reject(networkError(code)));
 
-    const result = await createHttp({ fetch }).send(GET);
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: textBody });
 
     expect(result).toEqual({ ok: false, error: { kind: 'unreachable', call: 'GET /items', reason } });
   });
@@ -69,7 +128,7 @@ describe('createHttp', () => {
   test('Should report the cause when a network error has no code', async () => {
     const { fetch } = fakeFetch(() => Promise.reject(new TypeError('fetch failed', { cause: new Error('bad port') })));
 
-    const result = await createHttp({ fetch }).send(GET);
+    const result = await createHttp({ fetch }).getRequest(ITEMS_URL, { response: textBody });
 
     expect(result).toEqual({ ok: false, error: { kind: 'unreachable', call: 'GET /items', reason: 'fetch failed: bad port' } });
   });
@@ -83,7 +142,7 @@ describe('createHttp', () => {
         });
       });
 
-    const result = await createHttp({ fetch, timeoutMs: 5 }).send(GET);
+    const result = await createHttp({ fetch, timeoutMs: 5 }).getRequest(ITEMS_URL, { response: textBody });
 
     expect(result).toEqual({ ok: false, error: { kind: 'unreachable', call: 'GET /items', reason: 'no answer after 0.005 s (timeout)' } });
   });

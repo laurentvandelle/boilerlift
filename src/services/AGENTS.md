@@ -12,12 +12,12 @@
 ## Shape
 
 - A service implements a port declared in `core/`. The port's types stay in `core/`; only what carries I/O (`fetch`, the options) lives here.
-- `http/http.ts` sends one request and returns the body as text: a success status, an `http-error` with the body, or `unreachable` with a reason a person can act on.
-- `n8n/n8n-client.ts` implements `N8nClient` over `http/`: the API key, the paths and paging, the n8n error `message`, and the JSON parse. It runs every body through one parser of `n8n/n8n-response.ts`; a mismatch is an `invalid-response` failure. Why: `docs/adr/0007-adapters-live-in-services.md`.
+- `http/http.ts` is the one place that calls `fetch`: `getRequest`, `postRequest` and `putRequest` take the URL, the headers, the JSON body to send, and a `response` reader (`jsonBody(parser)` or `textBody`). They return the read body, an `http-error` with the `message` of a JSON error body, an `invalid-response` when the reader rejects the body, or `unreachable` with a reason a person can act on.
+- `n8n/n8n-client.ts` implements `N8nClient` by calling those methods directly, one per endpoint: the URLs, the API key header, paging, and one parser of `n8n/n8n-response.ts` per body. Add no request wrapper between the client and `http/`. Why: `docs/adr/0007-adapters-live-in-services.md`.
 
 ## Tests
 
-- Each adapter is tested with a hand-written `fetch` stub in its own test, which records the calls. `http/http.test.ts` pins the transport (headers, body, timeout, network errors); `n8n/n8n-client.test.ts` pins the n8n calls (paths, API key, paging, parsing, error messages).
+- Each adapter is tested with a hand-written `fetch` stub in its own test, which records the calls. `http/http.test.ts` pins the transport (methods, headers, body, readers, error messages, timeout, network errors); `n8n/n8n-client.test.ts` pins the n8n calls (URLs, API key, paging, parsers).
 
 ## Example
 
