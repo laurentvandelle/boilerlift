@@ -49,7 +49,7 @@ type Row = [string, string];
 function optionRows(options: Readonly<Record<string, CommandOption>>): Row[] {
   return Object.entries(options).map(([name, option]): Row => {
     const flag = option.short === undefined ? `    --${name}` : `-${option.short}, --${name}`;
-    const value = option.type === 'string' ? ` <${name}>` : '';
+    const value = option.type === 'string' ? ` <${option.valueName ?? name}>` : '';
     return [`${flag}${value}`, option.description];
   });
 }

@@ -1,23 +1,17 @@
-import { CliResult } from '#src/cli/cli.model';
-import { describeConfigError } from '#src/core/config/config-error';
-import { ConfigError, ConnectionConfig } from '#src/core/config/config.model';
+import { TargetRun } from '#src/cli/targets.render';
+import { Target } from '#src/core/config/config.model';
 import { CHECK_LABELS } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
-import { EXIT_USAGE } from '#src/core/common/exit-codes';
 
 const STATUS_MARKS: Record<Check['status'], string> = { ok: '✓', failed: '✗', skipped: '–' };
 
-/** A connection config that cannot be used: exit 1, the fix on stderr. */
-export function renderConfigError(error: ConfigError): CliResult {
-  return { exitCode: EXIT_USAGE, stdout: '', stderr: describeConfigError(error) };
-}
-
-/** The configuration ping read, one line per check, then the summary. */
-export function renderReport(config: ConnectionConfig, report: ConnectionReport): CliResult {
+/** The ping of one target: the configuration it read, one line per check, then the summary. The API key never shows. */
+export function renderTargetReport(target: Target, report: ConnectionReport): TargetRun {
+  const { url, apiKey } = target.connection;
   const header = [
-    'lift ping',
-    `  URL      ${config.url.value} (from ${config.url.source})`,
-    `  API key  •••• (set, from ${config.apiKey.source})`,
+    `lift ping → ${target.name}`,
+    `  URL      ${url.value} (from ${url.source})`,
+    `  API key  •••• (${target.apiKeyEnv}, from ${apiKey.source})`,
     ...report.warnings.map((warning) => `  ! ${warning}`),
   ];
   const width = Math.max(...Object.values(CHECK_LABELS).map((label) => label.length)) + 2;
@@ -31,8 +25,25 @@ export function renderReport(config: ConnectionConfig, report: ConnectionReport)
       ? 'All checks passed.'
       : `${failures} check${failures === 1 ? '' : 's'} failed. Exit code ${report.exitCode}.`;
   return {
-    exitCode: report.exitCode,
-    stdout: `${header.join('\n')}\n\n${checks.join('\n')}\n\n${summary}\n`,
-    stderr: failures === 0 ? '' : `${summary}\n`,
+    target: target.name,
+    url: url.value,
+    text: {
+      exitCode: report.exitCode,
+      stdout: `${header.join('\n')}\n\n${checks.join('\n')}\n\n${summary}\n`,
+      stderr: failures === 0 ? '' : `${summary}\n`,
+    },
+    payload: {
+      url: url.value,
+      apiKey: { env: target.apiKeyEnv, source: apiKey.source },
+      checks: report.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        detail: check.detail,
+        ...(check.status === 'failed' ? { hint: check.hint } : {}),
+      })),
+      warnings: report.warnings,
+      exitCode: report.exitCode,
+    },
+    outcome: summary,
   };
 }

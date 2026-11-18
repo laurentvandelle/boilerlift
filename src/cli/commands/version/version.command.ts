@@ -7,6 +7,7 @@ export const versionCommand: CommandDefinition = defineCommand({
   summary: 'Print the Boilerlift version',
   usage: 'lift version',
   allowPositionals: false,
+  targets: false,
   options: {},
   run: (_input, ctx) => Promise.resolve(renderVersion(ctx.version)),
 });

@@ -164,3 +164,45 @@ describe('nodeContext lock file', () => {
     });
   });
 });
+
+describe('nodeContext project config', () => {
+  test('Should return the default export of boilerlift.config.ts when the folder has one', async () => {
+    const cwd = await tempFolder();
+    const config = { targets: { dev: { url: 'https://n8n.example.com', apiKeyEnv: 'N8N_API_KEY', workflows: './workflows' } } };
+    await write(cwd, 'boilerlift.config.ts', `const config: object = ${JSON.stringify(config)};\nexport default config;\n`);
+
+    const file = await nodeContext(cwd).loadProjectConfig();
+
+    expect(file).toEqual({ kind: 'loaded', content: config });
+  });
+
+  test('Should return missing when the folder has no boilerlift.config.ts', async () => {
+    const cwd = await tempFolder();
+
+    const file = await nodeContext(cwd).loadProjectConfig();
+
+    expect(file).toEqual({ kind: 'missing' });
+  });
+
+  test('Should return the reason when boilerlift.config.ts throws on import', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'boilerlift.config.ts', "throw new Error('bad config');\n");
+
+    const file = await nodeContext(cwd).loadProjectConfig();
+
+    expect(file).toEqual({ kind: 'unreadable', reason: 'bad config' });
+  });
+
+  test.each([
+    ['an existing folder', 'workflows/a.json', true],
+    ['a file', 'workflows', false],
+    ['a missing path', 'other/a.json', false],
+  ])('Should tell whether the path is a folder when it is %s', async (_condition, written, expected) => {
+    const cwd = await tempFolder();
+    await write(cwd, written, '{}');
+
+    const isDirectory = await nodeContext(cwd).isDirectory('workflows');
+
+    expect(isDirectory).toBe(expected);
+  });
+});

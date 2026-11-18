@@ -8,6 +8,7 @@ const fakeCommand: CommandDefinition = {
   summary: 'Do fake things',
   usage: 'lift fake [options]',
   allowPositionals: false,
+  targets: false,
   options: { target: { type: 'string', short: 't', description: 'Where to go' } },
   run: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
 };
@@ -32,8 +33,10 @@ Commands:
   fake  Do fake things
 
 Options:
-  -h, --help     Show this help
-  -v, --version  Print the Boilerlift version
+  -h, --help           Show this help
+  -v, --version        Print the Boilerlift version
+  -t, --target <name>  Run on this target of boilerlift.config.ts
+      --all            Run on every target, in the order boilerlift.config.ts declares them
 
 Run \`lift help <command>\` for the options of one command.
 \`boilerlift\` is an alias of \`lift\`.

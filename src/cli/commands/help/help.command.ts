@@ -7,6 +7,7 @@ export const helpCommand: CommandDefinition = defineCommand({
   summary: 'Show help for Boilerlift or for one command',
   usage: 'lift help [command]',
   allowPositionals: true,
+  targets: false,
   options: {},
   run: ({ positionals }, ctx) => Promise.resolve(help(positionals, ctx.registry)),
 });

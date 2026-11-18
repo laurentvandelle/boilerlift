@@ -17,6 +17,7 @@ describe('defineCommand', () => {
         summary: 'Typed options',
         usage: 'lift typed',
         allowPositionals: false,
+        targets: false,
         options: OPTIONS,
         run: ({ options }) => {
           assertType<boolean>(options.flag('dry-run'));
@@ -34,6 +35,7 @@ describe('defineCommand', () => {
         summary: 'Typed options',
         usage: 'lift typed',
         allowPositionals: false,
+        targets: false,
         options: OPTIONS,
         run: ({ options }) => {
         // @ts-expect-error 'dryrun' is not a declared option
