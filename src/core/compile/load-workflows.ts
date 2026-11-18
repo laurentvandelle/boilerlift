@@ -2,11 +2,11 @@ import { LoadProblem, LocalWorkflow, StableName, WorkflowFile, WorkflowNode } fr
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
 
-export const STABLE_NAME_PATTERN = /^[a-z0-9-]{1,16}$/;
+export const STABLE_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
 
 const EXTENSIONS = ['.workflow.ts', '.json'];
 
-/** True when `value` follows the stable-name rule: 1 to 16 of a-z, 0-9 and -. */
+/** True when `value` follows the stable-name rule: 1 to 64 of a-z, 0-9 and -. */
 export function isStableName(value: string): value is StableName {
   return STABLE_NAME_PATTERN.test(value);
 }
@@ -40,7 +40,7 @@ export function loadWorkflows(files: WorkflowFile[]): Result<LocalWorkflow[], Lo
       problems.push({
         kind: 'invalid-name',
         path: file.path,
-        detail: `stable name "${stableName}" must be 1 to 16 lowercase letters, digits or dashes; rename the file`,
+        detail: `stable name "${stableName}" must be 1 to 64 lowercase letters, digits or dashes; rename the file`,
       });
       continue;
     }

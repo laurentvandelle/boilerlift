@@ -17,7 +17,7 @@ export function fakeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
 /** `value` as a stable name, through the same guard as the loader. Throws when it breaks the stable-name rule. */
 export function fakeStableName(value: string): StableName {
   if (!isStableName(value)) {
-    throw new Error(`"${value}" is not a stable name: 1 to 16 of a-z, 0-9 and -`);
+    throw new Error(`"${value}" is not a stable name: 1 to 64 of a-z, 0-9 and -`);
   }
   return value;
 }

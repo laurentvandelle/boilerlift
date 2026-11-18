@@ -1,15 +1,16 @@
 import { readFileSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CommandContext, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
 import { isRecord } from '#src/core/common/is-record';
+import { Result, err, ok } from '#src/core/common/result';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
- * `fetch`, the Boilerlift version, and the `.env` file and workflow files of `cwd`.
+ * `fetch`, the Boilerlift version, and the `.env` file, workflow files and lock file of `cwd`.
  */
 export function nodeContext(cwd: string): CommandContext {
   return {
@@ -20,6 +21,8 @@ export function nodeContext(cwd: string): CommandContext {
     nodeVersion: process.versions.node,
     fetch: globalThis.fetch,
     loadWorkflowFiles: (dir) => loadWorkflowFiles(cwd, dir),
+    readLockFile: (path) => readLockFile(resolve(cwd, path)),
+    writeLockFile: (path, text) => writeLockFile(resolve(cwd, path), text),
   };
 }
 
@@ -41,6 +44,27 @@ function readDotEnv(path: string): string | undefined {
       return undefined;
     }
     throw error;
+  }
+}
+
+async function readLockFile(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+/** Writes the whole lock file. A disk error (permissions, full disk, a folder in the way) is returned, not thrown. */
+async function writeLockFile(path: string, text: string): Promise<Result<void, { reason: string }>> {
+  try {
+    await writeFile(path, text, 'utf8');
+    return ok(undefined);
+  } catch (error) {
+    return err({ reason: error instanceof Error ? error.message : String(error) });
   }
 }
 
