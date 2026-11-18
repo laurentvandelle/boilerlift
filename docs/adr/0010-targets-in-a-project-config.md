@@ -6,7 +6,7 @@ One project now reaches several n8n instances (each client's dev and prod), so `
 
 - **Keep `N8N_URL` and add per-target variables (`N8N_URL_PROD`).** Rejected: the list of targets and their folders would live in untracked env files, so a fresh clone or CI could not know where workflows go.
 - **A JSON or YAML config.** Rejected: a `.ts` file loads natively on Node 22.18 (type stripping), like the workflow files, and `defineConfig` types it in the editor.
-- **The URL from an environment variable too.** Rejected: the url is not a secret, and committing it makes the target the same on every machine. Only the API key stays outside the file, in the variable `apiKeyEnv` names.
+- **An `apiKeyEnv` field naming the variable that holds the key, read by Boilerlift.** Rejected in QA: the file is TypeScript, so it reads `process.env` itself, under the names the user picks, for the key and for the url alike. Boilerlift only puts `./.env` into `process.env` before importing the file, a variable already set winning.
 
 ## Consequences
 

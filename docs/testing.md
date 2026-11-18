@@ -36,7 +36,7 @@ Use the real thing wherever the test can, and pick the stand-in by the kind of d
 | --- | --- |
 | In-process code (pure logic, in-memory state) | The real code |
 | The n8n instance | The shared in-memory instance, `fakeN8n()` in `src/core/n8n/n8n.fake.ts` |
-| The outside world of a command (env, `.env`, project config, Node.js version, workflow files, lock file) | A `CommandContext` from `fakeContext()` in `src/cli/cli.fake.ts`, with `fakeProjectConfig()` or `fakeSingleTarget()` for `boilerlift.config.ts` and `fakeLockFile()` for the lock file |
+| The outside world of a command (project config, Node.js version, workflow files, lock file) | A `CommandContext` from `fakeContext()` in `src/cli/cli.fake.ts`, with `fakeProjectConfig()` or `fakeSingleTarget()` for `boilerlift.config.ts` and `fakeLockFile()` for the lock file |
 
 `fakeN8n()` is one store with two doors: `.client`, the `N8nClient` port, for core tests, and `.fetch`, answering like the n8n public API, for command tests. `src/services/` tests pass their own `fetch` stub: they test the HTTP adapter itself. `src/cli/AGENTS.md` and `src/core/AGENTS.md` say which door each test uses. Do not write another n8n stand-in: two of them drift apart.
 

@@ -8,8 +8,8 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 ### The instance
 
 - **Instance**: the user's own n8n server, reached at the `url` of a target and through its public API with the target's API key. Boilerlift never hosts one.
-- **Project config**: `boilerlift.config.ts` at the project root, committed with it: the default export of `defineConfig`, which declares the targets. Every command that talks to n8n requires it. _Avoid_: `.env`, which holds only the API keys.
-- **Target**: one named entry of the project config: an instance `url`, the name of the environment variable that holds its API key (`apiKeyEnv`), and the folder of workflow files it receives (`workflows`). `ping` and `deploy` run on one target, or on every one with `--all`, in declaration order. Several targets may share an instance or a folder. _Avoid_: environment, which is the process environment the API key is read from.
+- **Project config**: `boilerlift.config.ts` at the project root, committed with it: the default export of `defineConfig`, which declares the targets. Every command that talks to n8n requires it. It reads its secrets from `process.env`, which Boilerlift fills from `./.env` first. _Avoid_: `.env`, which only holds variables.
+- **Target**: one named entry of the project config: an instance `url`, its API key (`apiKey`, read from an environment variable the user names), and the folder of workflow files it receives (`workflows`). `ping` and `deploy` run on one target, or on every one with `--all`, in declaration order. Several targets may share an instance or a folder. _Avoid_: environment, which is the process environment the config reads its values from.
 - **Instance connection**: the link from Boilerlift to the instance, that `ping` checks. _Avoid_: connection, which is a link between two nodes.
 
 ### Workflows
