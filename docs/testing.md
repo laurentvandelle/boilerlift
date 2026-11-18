@@ -36,7 +36,7 @@ Use the real thing wherever the test can, and pick the stand-in by the kind of d
 | --- | --- |
 | In-process code (pure logic, in-memory state) | The real code |
 | The n8n instance | The shared in-memory instance, `fakeN8n()` in `src/core/n8n/n8n.fake.ts` |
-| The outside world of a command (env, `.env`, Node.js version, workflow files, lock file) | A `CommandContext` from `fakeContext()` in `src/cli/cli.fake.ts`, with `fakeLockFile()` for the lock file |
+| The outside world of a command (project config, Node.js version, workflow files, lock file) | A `CommandContext` from `fakeContext()` in `src/cli/cli.fake.ts`, with `fakeProjectConfig()` or `fakeSingleTarget()` for `boilerlift.config.ts` and `fakeLockFile()` for the lock file |
 
 `fakeN8n()` is one store with two doors: `.client`, the `N8nClient` port, for core tests, and `.fetch`, answering like the n8n public API, for command tests. `src/services/` tests pass their own `fetch` stub: they test the HTTP adapter itself. `src/cli/AGENTS.md` and `src/core/AGENTS.md` say which door each test uses. Do not write another n8n stand-in: two of them drift apart.
 
@@ -44,7 +44,7 @@ Do not `vi.mock` the repository's own modules: mocking your own code tests the m
 
 ## Data
 
-- **Use the shared builders.** Build test data with the `fake*` builders, which hold sensible defaults and take overrides, so each test states only the values it is about: `fakeNode`, `fakeLocalWorkflow`, `fakeWorkflowFile` and `fakeStableName` in `src/core/compile/workflow.fake.ts`; `fakeN8nWorkflow`, `fakeWorkflowId`, `fakeTagId`, `httpError`, `unreachable` and `invalidResponse` in `src/core/n8n/n8n.fake.ts`; `fakeManaged`, `fakeLockText` and `fakeLockWriter` in `src/core/deliver/lock-file.fake.ts`; `fakeLockFile` in `src/cli/cli.fake.ts`. Add a missing builder there, next to its model, instead of in a test file.
+- **Use the shared builders.** Build test data with the `fake*` builders, which hold sensible defaults and take overrides, so each test states only the values it is about: `fakeNode`, `fakeLocalWorkflow`, `fakeWorkflowFile` and `fakeStableName` in `src/core/compile/workflow.fake.ts`; `fakeN8nWorkflow`, `fakeWorkflowId`, `fakeTagId`, `httpError`, `unreachable` and `invalidResponse` in `src/core/n8n/n8n.fake.ts`, with `fakeN8nByOrigin` to route one `fetch` to an instance per target; `fakeManaged`, `fakeLockText` and `fakeLockWriter` in `src/core/deliver/lock-file.fake.ts`; `fakeLockFile`, `fakeProjectConfig`, `fakeSingleTarget` and `fakeTwoTargets` in `src/cli/cli.fake.ts`. Add a missing builder there, next to its model, instead of in a test file.
 - **Branded values go through their guards.** `fakeStableName`, `fakeWorkflowId` and `fakeTagId` call the same guards as the code, so a test cannot build a value the code would reject.
 - **Keep tests short and alike.** Use the same shape, the same builders and the same stand-ins across the suite. The `as const` literals of the type tests stay: the type checks need them.
 

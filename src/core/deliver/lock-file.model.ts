@@ -9,7 +9,7 @@ export interface LockEntry {
 }
 
 /**
- * `boilerlift.lock.json`, committed with the project (ADR 0009): for each instance, by its cleaned-up `N8N_URL`,
+ * `boilerlift.lock.json`, committed with the project (ADR 0009): for each instance, by the cleaned-up url of its target,
  * the n8n id of each stable name deploy created there. Deploy recognises its workflows by these ids only.
  */
 export interface LockFile {

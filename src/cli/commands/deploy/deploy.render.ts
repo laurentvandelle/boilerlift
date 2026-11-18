@@ -1,16 +1,22 @@
 import { CliResult } from '#src/cli/cli.model';
+import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
-import { describeConfigError } from '#src/core/config/config-error';
-import { ConfigError } from '#src/core/config/config.model';
+import { CONFIG_FILE } from '#src/core/config/project-config';
 import { DeployAction, DeployReport, DeployResult, DeployWarning } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
 import { LockFileError } from '#src/core/deliver/lock-file.model';
+import { SharedEntry } from '#src/core/deliver/shared-entries';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 
-/** How the report is printed: the --json and --dry-run flags. */
+/** How the report is worded: the --dry-run flag. */
 export interface DeployFormat {
-  json: boolean;
   dryRun: boolean;
+}
+
+/** The target a deploy runs on: its name, and its url, the instance the lock file records under. */
+export interface DeployTarget {
+  name: string;
+  instance: string;
 }
 
 const MARKS: Record<DeployAction, string> = {
@@ -99,41 +105,90 @@ const LABELS = [DEPLOY_WORDING, DRY_RUN_WORDING].flatMap(({ labels }) => Object.
 const ACTION_WIDTH = 1 + Math.max(...LABELS.map((label) => label.length));
 const INDENT = ' '.repeat(2 + ACTION_WIDTH);
 
-/** A connection config that cannot be used: exit 1, the fix on stderr. */
-export function renderConfigError(error: ConfigError): CliResult {
-  return { exitCode: EXIT_USAGE, stdout: '', stderr: describeConfigError(error) };
+/**
+ * Targets on one instance whose folders hold the same stable name: exit 1, nothing was sent. With --json, the error
+ * on stdout too.
+ */
+export function renderSharedEntries(shared: SharedEntry[], format: { json: boolean }): CliResult {
+  const lines = shared.map(
+    ({ stableName, instance, first, second }) =>
+      `✗ ${stableName}  targets ${first.target} (${first.path}) and ${second.target} (${second.path}) both deploy it to ${instance}`,
+  );
+  const message = [
+    'Targets share a workflow on the same instance. Nothing was sent to n8n.',
+    ...lines,
+    `  → Both would use one entry of ${LOCK_FILE} and overwrite each other. Rename one of the files, or point the targets at different instances in ${CONFIG_FILE}.`,
+  ].join('\n');
+  if (!format.json) {
+    return { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n` };
+  }
+  const payload = { error: { kind: 'shared-lock-entry', message }, exitCode: EXIT_USAGE };
+  return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: `${message}\n` };
 }
 
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
-export function renderInvalidFiles(problems: LoadProblem[]): CliResult {
+export function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]): TargetRun {
   const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
+  const message = 'Invalid workflow files. Nothing was sent to n8n.';
   return {
-    exitCode: EXIT_USAGE,
-    stdout: '',
-    stderr: `Invalid workflow files. Nothing was sent to n8n.\n${lines.join('\n')}\n`,
+    target: target.name,
+    url: target.instance,
+    text: { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n${lines.join('\n')}\n` },
+    payload: {
+      instance: target.instance,
+      error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
+      exitCode: EXIT_USAGE,
+    },
+    outcome: 'invalid workflow files, nothing sent',
   };
 }
 
 /** A lock file that cannot be read: exit 1, nothing was sent, the problem and the fix on stderr. */
-export function renderInvalidLockFile(error: LockFileError): CliResult {
+export function renderInvalidLockFile(target: DeployTarget, error: LockFileError): TargetRun {
+  const message = `Invalid ${LOCK_FILE}. Nothing was sent to n8n.`;
   return {
-    exitCode: EXIT_USAGE,
-    stdout: '',
-    stderr: `Invalid ${LOCK_FILE}. Nothing was sent to n8n.\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run deploy again.\n`,
+    target: target.name,
+    url: target.instance,
+    text: {
+      exitCode: EXIT_USAGE,
+      stdout: '',
+      stderr: `${message}\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run deploy again.\n`,
+    },
+    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
+    outcome: `invalid ${LOCK_FILE}, nothing sent`,
   };
 }
 
 /** No workflow file under `dir`: exit 0, nothing was sent. */
-export function renderNothingToDeploy(dir: string, instance: string, format: DeployFormat): CliResult {
-  return format.json
-    ? renderJson(instance, { results: [], warnings: [], lockFile: { path: LOCK_FILE, changed: false }, exitCode: EXIT_OK }, wordingOf(format))
-    : { exitCode: EXIT_OK, stdout: `Nothing to deploy: no workflow in ./${dir}.\n`, stderr: '' };
+export function renderNothingToDeploy(target: DeployTarget, dir: string, format: DeployFormat): TargetRun {
+  const report: DeployReport = { results: [], warnings: [], lockFile: { path: LOCK_FILE, changed: false }, exitCode: EXIT_OK };
+  const message = `Nothing to deploy: no workflow in ${dir}.`;
+  return {
+    target: target.name,
+    url: target.instance,
+    text: { exitCode: EXIT_OK, stdout: `${message}\n`, stderr: '' },
+    payload: jsonPayload(target.instance, report, wordingOf(format)),
+    outcome: message,
+  };
 }
 
-/** The report of a deploy or a dry run, as text or JSON. */
-export function renderReport(instance: string, report: DeployReport, format: DeployFormat): CliResult {
+/** The report of a deploy or a dry run on one target: its text, its JSON payload and its recap. */
+export function renderReport(target: DeployTarget, report: DeployReport, format: DeployFormat): TargetRun {
   const wording = wordingOf(format);
-  return format.json ? renderJson(instance, report, wording) : renderText(instance, report, wording);
+  const [summary = ''] = wording.summary(summarize(report.results));
+  const outcome =
+    report.error !== undefined && report.results.length === 0
+      ? `stopped: ${report.error.call} → ${report.error.detail}`
+      : report.error !== undefined
+        ? `stopped: ${report.error.call} → ${report.error.detail}; ${summary}`
+        : summary;
+  return {
+    target: target.name,
+    url: target.instance,
+    text: renderText(target, report, wording),
+    payload: jsonPayload(target.instance, report, wording),
+    outcome,
+  };
 }
 
 function wordingOf(format: DeployFormat): Wording {
@@ -182,9 +237,9 @@ function warningText(warning: DeployWarning, wording: Wording): string {
   }
 }
 
-function renderText(instance: string, report: DeployReport, wording: Wording): CliResult {
+function renderText(target: DeployTarget, report: DeployReport, wording: Wording): CliResult {
   const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
-  const stdout = [`${wording.command} → ${instance}`];
+  const stdout = [`${wording.command} → ${target.name} (${target.instance})`];
   for (const result of report.results) {
     stdout.push(`${MARKS[result.action]} ${wording.labels[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
     if (result.action === 'failed') {
@@ -226,9 +281,9 @@ function recap(report: DeployReport, wording: Wording): string {
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
 }
 
-function renderJson(instance: string, report: DeployReport, wording: Wording): CliResult {
+function jsonPayload(instance: string, report: DeployReport, wording: Wording): Record<string, unknown> {
   const { error } = report;
-  const payload = {
+  return {
     instance,
     dryRun: wording.dryRun,
     results: report.results.map((result) => ({
@@ -246,5 +301,4 @@ function renderJson(instance: string, report: DeployReport, wording: Wording): C
     error: error === undefined ? null : { call: error.call, detail: error.detail, hint: error.hint },
     exitCode: report.exitCode,
   };
-  return { exitCode: report.exitCode, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: '' };
 }

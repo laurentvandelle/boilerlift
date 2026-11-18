@@ -1,19 +1,21 @@
 import { parseArgs } from 'node:util';
-import { CliResult, CommandContext, CommandDefinition, CommandInput } from '#src/cli/cli.model';
-import { GLOBAL_OPTIONS, commandOptions } from '#src/cli/commands/help/help.options';
+import { CliResult, CommandContext, CommandDefinition, CommandInput, CommandOption } from '#src/cli/cli.model';
+import { COMMAND_ALIAS_OPTIONS, TARGET_OPTIONS, commandOptions } from '#src/cli/commands/help/help.options';
 import { renderCommandHelp, renderGlobalHelp, renderHelp, unknownCommand, usageError } from '#src/cli/commands/help/help.render';
 import { EXIT_UNEXPECTED } from '#src/core/common/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 
-/** Each global option, long and short, and the command it runs: `--version` and `-v` run version. */
+/** Each command alias option, long and short, and the command it runs: `--version` and `-v` run version. */
 const GLOBAL_ALIASES: Record<string, string> = Object.fromEntries(
-  Object.entries(GLOBAL_OPTIONS).flatMap(([name, { short }]): [string, string][] =>
+  Object.entries(COMMAND_ALIAS_OPTIONS).flatMap(([name, { short }]): [string, string][] =>
     short === undefined ? [[`--${name}`, name]] : [[`--${name}`, name], [`-${short}`, name]],
   ),
 );
 
 export async function runCli(args: string[], ctx: CommandContext): Promise<CliResult> {
-  const [first = '--help', ...rest] = args;
+  const { leading, others } = splitLeadingTargetOptions(args);
+  const [first = '--help', ...afterName] = others;
+  const rest = [...afterName, ...leading];
   const name = GLOBAL_ALIASES[first] ?? first;
   if (name.startsWith('-')) {
     return usageError(`Unknown option: ${name}`, renderGlobalHelp(ctx.registry));
@@ -23,6 +25,31 @@ export async function runCli(args: string[], ctx: CommandContext): Promise<CliRe
     return unknownCommand(name, ctx.registry);
   }
   return runCommand(command, rest, ctx);
+}
+
+/**
+ * The target options written before the command name (`lift --target prod deploy`), moved out so the command parses
+ * them with its own. A string option takes the next argument as its value, unless written `--target=prod`.
+ */
+function splitLeadingTargetOptions(args: string[]): { leading: string[]; others: string[] } {
+  const leading: string[] = [];
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index] ?? '';
+    const option = targetOptionOf(arg);
+    if (option === undefined) {
+      break;
+    }
+    const takesValue = option.type === 'string' && !arg.includes('=');
+    leading.push(...args.slice(index, index + (takesValue ? 2 : 1)));
+    index += takesValue ? 2 : 1;
+  }
+  return { leading, others: args.slice(index) };
+}
+
+function targetOptionOf(arg: string): CommandOption | undefined {
+  const [flag = ''] = arg.split('=');
+  return Object.entries(TARGET_OPTIONS).find(([name, { short }]) => flag === `--${name}` || (short !== undefined && flag === `-${short}`))?.[1];
 }
 
 /**
@@ -36,6 +63,9 @@ async function runCommand(command: CommandDefinition, args: string[], ctx: Comma
   }
   if (input.value.values.help === true) {
     return renderHelp(renderCommandHelp(command));
+  }
+  if (command.targets && input.value.values.target !== undefined && input.value.values.all === true) {
+    return usageError('--target and --all cannot be used together: name one target, or run on every one.', renderCommandHelp(command));
   }
   return command.run(input.value, ctx);
 }

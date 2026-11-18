@@ -35,26 +35,63 @@ npm install --save-dev boilerlift
 ```sh
 lift --help            # list the available commands
 lift ping              # check the connection to your n8n instance
-lift deploy            # deliver ./workflows to your instance as drafts
+lift deploy            # deliver the workflows of your target as drafts
+lift deploy -t prod    # deliver to the target named prod
+lift deploy --all      # deliver to every target, one after the other
 lift deploy --dry-run  # show what deploy would do, write nothing
 lift help <command>    # show the options of one command
 lift --version         # print the installed version
 ```
 
-## Check your connection
+## Declare your targets
 
-Before deploying anything, check that your project can reach your n8n instance. `lift ping` reads two values from the environment, then from a `.env` file in the current folder. A variable set in the environment wins over `.env`.
+A **target** is one n8n instance Boilerlift deploys to, with the folder of workflow files it receives. Declare your targets in **`boilerlift.config.ts`** at the project root. Every command that talks to n8n reads it; without it, the command stops, exits 1 and prints a starter config to copy.
 
-| Variable      | Value                                                            |
-| ------------- | ---------------------------------------------------------------- |
-| `N8N_URL`     | Root URL of your n8n instance. Boilerlift adds `/api/v1` itself. |
-| `N8N_API_KEY` | An n8n API key, created in n8n → Settings → n8n API.             |
+```ts
+// boilerlift.config.ts
+import { defineConfig } from 'boilerlift';
+
+export default defineConfig({
+  targets: {
+    dev: {
+      url: process.env.DEV_N8N_URL,
+      apiKey: process.env.DEV_N8N_API_KEY,
+      workflows: './workflows',
+    },
+    prod: {
+      url: 'https://your-n8n.example.com',
+      apiKey: process.env.PROD_N8N_API_KEY,
+      workflows: './workflows',
+    },
+  },
+});
+```
+
+| Field       | Value                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| key         | The target name: 1 to 64 lowercase letters, digits or dashes. Targets are listed and run in the order you declare them.        |
+| `url`       | Root URL of the n8n instance, `http://` or `https://`. Boilerlift adds `/api/v1` itself. Write it, or read it from the environment. |
+| `apiKey`    | The n8n API key (n8n → Settings → n8n API). Read it from an environment variable of your choice, such as `process.env.PROD_N8N_API_KEY`: never write the key itself in the file. |
+| `workflows` | The folder of the workflow files for this target, from the project root. Always explicit.                                     |
+
+You choose the variable names. Before it loads `boilerlift.config.ts`, Boilerlift puts the variables of the `.env` file in the current folder into `process.env`; a variable already set in the environment wins over `.env`. A `url` or `apiKey` that reads an unset variable is reported as empty, naming the target.
 
 ```sh
 # .env — keep it out of Git
-N8N_URL=https://your-n8n.example.com
-N8N_API_KEY=your-n8n-api-key
+DEV_N8N_URL=https://dev.your-n8n.example.com
+DEV_N8N_API_KEY=your-dev-api-key
+PROD_N8N_API_KEY=your-prod-api-key
 ```
+
+With one target declared, `ping` and `deploy` run on it. With several, name one with `--target <name>` (`-t`), or run on every one in turn with `--all`. Several targets and none named, an unknown name, or a target whose workflows folder does not exist stops the command before anything is sent, lists the available targets and exits 1. `--target` and `--all` together are a usage error.
+
+Several targets may share a workflows folder (the same files to dev and prod), or share an instance with different folders. Two targets on the same instance whose folders hold the same stable name would overwrite each other's workflow: `deploy` refuses this before writing, naming both targets and the file.
+
+> Upgrading from `N8N_URL`: paste the starter config `lift ping` prints. It reads `url` from `process.env.N8N_URL` and `apiKey` from `process.env.N8N_API_KEY`, so your `.env` keeps working as it is.
+
+## Check your connection
+
+Before deploying anything, check that your project can reach the instance of your target. `lift ping` reads the target and its API key from `boilerlift.config.ts`.
 
 Add the script to your project's `package.json`, then run `npm run ping`:
 
@@ -66,12 +103,12 @@ Add the script to your project's `package.json`, then run `npm run ping`:
 }
 ```
 
-`ping` is read-only. It checks, in order, that Node.js is 22.18 or later, that the instance answers on `GET /healthz`, and that the public API accepts your key (`GET /api/v1/workflows`). After a failed check the next ones are skipped, and each failure prints the next step. The key is never printed. An `http://` URL gets a warning, because the key travels unencrypted.
+`ping` is read-only. It checks, in order, that Node.js is 22.18 or later, that the instance answers on `GET /healthz`, and that the public API accepts your key (`GET /api/v1/workflows`). After a failed check the next ones are skipped, and each failure prints the next step. The key is never printed. An `http://` URL gets a warning, because the key travels unencrypted. `--json` prints the checks as JSON. With `--all`, each target gets its own block, then a recap line per target, and the exit code is the highest of them.
 
 | Exit code | Meaning                                                                                                                                           |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0         | Every check passed                                                                                                                                |
-| 1         | Usage error, missing `N8N_URL` / `N8N_API_KEY`, an `N8N_URL` that is not `http://` or `https://`, or an unexpected error (printed with its stack) |
+| 1         | Usage error, missing or invalid `boilerlift.config.ts`, an unknown target, a missing API key, or an unexpected error (printed with its stack) |
 | 2         | Node.js is older than 22.18                                                                                                                       |
 | 3         | The instance or its public API cannot be reached                                                                                                  |
 | 4         | The API key is rejected                                                                                                                           |
@@ -80,7 +117,7 @@ Add the script to your project's `package.json`, then run `npm run ping`:
 
 ## Write a workflow
 
-Export a workflow from n8n (editor → ⋯ → Download), then paste the JSON into `defineWorkflow` in a `.workflow.ts` file under `./workflows`:
+Export a workflow from n8n (editor → ⋯ → Download), then paste the JSON into `defineWorkflow` in a `.workflow.ts` file under the workflows folder of your target (`./workflows` below):
 
 ```ts
 // workflows/invoice-sync.workflow.ts
@@ -106,7 +143,7 @@ Other keys of the export (`id`, `meta`, `pinData`, `versionId`, `credentials`…
 
 ## Deploy
 
-`lift deploy` delivers every workflow under `./workflows` to your instance. It reads the same `N8N_URL` and `N8N_API_KEY` as `ping`.
+`lift deploy` delivers every workflow in the workflows folder of the target to its instance. It reads the targets like `ping`. With `--all`, every target is checked first (config, API key, folder): if one is broken, nothing is written. Then each target is deployed in turn; a failed target does not stop the next ones, and the exit code is the highest of them.
 
 ```text
 workflows/
@@ -118,7 +155,7 @@ Before anything is sent, `deploy` checks every file, `.workflow.ts` and `.json` 
 
 The file name without `.workflow.ts` / `.json` is the workflow's **stable name**: 1 to 64 lowercase letters, digits or dashes, unique across all folders.
 
-When `deploy` creates a workflow, it records its n8n id in **`boilerlift.lock.json`** at the project root, under the instance (`N8N_URL`) and the stable name:
+When `deploy` creates a workflow, it records its n8n id in **`boilerlift.lock.json`** at the project root, under the instance (the `url` of the target) and the stable name:
 
 ```json
 {
@@ -134,7 +171,7 @@ When `deploy` creates a workflow, it records its n8n id in **`boilerlift.lock.js
 `deploy` finds your workflows by these ids only, never by name or tag. Renaming the workflow in n8n keeps the link (the name in the file wins on the next update); renaming the file makes a new workflow. A workflow on the instance that the lock file does not list is never touched, so several projects can share one instance. **Commit `boilerlift.lock.json`** after each deploy that changes it (the report then says `boilerlift.lock.json updated — commit it`): a deploy from another machine or from CI without it would create the workflows again.
 
 ```text
-lift deploy → https://your-n8n.example.com
+lift deploy → prod (https://your-n8n.example.com)
 ~ updated        crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = skipped        daily-report   unchanged
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
@@ -155,12 +192,12 @@ boilerlift.lock.json updated — commit it
 - If `boilerlift.lock.json` cannot be written after a create, the run stops (exit 7): the error names the created id, and the hint says what to add to the file by hand. An invalid `boilerlift.lock.json` stops `deploy` before any call (exit 1).
 - Workflows tagged `boilerlift:<stable-name>` by earlier versions are not taken over: with no record, `deploy` creates them again. Their tags stay; delete or archive the old copies in the n8n editor.
 - After the summary, stderr recaps the failed and not-processed workflows and the next step.
-- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `recreated`, `updated`, `skipped`, `restored`, `failed`, `not-processed`), a `previousId` when it was recreated and, when it failed, an `error` with `call`, `detail` and `hint`; plus `dryRun` (`true` under `--dry-run`), `summary`, `warnings`, `lockFile` (`{ path, changed }`), `exitCode`, and a top-level `error` only when the whole run stopped.
+- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `recreated`, `updated`, `skipped`, `restored`, `failed`, `not-processed`), a `previousId` when it was recreated and, when it failed, an `error` with `call`, `detail` and `hint`; plus `target`, `instance`, `dryRun` (`true` under `--dry-run`), `summary`, `warnings`, `lockFile` (`{ path, changed }`), `exitCode`, and a top-level `error` only when the whole run stopped. With `--all`, the report is `{ "targets": [{ "target": "dev", … }, …], "exitCode": … }`. A config error prints `{ "error", "availableTargets", "exitCode" }`.
 
 | Exit code | Meaning                                                                                                                |
 | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | 0         | Every workflow delivered, or nothing to deploy                                                                         |
-| 1         | Usage error, missing or invalid configuration, invalid workflow files, or an unexpected error (printed with its stack) |
+| 1         | Usage error, missing or invalid configuration, targets sharing a workflow on one instance, invalid workflow files, or an unexpected error (printed with its stack) |
 | 3         | The instance cannot be reached, or does not answer like the n8n public API                                             |
 | 4         | The API key is rejected                                                                                                |
 | 5         | At least one workflow failed; the others were delivered                                                                |
@@ -172,7 +209,7 @@ boilerlift.lock.json updated — commit it
 `lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would recreate`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n older than 2.35.0) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
 
 ```text
-lift deploy --dry-run → https://your-n8n.example.com
+lift deploy --dry-run → prod (https://your-n8n.example.com)
 ~ would update   crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = would skip     daily-report   unchanged
 + would create   invoice-sync   workflows/invoice-sync.workflow.ts
@@ -184,7 +221,7 @@ boilerlift.lock.json would update — commit it after lift deploy
 
 ## Status
 
-Early stage, best-effort support. Multi-environment support (dev, staging, prod) and drift detection are on the roadmap.
+Early stage, best-effort support. Promoting workflows between targets and drift detection are on the roadmap.
 
 > Boilerlift is an independent open source project. It is not affiliated with, endorsed by, or sponsored by n8n GmbH.
 
@@ -196,7 +233,7 @@ npm run verify   # lint, typecheck, tests
 npm run build    # compile into dist/
 ```
 
-`npm start` builds, then runs `debug/main.ts` against `dist/` as an external consumer would. With no argument it runs a real `lift deploy` of `debug/workflows` to the instance in `debug/.env`: point that file at a test instance.
+`npm start` builds, then runs `debug/main.ts` against `dist/` as an external consumer would. With no argument it runs a real `lift deploy` of `debug/workflows` to the target in `debug/boilerlift.config.ts`, whose url and API key come from `debug/.env`: point it at a test instance.
 
 ## License
 

@@ -1,23 +1,25 @@
 import { readFileSync } from 'node:fs';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CommandContext, WorkflowFile } from '#src/cli/cli.model';
+import { parseEnv } from 'node:util';
+import { CommandContext, ProjectConfigFile, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
 import { isRecord } from '#src/core/common/is-record';
+import { CONFIG_FILE } from '#src/core/config/project-config';
 import { Result, err, ok } from '#src/core/common/result';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
- * `fetch`, the Boilerlift version, and the `.env` file, workflow files and lock file of `cwd`.
+ * `fetch`, the Boilerlift version, and the project config (with its `.env`), workflow files and lock file of `cwd`.
  */
 export function nodeContext(cwd: string): CommandContext {
   return {
     version: packageVersion(),
     registry: COMMANDS,
-    env: process.env,
-    dotEnv: readDotEnv(join(cwd, '.env')),
+    loadProjectConfig: () => loadProjectConfig(join(cwd, CONFIG_FILE), join(cwd, '.env')),
+    isDirectory: (path) => isDirectory(resolve(cwd, path)),
     nodeVersion: process.versions.node,
     fetch: globalThis.fetch,
     loadWorkflowFiles: (dir) => loadWorkflowFiles(cwd, dir),
@@ -42,6 +44,53 @@ function readDotEnv(path: string): string | undefined {
   } catch (error) {
     if (isMissingFile(error)) {
       return undefined;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Imports the config file, once the variables of `.env` are in `process.env` so the file can read them. A variable
+ * already set, and not blank, keeps its value. Node 22.18 and later strip TypeScript types natively, so the file
+ * imports as is.
+ */
+async function loadProjectConfig(path: string, dotEnvPath: string): Promise<ProjectConfigFile> {
+  if (!(await isFile(path))) {
+    return { kind: 'missing' };
+  }
+  const dotEnv = readDotEnv(dotEnvPath);
+  if (dotEnv !== undefined) {
+    for (const [key, value] of Object.entries(parseEnv(dotEnv))) {
+      if (value !== undefined && (process.env[key] ?? '').trim() === '') {
+        process.env[key] = value;
+      }
+    }
+  }
+  try {
+    const module: unknown = await import(pathToFileURL(path).href);
+    return { kind: 'loaded', content: isRecord(module) ? module.default : undefined };
+  } catch (error) {
+    return { kind: 'unreadable', reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch (error) {
+    if (isMissingFile(error) || (isRecord(error) && error.code === 'ENOTDIR')) {
+      return false;
     }
     throw error;
   }

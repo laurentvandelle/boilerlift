@@ -13,6 +13,7 @@ const echoCommand: CommandDefinition = defineCommand({
   summary: 'Echo the parsed input',
   usage: 'lift echo [options]',
   allowPositionals: false,
+  targets: false,
   options: {
     name: { type: 'string', short: 'n', description: 'Name to echo' },
     loud: { type: 'boolean', description: 'Shout' },
@@ -27,13 +28,25 @@ const throwingCommand: CommandDefinition = defineCommand({
   summary: 'Throw',
   usage: 'lift boom',
   allowPositionals: false,
+  targets: false,
   options: {},
   run: () => Promise.reject(new Error('EACCES: permission denied, scandir workflows')),
 });
 
+/** A command that runs on targets: it prints the selection runCli handed it. */
+const targetCommand: CommandDefinition = defineCommand({
+  name: 'aim',
+  summary: 'Print the selected targets',
+  usage: 'lift aim',
+  allowPositionals: false,
+  targets: true,
+  options: {},
+  run: ({ target }) => Promise.resolve({ exitCode: 0, stdout: `${JSON.stringify(target)}\n`, stderr: '' }),
+});
+
 const ctx: CommandContext = fakeContext({
   version: '1.2.3',
-  registry: [helpCommand, versionCommand, echoCommand, throwingCommand],
+  registry: [helpCommand, versionCommand, echoCommand, throwingCommand, targetCommand],
 });
 const GLOBAL_HELP = renderGlobalHelp(ctx.registry);
 
@@ -57,8 +70,10 @@ Commands:
   deploy   Deliver your workflows to your n8n instance as drafts
 
 Options:
-  -h, --help     Show this help
-  -v, --version  Print the Boilerlift version
+  -h, --help           Show this help
+  -v, --version        Print the Boilerlift version
+  -t, --target <name>  Run on this target of boilerlift.config.ts
+      --all            Run on every target, in the order boilerlift.config.ts declares them
 
 Run \`lift help <command>\` for the options of one command.
 \`boilerlift\` is an alias of \`lift\`.
@@ -178,5 +193,49 @@ describe('crashResult', () => {
     const result = crashResult('plain string');
 
     expect(result).toEqual({ exitCode: 1, stdout: '', stderr: 'plain string\n' });
+  });
+
+  test('Should exit 1 with a usage error when --target and --all are given together', async () => {
+    const result = await runCli(['aim', '--target', 'prod', '--all'], ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('--target and --all cannot be used together');
+  });
+
+  test('Should pass the named target to the command when --target follows the command name', async () => {
+    const result = await runCli(['aim', '-t', 'prod'], ctx);
+
+    expect(result.stdout).toBe('{"kind":"one","name":"prod"}\n');
+  });
+
+  test('Should pass the target options to the command when they come before the command name', async () => {
+    const result = await runCli(['--target', 'prod', 'aim'], ctx);
+
+    expect(result.stdout).toBe('{"kind":"one","name":"prod"}\n');
+  });
+
+  test('Should select every target when --all is given', async () => {
+    const result = await runCli(['--all', 'aim'], ctx);
+
+    expect(result.stdout).toBe('{"kind":"all"}\n');
+  });
+
+  test('Should select the default target when neither --target nor --all is given', async () => {
+    const result = await runCli(['aim'], ctx);
+
+    expect(result.stdout).toBe('{"kind":"default"}\n');
+  });
+
+  test('Should reject --target as an unknown option when the command runs on no target', async () => {
+    const result = await runCli(['version', '--target', 'prod'], ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Unknown option '--target'");
+  });
+
+  test('Should list the target options in the help of a command when it runs on targets', async () => {
+    const result = await runCli(['aim', '--help'], ctx);
+
+    expect(result.stdout).toContain('-t, --target <name>  Run on this target of boilerlift.config.ts');
   });
 });

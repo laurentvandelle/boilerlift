@@ -11,7 +11,7 @@ export const DRAFT_PARAM = 'publishIfActive';
 export const MIN_N8N_VERSION = '2.35.0';
 
 /** The next step when the instance rejects the API key. */
-export const API_KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set N8N_API_KEY in .env';
+export const API_KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads';
 
 /** What an HTTP error from the public API means: the API key is rejected (401, 403), nothing is there (404), or other. */
 export function classifyHttpError(status: number): 'key-rejected' | 'not-found' | 'other' {

@@ -1,8 +1,9 @@
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
+import { BoilerliftConfig, ProjectConfigFile, TargetSelection } from '#src/core/config/config.model';
 import { Result } from '#src/core/common/result';
 
-export type { WorkflowFile };
+export type { BoilerliftConfig, ProjectConfigFile, TargetSelection, WorkflowFile };
 
 export interface CliResult {
   exitCode: ExitCode;
@@ -13,6 +14,8 @@ export interface CliResult {
 export interface CommandOption {
   type: 'boolean' | 'string';
   short?: string;
+  /** What the help shows as the value of a string option, `--target <name>`. Defaults to the option name. */
+  valueName?: string;
   description: string;
 }
 
@@ -36,10 +39,14 @@ export interface OptionValues<Options> {
   text(name: OptionNames<Options, 'string'>): string | undefined;
 }
 
-/** What a command built with defineCommand receives: option values typed by its declared options. */
+/**
+ * What a command built with defineCommand receives: option values typed by its declared options, and the targets
+ * that `--target` and `--all` select (`default` for a command that runs on no target).
+ */
 export interface TypedCommandInput<Options> {
   positionals: string[];
   options: OptionValues<Options>;
+  target: TargetSelection;
 }
 
 /** What defineCommand takes: a command whose `run` reads options typed by its `options`. */
@@ -48,6 +55,8 @@ export interface CommandSpec<Options extends Readonly<Record<string, CommandOpti
   summary: string;
   usage: string;
   allowPositionals: boolean;
+  /** True when the command runs on targets of the project config: it then takes `--target` and `--all`. */
+  targets: boolean;
   options: Options;
   run(input: TypedCommandInput<Options>, ctx: CommandContext): Promise<CliResult>;
 }
@@ -55,9 +64,14 @@ export interface CommandSpec<Options extends Readonly<Record<string, CommandOpti
 export interface CommandContext {
   version: string;
   registry: readonly CommandDefinition[];
-  env: Readonly<Record<string, string | undefined>>;
-  /** Raw text of `./.env`, or `undefined` when there is no file. */
-  dotEnv: string | undefined;
+  /**
+   * Imports `./boilerlift.config.ts` and returns its default export: `missing` when there is no file, `unreadable`
+   * with the reason when it cannot be imported. The variables of `./.env` are in the environment first, so the file
+   * can read them from `process.env`; a variable already set keeps its value.
+   */
+  loadProjectConfig(): Promise<ProjectConfigFile>;
+  /** True when `path`, relative to the current folder, is an existing folder. */
+  isDirectory(path: string): Promise<boolean>;
   nodeVersion: string;
   fetch: typeof fetch;
   /**
@@ -81,6 +95,8 @@ export interface CommandDefinition {
   summary: string;
   usage: string;
   allowPositionals: boolean;
+  /** True when the command takes `--target` and `--all`. */
+  targets: boolean;
   options: Readonly<Record<string, CommandOption>>;
   run(input: CommandInput, ctx: CommandContext): Promise<CliResult>;
 }

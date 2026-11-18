@@ -16,8 +16,8 @@ export function isWorkflowFilePath(path: string): boolean {
   return EXTENSIONS.some((extension) => path.endsWith(extension));
 }
 
-/** The file base name without `.workflow.ts` / `.json`. */
-function baseNameOf(path: string): string {
+/** The file base name without `.workflow.ts` / `.json`: the stable name of a workflow file, once `isStableName` accepts it. */
+export function baseNameOf(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
   const extension = EXTENSIONS.find((candidate) => base.endsWith(candidate));
   return extension === undefined ? base : base.slice(0, -extension.length);

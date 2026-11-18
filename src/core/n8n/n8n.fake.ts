@@ -281,3 +281,18 @@ function isWorkflowBody(value: unknown): value is N8nWorkflowBody {
     isRecord(value.settings)
   );
 }
+
+/**
+ * A `fetch` for several instances at once: each request goes to the `fakeN8n` of its origin (`https://dev.example.com`).
+ * A request to another origin is a bug in the test, so it throws.
+ */
+export function fakeN8nByOrigin(instances: Record<string, FakeN8n>): typeof fetch {
+  return (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const { origin } = new URL(input instanceof Request ? input.url : input);
+    const instance = instances[origin];
+    if (instance === undefined) {
+      return Promise.reject(new Error(`no fake n8n instance at ${origin}`));
+    }
+    return instance.fetch(input, init);
+  };
+}

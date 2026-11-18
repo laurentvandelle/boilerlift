@@ -50,7 +50,7 @@ function checkNode(nodeVersion: string): Check {
 
 async function checkUrl(client: CheckConnectionInput['client']): Promise<Check> {
   const result = await client.checkHealth();
-  const hint = 'Check N8N_URL: it must be the root URL of your n8n instance, for example https://your-n8n.example.com';
+  const hint = 'Check the url of the target in boilerlift.config.ts: it must be the root URL of your n8n instance, for example https://your-n8n.example.com';
   if (result.ok) {
     return { name: 'url', status: 'ok', detail: `reachable (${result.value.call} → ${result.value.status})` };
   }
@@ -80,7 +80,7 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
       name: 'apiKey',
       status: 'failed',
       detail: `unreachable: ${failure.reason}`,
-      hint: 'Check N8N_URL and your network, then run ping again',
+      hint: 'Check the url of the target and your network, then run ping again',
       exitCode: EXIT_UNREACHABLE,
     };
   }
@@ -93,7 +93,7 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
       name: 'apiKey',
       status: 'failed',
       detail: `public API not found at ${API_PATH} (${call})`,
-      hint: 'Check N8N_URL, or whether the public API is enabled on the instance',
+      hint: 'Check the url of the target, or whether the public API is enabled on the instance',
       exitCode: EXIT_UNREACHABLE,
     };
   case 'other':
@@ -101,7 +101,7 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
       name: 'apiKey',
       status: 'failed',
       detail: `unexpected answer (${call})`,
-      hint: 'Check that N8N_URL points to an n8n instance and that it is running',
+      hint: 'Check that the url of the target points to an n8n instance and that it is running',
       exitCode: EXIT_UNREACHABLE,
     };
   }
@@ -109,7 +109,7 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
 
 function warningsFor(url: string): string[] {
   if (url.toLowerCase().startsWith('http://')) {
-    return ['N8N_URL uses http://: the API key is sent unencrypted. Use https:// outside local development.'];
+    return ['The url uses http://: the API key is sent unencrypted. Use https:// outside local development.'];
   }
   return [];
 }

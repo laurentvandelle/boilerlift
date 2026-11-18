@@ -1,16 +1,24 @@
 import { describe, expect, test } from 'vitest';
 import { CommandContext, CommandInput } from '#src/cli/cli.model';
-import { FakeLockFile, fakeContext, fakeLockFile } from '#src/cli/cli.fake';
+import {
+  FAKE_DEV_URL as DEV_URL,
+  FAKE_PROD_URL as PROD_URL,
+  FakeLockFile,
+  fakeContext,
+  fakeLockFile,
+  fakeProjectConfig,
+  fakeSingleTarget,
+  fakeTwoTargets,
+} from '#src/cli/cli.fake';
 import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
 import { fakeLockText } from '#src/core/deliver/lock-file.fake';
-import { FakeN8n, fakeN8n, fakeN8nWorkflow, httpError, invalidResponse } from '#src/core/n8n/n8n.fake';
+import { FakeN8n, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, invalidResponse, unreachable } from '#src/core/n8n/n8n.fake';
 
 const TEXT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
 const DRY_RUN = { positionals: [], values: { 'dry-run': true } };
 const DRY_RUN_JSON = { positionals: [], values: { 'dry-run': true, json: true } };
-const ENV = { N8N_URL: 'https://n8n.example.com', N8N_API_KEY: 'secret' };
 
 const INVOICE = fakeLocalWorkflow('invoice-sync', { path: 'workflows/invoice-sync.workflow.ts', name: 'Invoice sync' });
 const CRM = fakeLocalWorkflow('crm-import', { path: 'workflows/crm/crm-import.json', name: 'CRM import' });
@@ -19,15 +27,15 @@ const NEW = fakeLocalWorkflow('new', { name: 'New' });
 const FILES = [INVOICE, CRM, REPORT].map(fakeWorkflowFile);
 const HAND_ADDED = { id: 'h', name: 'hand-added' };
 
-const KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set N8N_API_KEY in .env';
+const KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads';
 const RETRY_HINT = 'Check the workflow file and the n8n instance (n8n 2.35.0 or later), then run deploy again';
 
-/** A deploy context on ENV's instance, with `lock` as the lock file: an empty one unless the test seeds it. */
+/** A deploy context on the single target `dev`, with `lock` as the lock file: an empty one unless the test seeds it. */
 function context(overrides: Partial<CommandContext>, lock: FakeLockFile = fakeLockFile()): CommandContext {
-  return fakeContext({ registry: [deployCommand], env: ENV, ...lock.context, ...overrides });
+  return fakeContext({ registry: [deployCommand], loadProjectConfig: fakeSingleTarget(), ...lock.context, ...overrides });
 }
 
-/** A lock file that records `entries` (stable name → n8n id) for ENV's instance. */
+/** A lock file that records `entries` (stable name → n8n id) for the instance of the single target. */
 function recorded(entries: Record<string, string>): FakeLockFile {
   return fakeLockFile({ text: fakeLockText(entries) });
 }
@@ -82,7 +90,7 @@ describe('deployCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy → https://n8n.example.com
+      stdout: `lift deploy → dev (https://n8n.example.com)
 ~ updated        crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = skipped        daily-report   unchanged
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
@@ -144,6 +152,7 @@ boilerlift.lock.json updated — commit it
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
+      target: 'dev',
       instance: 'https://n8n.example.com',
       dryRun: false,
       results: [
@@ -165,7 +174,7 @@ boilerlift.lock.json updated — commit it
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(5);
-    expect(result.stdout).toBe(`lift deploy → https://n8n.example.com
+    expect(result.stdout).toBe(`lift deploy → dev (https://n8n.example.com)
 ✗ failed         crm-import     PUT /api/v1/workflows/crm1 → HTTP 500: boom
                  → ${RETRY_HINT}
 + created        daily-report   workflows/daily-report.json
@@ -217,7 +226,7 @@ Next: fix each failure with the hint under its line, then run deploy again.
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(4);
-    expect(result.stdout).toBe(`lift deploy → https://n8n.example.com
+    expect(result.stdout).toBe(`lift deploy → dev (https://n8n.example.com)
 ✗ failed         crm-import     POST /api/v1/workflows → HTTP 401: boom
                  → ${KEY_HINT}
 - not-processed  daily-report   not processed
@@ -260,7 +269,7 @@ Next: ${KEY_HINT}.
 
     expect(result).toEqual({
       exitCode: 6,
-      stdout: 'lift deploy → https://n8n.example.com\n',
+      stdout: 'lift deploy → dev (https://n8n.example.com)\n',
       stderr: `✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required
   → Upgrade the instance to n8n 2.35.0 or later, then run deploy again
 Nothing was written to n8n.
@@ -284,6 +293,7 @@ Nothing was written to n8n.
     const result = await deployCommand.run(JSON_INPUT, ctx);
 
     expect(JSON.parse(result.stdout)).toEqual({
+      target: 'dev',
       instance: 'https://n8n.example.com',
       dryRun: false,
       results: [],
@@ -308,7 +318,7 @@ Nothing was written to n8n.
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy → https://n8n.example.com
+      stdout: `lift deploy → dev (https://n8n.example.com)
 ! restored       daily-report   workflows/daily-report.json (unpublished draft)
 ⚠ daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
 0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
@@ -374,14 +384,13 @@ Nothing was written to n8n.
     );
   });
 
-  test('Should exit 1 with the same message as ping when the configuration is missing', async () => {
-    const ctx = context({ env: {}, loadWorkflowFiles: () => Promise.resolve(FILES) });
+  test('Should exit 1 and name the target when its API key is missing', async () => {
+    const ctx = context({ loadProjectConfig: fakeSingleTarget('https://n8n.example.com', ''), loadWorkflowFiles: () => Promise.resolve(FILES) });
 
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Missing N8N_URL and N8N_API_KEY.');
-    expect(result.stderr).toContain('  N8N_URL=https://your-n8n.example.com\n');
+    expect(result.stderr).toContain('Missing the API key of target "dev": its "apiKey" in boilerlift.config.ts is empty.');
   });
 
   test('Should show what deploy would do when --dry-run is set', async () => {
@@ -393,7 +402,7 @@ Nothing was written to n8n.
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy --dry-run → https://n8n.example.com
+      stdout: `lift deploy --dry-run → dev (https://n8n.example.com)
 ~ would update   crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = would skip     daily-report   unchanged
 + would create   invoice-sync   workflows/invoice-sync.workflow.ts
@@ -434,6 +443,7 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
+      target: 'dev',
       instance: 'https://n8n.example.com',
       dryRun: true,
       results: [
@@ -455,7 +465,7 @@ boilerlift.lock.json would update — commit it after lift deploy
     const result = await deployCommand.run(DRY_RUN, ctx);
 
     expect(result.exitCode).toBe(6);
-    expect(result.stdout).toBe('lift deploy --dry-run → https://n8n.example.com\n');
+    expect(result.stdout).toBe('lift deploy --dry-run → dev (https://n8n.example.com)\n');
     expect(result.stderr).toContain('✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required');
     expect(result.stderr).toContain('Nothing was written to n8n.');
   });
@@ -481,13 +491,13 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     const dryRun = options['dry-run'];
 
-    expect(usage).toContain('lift deploy [--dry-run] [--json]');
+    expect(usage).toContain('lift deploy [--target <name> | --all] [--dry-run] [--json]');
     expect(usage).toContain('It exits with the same codes as a real deploy.');
     expect(dryRun).toEqual({ type: 'boolean', description: 'Show what deploy would do; write nothing' });
   });
 
-  test('Should exit 1 and send nothing when N8N_URL uses another scheme than http or https', async () => {
-    const ctx = context({ env: { N8N_URL: 'ftp://n8n.example.com', N8N_API_KEY: 'secret' }, loadWorkflowFiles: () => Promise.resolve(FILES) });
+  test('Should exit 1 and send nothing when the url of the target uses another scheme than http or https', async () => {
+    const ctx = context({ loadProjectConfig: fakeSingleTarget('ftp://n8n.example.com'), loadWorkflowFiles: () => Promise.resolve(FILES) });
 
     const result = await deployCommand.run(TEXT, ctx);
 
@@ -495,9 +505,8 @@ boilerlift.lock.json would update — commit it after lift deploy
       exitCode: 1,
       stdout: '',
       stderr:
-        'Invalid N8N_URL "ftp://n8n.example.com" (from env): it must be an http:// or https:// URL.\n' +
-        'Fix it in your environment, for example:\n' +
-        '  N8N_URL=https://your-n8n.example.com\n',
+        'Invalid boilerlift.config.ts:\n' +
+        '  ✗ target "dev": "url" must be an http:// or https:// URL, found "ftp://n8n.example.com"\n',
     });
   });
 
@@ -512,7 +521,7 @@ boilerlift.lock.json would update — commit it after lift deploy
       'Failed: crm-import.\n' +
         'Stopped: GET /api/v1/workflows/crm1 → unexpected answer (HTTP 200): the body is not JSON\n' +
         'Not processed: daily-report, invoice-sync.\n' +
-        'Next: Check that N8N_URL points to an n8n instance (n8n 2.35.0 or later), then run deploy again.\n',
+        'Next: Check that the url of the target points to an n8n instance (n8n 2.35.0 or later), then run deploy again.\n',
     );
   });
   test('Should update a recorded workflow by its id when it was renamed in n8n', async () => {
@@ -585,7 +594,7 @@ boilerlift.lock.json would update — commit it after lift deploy
     const result = await deployCommand.run(TEXT, ctx);
 
     expect({ stdout: result.stdout, lock: lock.text() }).toEqual({
-      stdout: `lift deploy → https://n8n.example.com
+      stdout: `lift deploy → dev (https://n8n.example.com)
 * recreated      crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
 0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
 boilerlift.lock.json updated — commit it
@@ -613,7 +622,7 @@ boilerlift.lock.json updated — commit it
 
     const result = await deployCommand.run(DRY_RUN, ctx);
 
-    expect(result.stdout).toBe(`lift deploy --dry-run → https://n8n.example.com
+    expect(result.stdout).toBe(`lift deploy --dry-run → dev (https://n8n.example.com)
 * would recreate crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
 Would: 0 create, 1 recreate, 0 update, 0 restore, 0 skip, 0 fail.
 Dry run: nothing was written. Run lift deploy to apply.
@@ -654,7 +663,7 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     expect(result).toEqual({
       exitCode: 7,
-      stdout: `lift deploy → https://n8n.example.com
+      stdout: `lift deploy → dev (https://n8n.example.com)
 ✗ failed         crm-import     write boilerlift.lock.json → workflow w1 was created for crm-import, but boilerlift.lock.json could not be written: EACCES: permission denied
                  → Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boilerlift.lock.json by hand and commit it, then run deploy again
 - not-processed  daily-report   not processed
@@ -705,5 +714,192 @@ Next: Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boi
 
     expect(lines.filter((line) => !usage.includes(line))).toEqual([]);
     expect(usage).not.toContain('boilerlift:');
+  });
+});
+
+const DEV_FILES = [fakeWorkflowFile(fakeLocalWorkflow('invoice-sync', { path: 'dev/invoice-sync.workflow.ts' }))];
+const PROD_FILES = [fakeWorkflowFile(fakeLocalWorkflow('crm-import', { path: 'prod/crm-import.json' }))];
+
+/** The files of `./dev` and `./prod`, by folder. */
+function twoFolders(dir: string): Promise<ReturnType<typeof fakeWorkflowFile>[]> {
+  return Promise.resolve(dir === './dev' ? DEV_FILES : dir === './prod' ? PROD_FILES : []);
+}
+
+function targetsContext(overrides: Partial<CommandContext>, lock: FakeLockFile = fakeLockFile()): CommandContext {
+  return context({ loadProjectConfig: fakeTwoTargets(), loadWorkflowFiles: twoFolders, ...overrides }, lock);
+}
+
+const ALL: CommandInput = { positionals: [], values: { all: true } };
+const ALL_JSON: CommandInput = { positionals: [], values: { all: true, json: true } };
+
+describe('deployCommand targets', () => {
+  test('Should exit 1 and print a starter config to copy when there is no boilerlift.config.ts', async () => {
+    const ctx = context({ loadProjectConfig: () => Promise.resolve({ kind: 'missing' }) });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('No boilerlift.config.ts in this folder.');
+    expect(result.stderr).toContain("import { defineConfig } from 'boilerlift';");
+    expect(result.stderr).toContain('      url: process.env.N8N_URL,\n      apiKey: process.env.N8N_API_KEY,\n      workflows: \'./workflows\',');
+  });
+
+  test('Should exit 1, send nothing and list the targets when several are declared and none is named', async () => {
+    const n8n = fakeN8n();
+    const ctx = targetsContext({ fetch: n8n.fetch });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('declares several targets, and the command names none.\nAvailable targets: dev, prod\nName one with --target <name>, or run on every one with --all.\n');
+    expect(result.stderr).toContain('Available targets: dev, prod\n');
+    expect(n8n.requests).toEqual([]);
+  });
+
+  test('Should list the available targets in the JSON when --json names an unknown target', async () => {
+    const ctx = targetsContext({});
+
+    const result = await deployCommand.run({ positionals: [], values: { target: 'staging', json: true } }, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ error: { kind: 'unknown-target' }, availableTargets: ['dev', 'prod'], exitCode: 1 });
+  });
+
+  test('Should deploy only to the instance of the target --target names when several are declared', async () => {
+    const dev = fakeN8n();
+    const prod = fakeN8n();
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
+
+    const result = await deployCommand.run({ positionals: [], values: { target: 'prod' } }, ctx);
+
+    expect(result.exitCode).toBe(0);
+    expect(prod.workflows.map(({ name }) => name)).toEqual(['Workflow crm-import']);
+    expect(dev.requests).toEqual([]);
+  });
+
+  test('Should exit 1 and send nothing when the workflows folder of the target does not exist', async () => {
+    const n8n = fakeN8n();
+    const ctx = context({ fetch: n8n.fetch, isDirectory: () => Promise.resolve(false) });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: '',
+      stderr:
+        'The workflows folder of target "dev", ./workflows, does not exist.\n' +
+        'Create it, or fix "workflows" for this target in boilerlift.config.ts.\n' +
+        'Available targets: dev\n',
+    });
+    expect(n8n.requests).toEqual([]);
+  });
+
+  test('Should exit 1 and send nothing to any target when --all meets a target whose API key is missing', async () => {
+    const dev = fakeN8n();
+    const config = fakeProjectConfig({
+      targets: {
+        dev: { url: DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+        prod: { url: PROD_URL, apiKey: undefined, workflows: './prod' },
+      },
+    });
+    const ctx = targetsContext({ loadProjectConfig: config, fetch: dev.fetch });
+
+    const result = await deployCommand.run(ALL, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Missing the API key of target "prod"');
+    expect(dev.requests).toEqual([]);
+  });
+
+  test('Should print one block per target, then a recap line per target, when --all deploys every target', async () => {
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: fakeN8n(), [PROD_URL]: fakeN8n() }) });
+
+    const result = await deployCommand.run(ALL, ctx);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('── dev (https://dev.example.com)\nlift deploy → dev (https://dev.example.com)\n+ created');
+    expect(result.stdout).toContain('── prod (https://prod.example.com)\nlift deploy → prod (https://prod.example.com)\n+ created');
+    expect(result.stdout).toContain(
+      'Targets:\n' +
+        '  ✓ dev   https://dev.example.com   1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.\n' +
+        '  ✓ prod  https://prod.example.com  1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.\n',
+    );
+  });
+
+  test('Should go on to the next target and exit with the worst code when --all meets an unreachable target', async () => {
+    const dev = fakeN8n({ failures: [unreachable('GET /api/v1/openapi.yml', 'connection refused')] });
+    const prod = fakeN8n();
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
+
+    const result = await deployCommand.run(ALL, ctx);
+
+    expect(result.exitCode).toBe(3);
+    expect(prod.workflows.map(({ name }) => name)).toEqual(['Workflow crm-import']);
+    expect(result.stdout).toContain('  ✗ dev   https://dev.example.com   stopped: GET /api/v1/openapi.yml → unreachable: connection refused');
+    expect(result.stderr).toContain('── dev (https://dev.example.com)\n✗ GET /api/v1/openapi.yml → unreachable: connection refused');
+  });
+
+  test('Should record each target under its own instance in the lock file when --all deploys both', async () => {
+    const lock = fakeLockFile();
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: fakeN8n(), [PROD_URL]: fakeN8n() }) }, lock);
+
+    await deployCommand.run(ALL, ctx);
+
+    expect(JSON.parse(lock.text() ?? '{}')).toEqual({
+      version: 1,
+      instances: { [DEV_URL]: { 'invoice-sync': { n8nId: 'w1' } }, [PROD_URL]: { 'crm-import': { n8nId: 'w1' } } },
+    });
+  });
+
+  test('Should print one entry per target and the worst exit code when --all --json deploys', async () => {
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: fakeN8n(), [PROD_URL]: fakeN8n() }) });
+
+    const result = await deployCommand.run(ALL_JSON, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      targets: [
+        { target: 'dev', instance: DEV_URL, results: [{ stableName: 'invoice-sync', action: 'created' }], exitCode: 0 },
+        { target: 'prod', instance: PROD_URL, results: [{ stableName: 'crm-import', action: 'created' }], exitCode: 0 },
+      ],
+      exitCode: 0,
+    });
+  });
+
+  test('Should exit 1, send nothing and name both targets and the file when two targets on one url hold the same stable name', async () => {
+    const n8n = fakeN8n();
+    const config = fakeProjectConfig({
+      targets: {
+        dev: { url: DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+        demo: { url: `${DEV_URL}/`, apiKey: 'dev-secret', workflows: './demo' },
+      },
+    });
+    const demoFiles = [fakeWorkflowFile(fakeLocalWorkflow('invoice-sync', { path: 'demo/invoice-sync.json' }))];
+    const loadWorkflowFiles = (dir: string): Promise<ReturnType<typeof fakeWorkflowFile>[]> => Promise.resolve(dir === './dev' ? DEV_FILES : demoFiles);
+    const ctx = targetsContext({ loadProjectConfig: config, loadWorkflowFiles, fetch: n8n.fetch });
+
+    const result = await deployCommand.run({ positionals: [], values: { target: 'dev' } }, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      '✗ invoice-sync  targets dev (dev/invoice-sync.workflow.ts) and demo (demo/invoice-sync.json) both deploy it to https://dev.example.com',
+    );
+    expect(n8n.requests).toEqual([]);
+  });
+
+  test('Should deploy the same folder to both instances when two targets share a workflows folder', async () => {
+    const dev = fakeN8n();
+    const prod = fakeN8n();
+    const config = fakeProjectConfig({
+      targets: {
+        dev: { url: DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+        prod: { url: PROD_URL, apiKey: 'prod-secret', workflows: './dev' },
+      },
+    });
+    const ctx = targetsContext({ loadProjectConfig: config, fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
+
+    const result = await deployCommand.run(ALL, ctx);
+
+    expect(result.exitCode).toBe(0);
+    expect([dev, prod].map((n8n) => n8n.workflows.map(({ name }) => name))).toEqual([['Workflow invoice-sync'], ['Workflow invoice-sync']]);
   });
 });

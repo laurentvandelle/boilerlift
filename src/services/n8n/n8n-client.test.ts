@@ -4,8 +4,8 @@ import { createN8nClient } from '#src/services/n8n/n8n-client';
 import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 
 const CONFIG: ConnectionConfig = {
-  url: { value: 'https://n8n.example.com', source: 'env' },
-  apiKey: { value: 'secret', source: 'env' },
+  url: { value: 'https://n8n.example.com', source: 'boilerlift.config.ts' },
+  apiKey: { value: 'secret', source: 'boilerlift.config.ts' },
 };
 
 interface Call {

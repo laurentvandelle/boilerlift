@@ -182,6 +182,7 @@ export default tseslint.config(
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
         { category: 'define-command', pattern: 'src/cli/define-command.ts' },
+        { category: 'targets-render', pattern: 'src/cli/targets.render.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'n8n-client', pattern: 'src/services/n8n/n8n-client.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },
@@ -250,8 +251,9 @@ export default tseslint.config(
             },
             {
               // defineCommand builds each command's CommandDefinition, with option values typed by its options.
+              // targets.render.ts lays out the output of a command that runs on targets (--target, --all).
               from: { element: { type: 'cli-command' } },
-              allow: { to: { file: { categories: ['cli-model', 'define-command'] } } },
+              allow: { to: { file: { categories: ['cli-model', 'define-command', 'targets-render'] } } },
             },
             {
               from: { element: { type: 'cli-command' } },
@@ -263,15 +265,16 @@ export default tseslint.config(
               from: { element: { type: 'cli' } },
               allow: { to: { element: { type: ['cli', 'cli-command', ...CORE] } } },
             },
-            // 4. Entry points: bin runs the CLI. index (the package entry) re-exports what workflow files
-            // import from 'boilerlift' (defineWorkflow and the workflow types), all from compile.
+            // 4. Entry points: bin runs the CLI. index (the package entry) re-exports what workflow files and
+            // boilerlift.config.ts import from 'boilerlift': defineWorkflow and the workflow types from compile,
+            // defineConfig and its types from config.
             {
               from: { file: { categories: 'bin' } },
               allow: { to: { element: { type: 'cli' } } },
             },
             {
               from: { file: { categories: 'index' } },
-              allow: { to: { element: { type: 'compile' } } },
+              allow: { to: { element: { type: ['compile', 'config'] } } },
             },
             // 5. The allowlist already blocks these edges. These policies only name the rule in the error.
             {

@@ -5,8 +5,8 @@ import { fakeN8n, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { ApiFailure } from '#src/core/n8n/n8n.model';
 
 const HTTPS_CONFIG: ConnectionConfig = {
-  url: { value: 'https://n8n.example.com', source: 'env' },
-  apiKey: { value: 'secret', source: 'env' },
+  url: { value: 'https://n8n.example.com', source: 'boilerlift.config.ts' },
+  apiKey: { value: 'secret', source: 'boilerlift.config.ts' },
 };
 
 describe('checkConnection', () => {
@@ -58,7 +58,7 @@ describe('checkConnection', () => {
     expect(n8n.calls).toEqual([]);
   });
 
-  test('Should fail with exit 3 and the N8N_URL hint when the URL is unreachable', async () => {
+  test('Should fail with exit 3 and the url hint when the URL is unreachable', async () => {
     const n8n = fakeN8n({ failures: [unreachable('GET /healthz', 'connection refused')] });
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
@@ -66,7 +66,7 @@ describe('checkConnection', () => {
     expect(report.exitCode).toBe(3);
     const check = report.checks[1];
     expect(check).toMatchObject({ status: 'failed', detail: 'unreachable: connection refused' });
-    expect(check?.status === 'failed' ? check.hint : '').toContain('Check N8N_URL');
+    expect(check?.status === 'failed' ? check.hint : '').toContain('Check the url of the target');
   });
 
   test('Should skip the API key check when the URL is unreachable', async () => {
@@ -96,7 +96,7 @@ describe('checkConnection', () => {
     expect(report.checks[2]).toMatchObject({
       status: 'failed',
       detail: `rejected (GET /api/v1/workflows → ${status})`,
-      hint: 'Create a key in n8n → Settings → n8n API, then set N8N_API_KEY in .env',
+      hint: 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads',
     });
   });
 
@@ -124,7 +124,7 @@ describe('checkConnection', () => {
   });
 
   test('Should warn without failing when the URL uses http://', async () => {
-    const config: ConnectionConfig = { ...HTTPS_CONFIG, url: { value: 'http://localhost:5678', source: '.env' } };
+    const config: ConnectionConfig = { ...HTTPS_CONFIG, url: { value: 'http://localhost:5678', source: 'boilerlift.config.ts' } };
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config, client: fakeN8n().client });
 

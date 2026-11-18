@@ -6,7 +6,7 @@ import { LockWriter } from '#src/core/deliver/lock-file.model';
 import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
-/** The instance the fake lock file records for, as `resolveConnectionConfig` cleans up `N8N_URL`. */
+/** The instance the fake lock file records for, as `parseProjectConfig` cleans up the url of a target. */
 export const FAKE_INSTANCE = 'https://n8n.example.com';
 
 /** Managed ids as a test writes them, `{ 'crm-import': 'abc' }`, through the same guards as the code. */

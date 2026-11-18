@@ -58,14 +58,14 @@ export function describeFailure(failure: ApiFailure): DeployError {
       kind: 'unreachable',
       call: failure.call,
       detail: `unreachable: ${failure.reason}`,
-      hint: 'Run lift ping to check N8N_URL and your network, then run deploy again',
+      hint: 'Run lift ping to check the url of the target and your network, then run deploy again',
     };
   case 'invalid-response':
     return {
       kind: 'unreachable',
       call: failure.call,
       detail: `unexpected answer (HTTP ${failure.status}): ${failure.detail}`,
-      hint: `Check that N8N_URL points to an n8n instance (n8n ${MIN_N8N_VERSION} or later), then run deploy again`,
+      hint: `Check that the url of the target points to an n8n instance (n8n ${MIN_N8N_VERSION} or later), then run deploy again`,
     };
   case 'http-error': {
     const detail = `HTTP ${failure.status}${failure.message === undefined ? '' : `: ${failure.message}`}`;
