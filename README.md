@@ -116,28 +116,46 @@ workflows/
 
 Before anything is sent, `deploy` checks every file, `.workflow.ts` and `.json` alike, with the same rules as the editor: the workflow has a `name`, `nodes` and `connections`; every node has `name`, `type`, `typeVersion`, `position` and `parameters`; node names are unique; every connection goes from and to an existing node. One wrong file refuses the whole run, names the file and what is wrong, and exits 1.
 
-The file name without `.workflow.ts` / `.json` is the workflow's **stable name**: 1 to 16 lowercase letters, digits or dashes, unique across all folders. Boilerlift tags the workflow `boilerlift:<stable-name>` on the instance and finds it again by that tag, so renaming the workflow in n8n keeps the link (the name in the file wins on the next update); renaming the file makes a new workflow.
+The file name without `.workflow.ts` / `.json` is the workflow's **stable name**: 1 to 64 lowercase letters, digits or dashes, unique across all folders.
+
+When `deploy` creates a workflow, it records its n8n id in **`boilerlift.lock.json`** at the project root, under the instance (`N8N_URL`) and the stable name:
+
+```json
+{
+  "version": 1,
+  "instances": {
+    "https://your-n8n.example.com": {
+      "crm-import": { "n8nId": "7Hq2" }
+    }
+  }
+}
+```
+
+`deploy` finds your workflows by these ids only, never by name or tag. Renaming the workflow in n8n keeps the link (the name in the file wins on the next update); renaming the file makes a new workflow. A workflow on the instance that the lock file does not list is never touched, so several projects can share one instance. **Commit `boilerlift.lock.json`** after each deploy that changes it (the report then says `boilerlift.lock.json updated — commit it`): a deploy from another machine or from CI without it would create the workflows again.
 
 ```text
 lift deploy → https://your-n8n.example.com
-~ updated       crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= skipped       daily-report   unchanged
-+ created       invoice-sync   workflows/invoice-sync.workflow.ts
-! restored      lead-scoring   workflows/lead-scoring.json (unpublished draft)
+~ updated        crm-import     workflows/crm/crm-import.json (draft; published version still running)
+= skipped        daily-report   unchanged
++ created        invoice-sync   workflows/invoice-sync.workflow.ts
+! restored       lead-scoring   workflows/lead-scoring.json (unpublished draft)
 ⚠ lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
 1 created, 1 updated, 1 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
+boilerlift.lock.json updated — commit it
 ```
 
 - Before any write, `deploy` reads the instance's API spec (`GET /api/v1/openapi.yml`). If the instance cannot save drafts (older than n8n 2.35.0), it stops, changes nothing and exits 6.
-- New workflows are created and never published.
+- New workflows are created and never published, and their ids recorded in `boilerlift.lock.json`. Updates, skips, restores and dry runs never write it.
 - Changed workflows are updated as drafts: the published version keeps running until you publish in n8n.
 - Workflows whose current draft already matches the file are skipped, so a rerun changes nothing.
-- A workflow deleted in the n8n editor is only archived. `deploy` unarchives it and updates it as a draft (`restored`), with a warning: it stays unpublished until you publish it. This needs the `workflow:delete` scope on the API key. A workflow deleted through the API is gone for good and is simply created again.
-- When an archived copy and an unarchived workflow carry the same tag, the unarchived one is used and a warning names the archived copy.
-- A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered. Two unarchived workflows with the same `boilerlift:` tag fail only that stable name.
+- A workflow deleted in the n8n editor is only archived. `deploy` unarchives it and updates it as a draft (`restored`), with a warning: it stays unpublished until you publish it. This needs the `workflow:delete` scope on the API key. The lock file keeps its id.
+- A recorded workflow that n8n no longer has (deleted for good, so its id answers 404) is created again from code (`* recreated`), and its new id replaces the old one in the lock file.
+- A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered.
 - An unreachable instance or a rejected key stops the run: the workflows not yet processed are listed as `not-processed`.
+- If `boilerlift.lock.json` cannot be written after a create, the run stops (exit 7): the error names the created id, and the hint says what to add to the file by hand. An invalid `boilerlift.lock.json` stops `deploy` before any call (exit 1).
+- Workflows tagged `boilerlift:<stable-name>` by earlier versions are not taken over: with no record, `deploy` creates them again. Their tags stay; delete or archive the old copies in the n8n editor.
 - After the summary, stderr recaps the failed and not-processed workflows and the next step.
-- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `updated`, `skipped`, `restored`, `failed`, `not-processed`) and, when it failed, an `error` with `call`, `detail` and `hint`; plus `dryRun` (`true` under `--dry-run`), `summary`, `warnings`, `exitCode`, and a top-level `error` only when the whole run stopped.
+- `--json` prints the same report as JSON, for scripts and AI agents: each result has an `action` (`created`, `recreated`, `updated`, `skipped`, `restored`, `failed`, `not-processed`), a `previousId` when it was recreated and, when it failed, an `error` with `call`, `detail` and `hint`; plus `dryRun` (`true` under `--dry-run`), `summary`, `warnings`, `lockFile` (`{ path, changed }`), `exitCode`, and a top-level `error` only when the whole run stopped.
 
 | Exit code | Meaning                                                                                                                |
 | --------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -147,19 +165,21 @@ lift deploy → https://your-n8n.example.com
 | 4         | The API key is rejected                                                                                                |
 | 5         | At least one workflow failed; the others were delivered                                                                |
 | 6         | The instance is older than n8n 2.35.0: nothing was written                                                             |
+| 7         | A workflow was created but `boilerlift.lock.json` could not be written: the run stopped there                          |
 
 ### Dry run
 
-`lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n older than 2.35.0) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
+`lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would recreate`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n older than 2.35.0) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
 
 ```text
 lift deploy --dry-run → https://your-n8n.example.com
-~ would update  crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= would skip    daily-report   unchanged
-+ would create  invoice-sync   workflows/invoice-sync.workflow.ts
+~ would update   crm-import     workflows/crm/crm-import.json (draft; published version still running)
+= would skip     daily-report   unchanged
++ would create   invoice-sync   workflows/invoice-sync.workflow.ts
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
 Dry run: nothing was written. Run lift deploy to apply.
 n8n can still reject a write; this preview covers what reads can show.
+boilerlift.lock.json would update — commit it after lift deploy
 ```
 
 ## Status
