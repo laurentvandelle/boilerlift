@@ -3,7 +3,6 @@ import { CommandContext } from '#src/cli/cli.model';
 import {
   FAKE_DEV_URL as DEV_URL,
   FAKE_PROD_URL as PROD_URL,
-  FAKE_TARGET_KEYS as TWO_KEYS,
   fakeContext,
   fakeSingleTarget,
   fakeTwoTargets,
@@ -15,12 +14,11 @@ const INPUT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
 const ALL = { positionals: [], values: { all: true } };
 const API_KEY = 'super-secret-key';
-const ENV = { N8N_API_KEY: API_KEY };
 
 
-/** A ping context on the single target `dev` at https://n8n.example.com, its key in N8N_API_KEY. */
+/** A ping context on the single target `dev` at https://n8n.example.com, with API_KEY. */
 function context(overrides: Partial<CommandContext>): CommandContext {
-  return fakeContext({ registry: [pingCommand], nodeVersion: '24.1.0', env: ENV, loadProjectConfig: fakeSingleTarget(), ...overrides });
+  return fakeContext({ registry: [pingCommand], nodeVersion: '24.1.0', loadProjectConfig: fakeSingleTarget('https://n8n.example.com', API_KEY), ...overrides });
 }
 
 describe('pingCommand', () => {
@@ -31,11 +29,11 @@ describe('pingCommand', () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toContain("export default defineConfig({\n  targets: {\n    dev: {\n      url: 'https://your-n8n.example.com',");
+    expect(result.stderr).toContain('export default defineConfig({\n  targets: {\n    dev: {\n      url: process.env.N8N_URL,');
   });
 
-  test('Should exit 1 and name the variable to set when the API key of the target is missing', async () => {
-    const ctx = context({ env: {} });
+  test('Should exit 1 and name the target when its API key is missing', async () => {
+    const ctx = context({ loadProjectConfig: fakeSingleTarget('https://n8n.example.com', '  ') });
 
     const result = await pingCommand.run(INPUT, ctx);
 
@@ -43,9 +41,8 @@ describe('pingCommand', () => {
       exitCode: 1,
       stdout: '',
       stderr:
-        'Missing N8N_API_KEY, the API key of target "dev" (its apiKeyEnv in boilerlift.config.ts).\n' +
-        'Add this line to .env, or set it in your environment:\n' +
-        '  N8N_API_KEY=your-n8n-api-key\n',
+        'Missing the API key of target "dev": its "apiKey" in boilerlift.config.ts is empty.\n' +
+        'Set the environment variable it reads, in your environment or in .env (for example N8N_API_KEY=your-n8n-api-key).\n',
     });
   });
 
@@ -60,7 +57,7 @@ describe('pingCommand', () => {
       stderr: '',
       stdout: `lift ping → dev
   URL      https://n8n.example.com (from boilerlift.config.ts)
-  API key  •••• (N8N_API_KEY, from env)
+  API key  •••• (set, from boilerlift.config.ts)
 
 ✓ Node     24.1.0 (requires ≥ 22.18.0)
 ✓ URL      reachable (GET /healthz → 200)
@@ -88,16 +85,7 @@ All checks passed.
 
     expect(result.stdout).not.toContain(API_KEY);
     expect(result.stderr).not.toContain(API_KEY);
-    expect(result.stdout).toContain('API key  •••• (N8N_API_KEY, from env)');
-  });
-
-  test('Should read the API key from .env when the environment does not set it', async () => {
-    const n8n = fakeN8n();
-    const ctx = context({ env: {}, dotEnv: 'N8N_API_KEY=from-file\n', fetch: n8n.fetch });
-
-    const result = await pingCommand.run(INPUT, ctx);
-
-    expect(result.stdout).toContain('API key  •••• (N8N_API_KEY, from .env)');
+    expect(result.stdout).toContain('API key  •••• (set, from boilerlift.config.ts)');
   });
 
   test('Should exit 2 and show the failed Node check when Node is too old', async () => {
@@ -159,7 +147,7 @@ All checks passed.
     expect(result.exitCode).toBe(4);
     expect(result.stdout).toContain('✗ API key  rejected (GET /api/v1/workflows → 401)');
     expect(result.stdout).toContain(
-      '           → Create a key in n8n → Settings → n8n API, then set it in the variable that apiKeyEnv names, in .env or your environment',
+      '           → Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads',
     );
     expect(result.stderr).toBe('1 check failed. Exit code 4.\n');
   });
@@ -185,7 +173,7 @@ All checks passed.
     expect(JSON.parse(result.stdout)).toEqual({
       target: 'dev',
       url: 'https://n8n.example.com',
-      apiKey: { env: 'N8N_API_KEY', source: 'env' },
+      apiKey: { set: true, source: 'boilerlift.config.ts' },
       checks: [
         { name: 'node', status: 'ok', detail: '24.1.0 (requires ≥ 22.18.0)' },
         { name: 'url', status: 'ok', detail: 'reachable (GET /healthz → 200)' },
@@ -198,7 +186,7 @@ All checks passed.
 
   test('Should exit 1, call nothing and list the targets when several are declared and none is named', async () => {
     const n8n = fakeN8n();
-    const ctx = context({ loadProjectConfig: fakeTwoTargets(), env: TWO_KEYS, fetch: n8n.fetch });
+    const ctx = context({ loadProjectConfig: fakeTwoTargets(), fetch: n8n.fetch });
 
     const result = await pingCommand.run(INPUT, ctx);
 
@@ -210,7 +198,7 @@ All checks passed.
   test('Should ping only the target --target names when several are declared', async () => {
     const dev = fakeN8n();
     const prod = fakeN8n();
-    const ctx = context({ loadProjectConfig: fakeTwoTargets(), env: TWO_KEYS, fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
+    const ctx = context({ loadProjectConfig: fakeTwoTargets(), fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
 
     const result = await pingCommand.run({ positionals: [], values: { target: 'prod' } }, ctx);
 
@@ -221,7 +209,7 @@ All checks passed.
   test('Should ping every target, recap each one and exit with the worst code when --all is set', async () => {
     const dev = fakeN8n();
     const prod = fakeN8n({ failures: [httpError('GET /api/v1/workflows', 401)] });
-    const ctx = context({ loadProjectConfig: fakeTwoTargets(), env: TWO_KEYS, fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
+    const ctx = context({ loadProjectConfig: fakeTwoTargets(), fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });
 
     const result = await pingCommand.run(ALL, ctx);
 
@@ -237,7 +225,6 @@ All checks passed.
   test('Should print one entry per target when --all --json is set', async () => {
     const ctx = context({
       loadProjectConfig: fakeTwoTargets(),
-      env: TWO_KEYS,
       fetch: fakeN8nByOrigin({ [DEV_URL]: fakeN8n(), [PROD_URL]: fakeN8n() }),
     });
 

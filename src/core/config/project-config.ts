@@ -1,8 +1,6 @@
-import { parseEnv } from 'node:util';
 import {
   BoilerliftConfig,
   ConfigError,
-  ConfigValue,
   DeclaredTarget,
   ProjectConfig,
   ProjectConfigFile,
@@ -18,9 +16,6 @@ export const CONFIG_FILE = 'boilerlift.config.ts';
 /** A target name: 1 to 64 of a-z, 0-9 and -, like a stable name. */
 const TARGET_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
 
-/** An environment variable name: a letter or `_`, then letters, digits or `_`. */
-const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 const URL_PROTOCOLS = ['http:', 'https:'];
 
 /**
@@ -33,7 +28,8 @@ export function defineConfig<const Config extends BoilerliftConfig>(config: Conf
 
 /**
  * Checks the default export of the config file. Every problem is listed at once. The targets keep the order of the
- * object keys; each url loses its trailing slashes.
+ * object keys; each url loses its trailing slashes. A blank API key passes here: `resolveTargets` reports it for the
+ * selected targets only.
  */
 function parseProjectConfig(file: ProjectConfigFile): Result<ProjectConfig, ConfigError> {
   switch (file.kind) {
@@ -72,25 +68,37 @@ function parseTarget(name: string, raw: unknown): Result<DeclaredTarget, string[
     return err([`${where}: a target name must be 1 to 64 lowercase letters, digits or dashes`]);
   }
   if (!isRecord(raw)) {
-    return err([`${where} must be an object with url, apiKeyEnv and workflows`]);
+    return err([`${where} must be an object with url, apiKey and workflows`]);
   }
   const problems: string[] = [];
-  const url = typeof raw.url === 'string' ? raw.url.trim() : '';
-  if (!isHttpUrl(url)) {
-    problems.push(`${where}: "url" must be an http:// or https:// URL, found ${JSON.stringify(raw.url) ?? 'nothing'}`);
+  const url = optionalText(raw.url);
+  if (url === null) {
+    problems.push(`${where}: "url" must be a string, such as process.env.N8N_URL`);
+  } else if (url === '') {
+    problems.push(`${where}: "url" is empty: set it, or the environment variable it reads, to the root URL of your n8n instance`);
+  } else if (!isHttpUrl(url)) {
+    problems.push(`${where}: "url" must be an http:// or https:// URL, found ${JSON.stringify(url)}`);
   }
-  const apiKeyEnv = typeof raw.apiKeyEnv === 'string' ? raw.apiKeyEnv.trim() : '';
-  if (!ENV_NAME_PATTERN.test(apiKeyEnv)) {
-    problems.push(`${where}: "apiKeyEnv" must name an environment variable, such as 'N8N_API_KEY'`);
+  const apiKey = optionalText(raw.apiKey);
+  if (apiKey === null) {
+    problems.push(`${where}: "apiKey" must be a string, such as process.env.N8N_API_KEY`);
   }
   const workflows = typeof raw.workflows === 'string' ? raw.workflows.trim() : '';
   if (workflows === '') {
     problems.push(`${where}: "workflows" must be the folder of its workflow files, such as './workflows'`);
   }
-  if (problems.length > 0) {
+  if (problems.length > 0 || url === null || apiKey === null) {
     return err(problems);
   }
-  return ok({ name, url: url.replace(/\/+$/, ''), apiKeyEnv, workflows });
+  return ok({ name, url: url.replace(/\/+$/, ''), apiKey, workflows });
+}
+
+/** A string, trimmed. `undefined` (an unset environment variable) reads as blank; anything else is `null`. */
+function optionalText(value: unknown): string | null {
+  if (value === undefined) {
+    return '';
+  }
+  return typeof value === 'string' ? value.trim() : null;
 }
 
 function isHttpUrl(value: string): boolean {
@@ -116,42 +124,31 @@ function selectTargets(config: ProjectConfig, selection: TargetSelection): Resul
 }
 
 /**
- * Reads the API key of each target from the environment, then from the text of `./.env`: a real environment variable
- * wins over `.env`, and a blank value counts as missing. The first target whose key is missing fails them all, so
- * nothing runs while one is broken.
+ * Each selected target with its connection. The first target whose API key is blank fails them all, so nothing runs
+ * while one is broken.
  */
-function resolveTargets(
-  targets: DeclaredTarget[],
-  available: string[],
-  env: Readonly<Record<string, string | undefined>>,
-  dotEnvText: string | undefined,
-): Result<Target[], ConfigError> {
-  const dotEnv = dotEnvText === undefined ? {} : parseEnv(dotEnvText);
+function resolveTargets(targets: DeclaredTarget[], available: string[]): Result<Target[], ConfigError> {
   const resolved: Target[] = [];
   for (const target of targets) {
-    const apiKey = pick(target.apiKeyEnv, env, dotEnv);
-    if (apiKey === undefined) {
-      return err({ kind: 'missing-api-key', target: target.name, apiKeyEnv: target.apiKeyEnv, available });
+    if (target.apiKey === '') {
+      return err({ kind: 'missing-api-key', target: target.name, available });
     }
     resolved.push({
       name: target.name,
-      apiKeyEnv: target.apiKeyEnv,
       workflows: target.workflows,
-      connection: { url: { value: target.url, source: CONFIG_FILE }, apiKey },
+      connection: { url: { value: target.url, source: CONFIG_FILE }, apiKey: { value: target.apiKey, source: CONFIG_FILE } },
     });
   }
   return ok(resolved);
 }
 
 /**
- * The targets a command runs on, from the config file, the selection and the environment: the config is parsed, the
- * targets selected, then every API key read. Any failure stops before a target runs.
+ * The targets a command runs on, from the config file and the selection: the config is parsed, the targets selected,
+ * then every API key checked. Any failure stops before a target runs.
  */
 export function targetsToRun(
   file: ProjectConfigFile,
   selection: TargetSelection,
-  env: Readonly<Record<string, string | undefined>>,
-  dotEnvText: string | undefined,
 ): Result<{ config: ProjectConfig; targets: Target[] }, ConfigError> {
   const config = parseProjectConfig(file);
   if (!config.ok) {
@@ -161,8 +158,7 @@ export function targetsToRun(
   if (!selected.ok) {
     return selected;
   }
-  const available = targetNames(config.value);
-  const targets = resolveTargets(selected.value, available, env, dotEnvText);
+  const targets = resolveTargets(selected.value, targetNames(config.value));
   return targets.ok ? ok({ config: config.value, targets: targets.value }) : targets;
 }
 
@@ -190,20 +186,4 @@ function targetNames(config: ProjectConfig): string[] {
 /** The names of the targets the config declares, when the error carries them; `[]` otherwise. */
 export function availableTargets(error: ConfigError): string[] {
   return 'available' in error ? error.available : [];
-}
-
-function pick(
-  key: string,
-  env: Readonly<Record<string, string | undefined>>,
-  dotEnv: Readonly<Record<string, string | undefined>>,
-): ConfigValue | undefined {
-  const fromEnv = env[key]?.trim();
-  if (fromEnv !== undefined && fromEnv !== '') {
-    return { value: fromEnv, source: 'env' };
-  }
-  const fromDotEnv = dotEnv[key]?.trim();
-  if (fromDotEnv !== undefined && fromDotEnv !== '') {
-    return { value: fromDotEnv, source: '.env' };
-  }
-  return undefined;
 }

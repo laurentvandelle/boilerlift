@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parseEnv } from 'node:util';
 import { CommandContext, ProjectConfigFile, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
@@ -11,15 +12,13 @@ import { Result, err, ok } from '#src/core/common/result';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version and
- * `fetch`, the Boilerlift version, and the `.env` file, project config, workflow files and lock file of `cwd`.
+ * `fetch`, the Boilerlift version, and the project config (with its `.env`), workflow files and lock file of `cwd`.
  */
 export function nodeContext(cwd: string): CommandContext {
   return {
     version: packageVersion(),
     registry: COMMANDS,
-    env: process.env,
-    dotEnv: readDotEnv(join(cwd, '.env')),
-    loadProjectConfig: () => loadProjectConfig(join(cwd, CONFIG_FILE)),
+    loadProjectConfig: () => loadProjectConfig(join(cwd, CONFIG_FILE), join(cwd, '.env')),
     isDirectory: (path) => isDirectory(resolve(cwd, path)),
     nodeVersion: process.versions.node,
     fetch: globalThis.fetch,
@@ -50,10 +49,22 @@ function readDotEnv(path: string): string | undefined {
   }
 }
 
-/** Imports the config file. Node 22.18 and later strip TypeScript types natively, so it imports as is. */
-async function loadProjectConfig(path: string): Promise<ProjectConfigFile> {
+/**
+ * Imports the config file, once the variables of `.env` are in `process.env` so the file can read them. A variable
+ * already set, and not blank, keeps its value. Node 22.18 and later strip TypeScript types natively, so the file
+ * imports as is.
+ */
+async function loadProjectConfig(path: string, dotEnvPath: string): Promise<ProjectConfigFile> {
   if (!(await isFile(path))) {
     return { kind: 'missing' };
+  }
+  const dotEnv = readDotEnv(dotEnvPath);
+  if (dotEnv !== undefined) {
+    for (const [key, value] of Object.entries(parseEnv(dotEnv))) {
+      if (value !== undefined && (process.env[key] ?? '').trim() === '') {
+        process.env[key] = value;
+      }
+    }
   }
   try {
     const module: unknown = await import(pathToFileURL(path).href);

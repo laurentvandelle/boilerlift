@@ -1,14 +1,17 @@
 import { ConfigError } from '#src/core/config/config.model';
 import { CONFIG_FILE } from '#src/core/config/project-config';
 
-/** The config to paste into a new `boilerlift.config.ts`: one target, the API key in N8N_API_KEY, the files in ./workflows. */
+/**
+ * The config to paste into a new `boilerlift.config.ts`: one target whose url and API key come from N8N_URL and
+ * N8N_API_KEY, the variables of a `.env` from before targets, and the files in ./workflows.
+ */
 export const STARTER_CONFIG = `import { defineConfig } from 'boilerlift';
 
 export default defineConfig({
   targets: {
     dev: {
-      url: 'https://your-n8n.example.com',
-      apiKeyEnv: 'N8N_API_KEY',
+      url: process.env.N8N_URL,
+      apiKey: process.env.N8N_API_KEY,
       workflows: './workflows',
     },
   },
@@ -19,7 +22,7 @@ export default defineConfig({
 export function describeConfigError(error: ConfigError): string {
   switch (error.kind) {
   case 'no-config-file':
-    return `No ${CONFIG_FILE} in this folder.\nCreate it with your n8n instance, for example:\n\n${STARTER_CONFIG}\nThen set N8N_API_KEY in your environment or in .env.\n`;
+    return `No ${CONFIG_FILE} in this folder.\nCreate it with your n8n instance, for example:\n\n${STARTER_CONFIG}\nThen set N8N_URL and N8N_API_KEY in your environment or in .env.\n`;
   case 'unreadable-config':
     return `Cannot read ${CONFIG_FILE}: ${error.reason}\n`;
   case 'invalid-config':
@@ -29,7 +32,7 @@ export function describeConfigError(error: ConfigError): string {
   case 'unknown-target':
     return `Unknown target "${error.name}": ${CONFIG_FILE} does not declare it.\n${availableLine(error.available)}`;
   case 'missing-api-key':
-    return `Missing ${error.apiKeyEnv}, the API key of target "${error.target}" (its apiKeyEnv in ${CONFIG_FILE}).\nAdd this line to .env, or set it in your environment:\n  ${error.apiKeyEnv}=your-n8n-api-key\n`;
+    return `Missing the API key of target "${error.target}": its "apiKey" in ${CONFIG_FILE} is empty.\nSet the environment variable it reads, in your environment or in .env (for example N8N_API_KEY=your-n8n-api-key).\n`;
   case 'missing-workflows':
     return `The workflows folder of target "${error.target}", ${error.workflows}, does not exist.\nCreate it, or fix "workflows" for this target in ${CONFIG_FILE}.\n${availableLine(error.available)}`;
   }

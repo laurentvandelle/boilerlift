@@ -11,7 +11,7 @@ export function renderTargetReport(target: Target, report: ConnectionReport): Ta
   const header = [
     `lift ping → ${target.name}`,
     `  URL      ${url.value} (from ${url.source})`,
-    `  API key  •••• (${target.apiKeyEnv}, from ${apiKey.source})`,
+    `  API key  •••• (set, from ${apiKey.source})`,
     ...report.warnings.map((warning) => `  ! ${warning}`),
   ];
   const width = Math.max(...Object.values(CHECK_LABELS).map((label) => label.length)) + 2;
@@ -34,7 +34,7 @@ export function renderTargetReport(target: Target, report: ConnectionReport): Ta
     },
     payload: {
       url: url.value,
-      apiKey: { env: target.apiKeyEnv, source: apiKey.source },
+      apiKey: { set: true, source: apiKey.source },
       checks: report.checks.map((check) => ({
         name: check.name,
         status: check.status,

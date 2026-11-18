@@ -71,7 +71,7 @@ export const deployCommand: CommandDefinition = defineCommand({
   },
   run: async (input, ctx) => {
     const format = { json: input.options.flag('json'), all: input.target.kind === 'all', dryRun: input.options.flag('dry-run') };
-    const resolved = targetsToRun(await ctx.loadProjectConfig(), input.target, ctx.env, ctx.dotEnv);
+    const resolved = targetsToRun(await ctx.loadProjectConfig(), input.target);
     if (!resolved.ok) {
       return renderConfigError(resolved.error, format);
     }

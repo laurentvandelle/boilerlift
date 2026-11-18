@@ -1,5 +1,5 @@
-/** Where a value of the connection config was read: the environment, `./.env`, or the project config file. */
-export type ConfigSource = 'env' | '.env' | 'boilerlift.config.ts';
+/** Where a value of the connection config was read: the project config file. */
+export type ConfigSource = 'boilerlift.config.ts';
 
 export interface ConfigValue {
   value: string;
@@ -12,12 +12,15 @@ export interface ConnectionConfig {
   apiKey: ConfigValue;
 }
 
-/** One target as `boilerlift.config.ts` declares it, inside `defineConfig`. */
+/**
+ * One target as `boilerlift.config.ts` declares it, inside `defineConfig`. `url` and `apiKey` may be read from the
+ * environment (`process.env.N8N_URL`), under names the user picks: `undefined` or blank is reported as missing.
+ */
 export interface TargetConfig {
   /** Root URL of the n8n instance, `http://` or `https://`. Boilerlift adds the API path itself. */
-  url: string;
-  /** The name of the environment variable that holds the API key. Its value is read from the environment, then `.env`. */
-  apiKeyEnv: string;
+  url: string | undefined;
+  /** The n8n API key of the instance (n8n → Settings → n8n API). Never write it in the file: read it from the environment. */
+  apiKey: string | undefined;
   /** The folder of the workflow files to deploy to this target, from the folder of the config file. */
   workflows: string;
 }
@@ -32,7 +35,8 @@ export interface DeclaredTarget {
   name: string;
   /** Without trailing slash. */
   url: string;
-  apiKeyEnv: string;
+  /** Not blank. */
+  apiKey: string;
   workflows: string;
 }
 
@@ -41,10 +45,9 @@ export interface ProjectConfig {
   targets: DeclaredTarget[];
 }
 
-/** A declared target with its API key read: ready to connect to. */
+/** A selected target, ready to connect to. */
 export interface Target {
   name: string;
-  apiKeyEnv: string;
   workflows: string;
   connection: ConnectionConfig;
 }
@@ -62,7 +65,7 @@ export type ProjectConfigFile = { kind: 'missing' } | { kind: 'loaded'; content:
  * - `invalid-config`: its default export is not a valid config; one problem per line.
  * - `target-required`: several targets, and the command names none.
  * - `unknown-target`: `--target` names a target the config does not declare.
- * - `missing-api-key`: the variable `apiKeyEnv` names is blank or absent.
+ * - `missing-api-key`: the `apiKey` of the target is blank or `undefined`, as when the variable it reads is not set.
  * - `missing-workflows`: the workflows folder of the target does not exist.
  *
  * `available` lists the declared targets, when the config could be read.
@@ -73,5 +76,5 @@ export type ConfigError =
   | { kind: 'invalid-config'; problems: string[] }
   | { kind: 'target-required'; available: string[] }
   | { kind: 'unknown-target'; name: string; available: string[] }
-  | { kind: 'missing-api-key'; target: string; apiKeyEnv: string; available: string[] }
+  | { kind: 'missing-api-key'; target: string; available: string[] }
   | { kind: 'missing-workflows'; target: string; workflows: string; available: string[] };

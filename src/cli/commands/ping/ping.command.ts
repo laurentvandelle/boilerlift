@@ -10,9 +10,10 @@ import { createN8nClient } from '#src/services/n8n/n8n-client';
 const USAGE = `lift ping [--target <name> | --all] [--json]
 
 Checks the connection to the n8n instance of a target declared in ./${CONFIG_FILE}:
-  url        Root URL of the n8n instance (Boilerlift adds ${API_PATH})
-  apiKeyEnv  The variable that holds its n8n API key (n8n → Settings → n8n API),
-             read from the environment, then from ./.env. The environment wins.
+  url     Root URL of the n8n instance (Boilerlift adds ${API_PATH})
+  apiKey  Its n8n API key (n8n → Settings → n8n API). Read it from the environment in the
+          file, for example process.env.N8N_API_KEY: the variables of ./.env are loaded
+          first, and a variable already set in the environment wins.
 With one target declared, ping runs on it. With several, name one with --target, or
 check every one in turn with --all.
 
@@ -35,7 +36,7 @@ export const pingCommand: CommandDefinition = defineCommand({
   },
   run: async (input, ctx) => {
     const format = { json: input.options.flag('json'), all: input.target.kind === 'all' };
-    const resolved = targetsToRun(await ctx.loadProjectConfig(), input.target, ctx.env, ctx.dotEnv);
+    const resolved = targetsToRun(await ctx.loadProjectConfig(), input.target);
     if (!resolved.ok) {
       return renderConfigError(resolved.error, format);
     }

@@ -64,12 +64,10 @@ export interface CommandSpec<Options extends Readonly<Record<string, CommandOpti
 export interface CommandContext {
   version: string;
   registry: readonly CommandDefinition[];
-  env: Readonly<Record<string, string | undefined>>;
-  /** Raw text of `./.env`, or `undefined` when there is no file. */
-  dotEnv: string | undefined;
   /**
    * Imports `./boilerlift.config.ts` and returns its default export: `missing` when there is no file, `unreadable`
-   * with the reason when it cannot be imported.
+   * with the reason when it cannot be imported. The variables of `./.env` are in the environment first, so the file
+   * can read them from `process.env`; a variable already set keeps its value.
    */
   loadProjectConfig(): Promise<ProjectConfigFile>;
   /** True when `path`, relative to the current folder, is an existing folder. */

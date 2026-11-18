@@ -2,15 +2,13 @@ import { BoilerliftConfig, CommandContext, ProjectConfigFile } from '#src/cli/cl
 import { Result, err, ok } from '#src/core/common/result';
 
 /**
- * A `CommandContext` for tests: no env, no `.env`, no config file, a recent Node, a `fetch` that fails if called, no
+ * A `CommandContext` for tests: no config file, a recent Node, a `fetch` that fails if called, no
  * workflow files. Every folder exists.
  */
 export function fakeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     version: '0.0.0',
     registry: [],
-    env: {},
-    dotEnv: undefined,
     loadProjectConfig: () => Promise.resolve({ kind: 'missing' }),
     isDirectory: () => Promise.resolve(true),
     nodeVersion: '24.0.0',
@@ -68,20 +66,17 @@ export function fakeProjectConfig(config: BoilerliftConfig | Record<string, unkn
 export const FAKE_DEV_URL = 'https://dev.example.com';
 export const FAKE_PROD_URL = 'https://prod.example.com';
 
-/** The keys of the two targets of `fakeTwoTargets`, as the environment holds them. */
-export const FAKE_TARGET_KEYS = { DEV_KEY: 'dev-secret', PROD_KEY: 'prod-secret' };
-
-/** A config with two targets, in this order: `dev` (key DEV_KEY, files ./dev) and `prod` (key PROD_KEY, files ./prod). */
+/** A config with two targets, in this order: `dev` (key dev-secret, files ./dev) and `prod` (key prod-secret, files ./prod). */
 export function fakeTwoTargets(): () => Promise<ProjectConfigFile> {
   return fakeProjectConfig({
     targets: {
-      dev: { url: FAKE_DEV_URL, apiKeyEnv: 'DEV_KEY', workflows: './dev' },
-      prod: { url: FAKE_PROD_URL, apiKeyEnv: 'PROD_KEY', workflows: './prod' },
+      dev: { url: FAKE_DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+      prod: { url: FAKE_PROD_URL, apiKey: 'prod-secret', workflows: './prod' },
     },
   });
 }
 
-/** A config with the single target `dev` at `url`, its key in N8N_API_KEY and its files in ./workflows. */
-export function fakeSingleTarget(url = 'https://n8n.example.com'): () => Promise<ProjectConfigFile> {
-  return fakeProjectConfig({ targets: { dev: { url, apiKeyEnv: 'N8N_API_KEY', workflows: './workflows' } } });
+/** A config with the single target `dev` at `url`, with `apiKey` and its files in ./workflows. */
+export function fakeSingleTarget(url = 'https://n8n.example.com', apiKey = 'secret'): () => Promise<ProjectConfigFile> {
+  return fakeProjectConfig({ targets: { dev: { url, apiKey, workflows: './workflows' } } });
 }

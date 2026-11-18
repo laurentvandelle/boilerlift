@@ -3,7 +3,6 @@ import { CommandContext, CommandInput } from '#src/cli/cli.model';
 import {
   FAKE_DEV_URL as DEV_URL,
   FAKE_PROD_URL as PROD_URL,
-  FAKE_TARGET_KEYS as TWO_KEYS,
   FakeLockFile,
   fakeContext,
   fakeLockFile,
@@ -20,7 +19,6 @@ const TEXT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
 const DRY_RUN = { positionals: [], values: { 'dry-run': true } };
 const DRY_RUN_JSON = { positionals: [], values: { 'dry-run': true, json: true } };
-const ENV = { N8N_API_KEY: 'secret' };
 
 const INVOICE = fakeLocalWorkflow('invoice-sync', { path: 'workflows/invoice-sync.workflow.ts', name: 'Invoice sync' });
 const CRM = fakeLocalWorkflow('crm-import', { path: 'workflows/crm/crm-import.json', name: 'CRM import' });
@@ -29,15 +27,15 @@ const NEW = fakeLocalWorkflow('new', { name: 'New' });
 const FILES = [INVOICE, CRM, REPORT].map(fakeWorkflowFile);
 const HAND_ADDED = { id: 'h', name: 'hand-added' };
 
-const KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it in the variable that apiKeyEnv names, in .env or your environment';
+const KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads';
 const RETRY_HINT = 'Check the workflow file and the n8n instance (n8n 2.35.0 or later), then run deploy again';
 
 /** A deploy context on the single target `dev`, with `lock` as the lock file: an empty one unless the test seeds it. */
 function context(overrides: Partial<CommandContext>, lock: FakeLockFile = fakeLockFile()): CommandContext {
-  return fakeContext({ registry: [deployCommand], env: ENV, loadProjectConfig: fakeSingleTarget(), ...lock.context, ...overrides });
+  return fakeContext({ registry: [deployCommand], loadProjectConfig: fakeSingleTarget(), ...lock.context, ...overrides });
 }
 
-/** A lock file that records `entries` (stable name → n8n id) for ENV's instance. */
+/** A lock file that records `entries` (stable name → n8n id) for the instance of the single target. */
 function recorded(entries: Record<string, string>): FakeLockFile {
   return fakeLockFile({ text: fakeLockText(entries) });
 }
@@ -386,14 +384,13 @@ Nothing was written to n8n.
     );
   });
 
-  test('Should exit 1 and name the variable to set when the API key of the target is missing', async () => {
-    const ctx = context({ env: {}, loadWorkflowFiles: () => Promise.resolve(FILES) });
+  test('Should exit 1 and name the target when its API key is missing', async () => {
+    const ctx = context({ loadProjectConfig: fakeSingleTarget('https://n8n.example.com', ''), loadWorkflowFiles: () => Promise.resolve(FILES) });
 
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Missing N8N_API_KEY, the API key of target "dev"');
-    expect(result.stderr).toContain('  N8N_API_KEY=your-n8n-api-key\n');
+    expect(result.stderr).toContain('Missing the API key of target "dev": its "apiKey" in boilerlift.config.ts is empty.');
   });
 
   test('Should show what deploy would do when --dry-run is set', async () => {
@@ -729,7 +726,7 @@ function twoFolders(dir: string): Promise<ReturnType<typeof fakeWorkflowFile>[]>
 }
 
 function targetsContext(overrides: Partial<CommandContext>, lock: FakeLockFile = fakeLockFile()): CommandContext {
-  return context({ loadProjectConfig: fakeTwoTargets(), env: TWO_KEYS, loadWorkflowFiles: twoFolders, ...overrides }, lock);
+  return context({ loadProjectConfig: fakeTwoTargets(), loadWorkflowFiles: twoFolders, ...overrides }, lock);
 }
 
 const ALL: CommandInput = { positionals: [], values: { all: true } };
@@ -744,7 +741,7 @@ describe('deployCommand targets', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('No boilerlift.config.ts in this folder.');
     expect(result.stderr).toContain("import { defineConfig } from 'boilerlift';");
-    expect(result.stderr).toContain("      apiKeyEnv: 'N8N_API_KEY',\n      workflows: './workflows',");
+    expect(result.stderr).toContain('      url: process.env.N8N_URL,\n      apiKey: process.env.N8N_API_KEY,\n      workflows: \'./workflows\',');
   });
 
   test('Should exit 1, send nothing and list the targets when several are declared and none is named', async () => {
@@ -799,12 +796,18 @@ describe('deployCommand targets', () => {
 
   test('Should exit 1 and send nothing to any target when --all meets a target whose API key is missing', async () => {
     const dev = fakeN8n();
-    const ctx = targetsContext({ env: { DEV_KEY: 'dev-secret' }, fetch: dev.fetch });
+    const config = fakeProjectConfig({
+      targets: {
+        dev: { url: DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+        prod: { url: PROD_URL, apiKey: undefined, workflows: './prod' },
+      },
+    });
+    const ctx = targetsContext({ loadProjectConfig: config, fetch: dev.fetch });
 
     const result = await deployCommand.run(ALL, ctx);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Missing PROD_KEY, the API key of target "prod"');
+    expect(result.stderr).toContain('Missing the API key of target "prod"');
     expect(dev.requests).toEqual([]);
   });
 
@@ -866,8 +869,8 @@ describe('deployCommand targets', () => {
     const n8n = fakeN8n();
     const config = fakeProjectConfig({
       targets: {
-        dev: { url: DEV_URL, apiKeyEnv: 'DEV_KEY', workflows: './dev' },
-        demo: { url: `${DEV_URL}/`, apiKeyEnv: 'DEV_KEY', workflows: './demo' },
+        dev: { url: DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+        demo: { url: `${DEV_URL}/`, apiKey: 'dev-secret', workflows: './demo' },
       },
     });
     const demoFiles = [fakeWorkflowFile(fakeLocalWorkflow('invoice-sync', { path: 'demo/invoice-sync.json' }))];
@@ -888,8 +891,8 @@ describe('deployCommand targets', () => {
     const prod = fakeN8n();
     const config = fakeProjectConfig({
       targets: {
-        dev: { url: DEV_URL, apiKeyEnv: 'DEV_KEY', workflows: './dev' },
-        prod: { url: PROD_URL, apiKeyEnv: 'PROD_KEY', workflows: './dev' },
+        dev: { url: DEV_URL, apiKey: 'dev-secret', workflows: './dev' },
+        prod: { url: PROD_URL, apiKey: 'prod-secret', workflows: './dev' },
       },
     });
     const ctx = targetsContext({ loadProjectConfig: config, fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }) });

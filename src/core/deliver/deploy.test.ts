@@ -10,7 +10,7 @@ import { FakeN8n, FakeN8nOptions, fakeN8n, fakeN8nWorkflow, httpError, unreachab
 import { ApiFailure, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';
 
 const PING_HINT = 'Run lift ping to check the url of the target and your network, then run deploy again';
-const KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it in the variable that apiKeyEnv names, in .env or your environment';
+const KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads';
 
 function actions(report: DeployReport): string[][] {
   return report.results.map(({ stableName, action }) => [stableName, action]);
