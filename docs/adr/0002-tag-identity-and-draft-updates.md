@@ -1,5 +1,5 @@
 ---
-status: accepted, amended by ADR-0003
+status: accepted, amended by ADR-0003, identity superseded by ADR-0009
 ---
 
 # Identify workflows by an `boilerlift:` tag and always update them as drafts

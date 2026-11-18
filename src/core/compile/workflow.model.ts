@@ -9,8 +9,8 @@ export type WorkflowFile =
   | { path: string; error: string };
 
 /**
- * The file base name without `.workflow.ts` / `.json`: 1 to 16 of a-z, 0-9 and -. It identifies the workflow on the
- * instance (ADR 0002). Only `isStableName` in load-workflows.ts produces one.
+ * The file base name without `.workflow.ts` / `.json`: 1 to 64 of a-z, 0-9 and -. It names the workflow in the
+ * project and in the lock file (ADR 0009). Only `isStableName` in load-workflows.ts produces one.
  */
 export type StableName = string & { readonly __brand: 'StableName' };
 

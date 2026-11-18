@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { ConnectionConfig } from '#src/core/config/config.model';
 import { createN8nClient } from '#src/services/n8n/n8n-client';
-import { fakeTagId, fakeWorkflowId } from '#src/core/n8n/n8n.fake';
+import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 
 const CONFIG: ConnectionConfig = {
   url: { value: 'https://n8n.example.com', source: 'env' },
@@ -129,48 +129,6 @@ describe('createN8nClient public API calls', () => {
     expect(calls[0]?.init?.body).toBeUndefined();
   });
 
-  test('Should follow nextCursor when the workflow list has several pages', async () => {
-    const pages = [
-      json({
-        data: [{ id: '1', name: 'A', tags: [{ id: 't', name: 'boilerlift:a' }], nodes: [], isArchived: true }],
-        nextCursor: 'next=1',
-      }),
-      json({ data: [{ id: '2', name: 'B', tags: [], isArchived: false }], nextCursor: null }),
-    ];
-    const { fetch, calls } = fakeFetch(() => Promise.resolve(pages.shift() ?? json({ data: [] })));
-    const client = createN8nClient({ config: CONFIG, fetch });
-
-    const result = await client.listWorkflows();
-
-    expect(result).toEqual({
-      ok: true,
-      value: {
-        call: 'GET /api/v1/workflows',
-        status: 200,
-        body: [
-          { id: '1', name: 'A', tags: [{ id: 't', name: 'boilerlift:a' }], isArchived: true },
-          { id: '2', name: 'B', tags: [], isArchived: false },
-        ],
-      },
-    });
-    expect(calls.map((call) => call.url)).toEqual([
-      'https://n8n.example.com/api/v1/workflows?excludePinnedData=true&limit=250',
-      'https://n8n.example.com/api/v1/workflows?excludePinnedData=true&limit=250&cursor=next%3D1',
-    ]);
-  });
-
-  test('Should default tags to [] and isArchived to false when a listed workflow has neither', async () => {
-    const { fetch } = fakeFetch(() => Promise.resolve(json({ data: [{ id: '2', name: 'B' }], nextCursor: null })));
-    const client = createN8nClient({ config: CONFIG, fetch });
-
-    const result = await client.listWorkflows();
-
-    expect(result).toEqual({
-      ok: true,
-      value: { call: 'GET /api/v1/workflows', status: 200, body: [{ id: '2', name: 'B', tags: [], isArchived: false }] },
-    });
-  });
-
   test('Should send the update as a draft with publishIfActive=false when it updates a workflow', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A' })));
     const client = createN8nClient({ config: CONFIG, fetch });
@@ -183,16 +141,6 @@ describe('createN8nClient public API calls', () => {
     expect(calls[0]?.init?.method).toBe('PUT');
     expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret', 'content-type': 'application/json' });
     expect(sentBody(calls[0])).toEqual(body);
-  });
-
-  test('Should send tag ids as objects when setting workflow tags', async () => {
-    const { fetch, calls } = fakeFetch(() => Promise.resolve(json([])));
-    const client = createN8nClient({ config: CONFIG, fetch });
-
-    await client.setWorkflowTags(ABC, [fakeTagId('t1'), fakeTagId('t2')]);
-
-    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/tags');
-    expect(sentBody(calls[0])).toEqual([{ id: 't1' }, { id: 't2' }]);
   });
 
   test('Should name the call and keep the n8n message when the instance answers an HTTP error', async () => {
@@ -236,11 +184,23 @@ describe('createN8nClient public API calls', () => {
     const { fetch } = fakeFetch(() => Promise.resolve(new Response('<html>Sign in to the proxy</html>', { status: 200 })));
     const client = createN8nClient({ config: CONFIG, fetch });
 
-    const result = await client.listWorkflows();
+    const result = await client.getWorkflow(ABC);
 
     expect(result).toEqual({
       ok: false,
-      error: { kind: 'invalid-response', call: 'GET /api/v1/workflows', status: 200, detail: 'the body is not JSON' },
+      error: { kind: 'invalid-response', call: 'GET /api/v1/workflows/abc', status: 200, detail: 'the body is not JSON' },
+    });
+  });
+
+  test('Should report an http-error 404 when the instance does not know the workflow id', async () => {
+    const { fetch } = fakeFetch(() => Promise.resolve(json({ message: 'Not Found' }, 404)));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.getWorkflow(ABC);
+
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'http-error', call: 'GET /api/v1/workflows/abc', status: 404, message: 'Not Found' },
     });
   });
 

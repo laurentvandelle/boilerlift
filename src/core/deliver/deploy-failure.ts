@@ -1,17 +1,15 @@
-import { StableName } from '#src/core/compile/workflow.model';
 import { DeployError, DeployErrorKind, DeployResult, RunEnd } from '#src/core/deliver/deploy.model';
-import { formatList } from '#src/core/deliver/format-list';
-import { stableTag } from '#src/core/deliver/stable-tag';
 import {
   EXIT_API_KEY_REJECTED,
   EXIT_DRAFTS_UNSUPPORTED,
+  EXIT_LOCK_WRITE_FAILED,
   EXIT_OK,
   EXIT_PARTIAL_FAILURE,
   EXIT_UNREACHABLE,
   FailureExitCode,
 } from '#src/core/common/exit-codes';
 import { API_KEY_HINT, DRAFT_PARAM, MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
-import { ApiFailure, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiFailure } from '#src/core/n8n/n8n.model';
 
 /** What each kind of deploy error does to the run: whether it stops it, and the exit code. The one place that says so. */
 const EFFECTS: Record<DeployErrorKind, { stopsRun: boolean; exitCode: FailureExitCode }> = {
@@ -19,6 +17,7 @@ const EFFECTS: Record<DeployErrorKind, { stopsRun: boolean; exitCode: FailureExi
   'key-rejected': { stopsRun: true, exitCode: EXIT_API_KEY_REJECTED },
   'drafts-unsupported': { stopsRun: true, exitCode: EXIT_DRAFTS_UNSUPPORTED },
   'workflow-failed': { stopsRun: false, exitCode: EXIT_PARTIAL_FAILURE },
+  'lock-write-failed': { stopsRun: true, exitCode: EXIT_LOCK_WRITE_FAILED },
 };
 
 /** A failure that stops the whole run: anything but a per-workflow failure. */
@@ -45,17 +44,6 @@ export function draftsUnsupported(call: string, status?: number): DeployError {
     call,
     detail: `${reason}: n8n ${MIN_N8N_VERSION} or later is required`,
     hint: `Upgrade the instance to n8n ${MIN_N8N_VERSION} or later, then run deploy again`,
-  };
-}
-
-/** The failure of a workflow whose stable tag several live workflows carry, as the list `call` showed them. */
-export function duplicateTag(call: string, stableName: StableName, ids: WorkflowId[]): DeployError {
-  const tag = stableTag(stableName);
-  return {
-    kind: 'workflow-failed',
-    call,
-    detail: `workflows ${formatList(ids)} both carry the tag ${tag}`,
-    hint: `Remove the tag ${tag} from one of them in the n8n editor, then run deploy again`,
   };
 }
 

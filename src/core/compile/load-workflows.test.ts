@@ -29,7 +29,15 @@ describe('loadWorkflows', () => {
     expect(result).toEqual({ ok: true, value: [workflow] });
   });
 
-  test.each(['Invoice', 'with_underscore', 'seventeen-chars-x'])('Should reject the file when its stable name is %s', (name) => {
+  test('Should accept the file when its stable name is 64 characters long', () => {
+    const workflow = fakeLocalWorkflow('a'.repeat(64));
+
+    const result = loadWorkflows([fakeWorkflowFile(workflow)]);
+
+    expect(result).toEqual({ ok: true, value: [workflow] });
+  });
+
+  test.each(['Invoice', 'with_underscore', 'a'.repeat(65)])('Should reject the file when its stable name is %s', (name) => {
     const files = [fakeWorkflowFile(fakeLocalWorkflow('valid', { path: `workflows/${name}.json` }))];
 
     const result = loadWorkflows(files);

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, onTestFinished, test } from 'vitest';
@@ -122,5 +122,45 @@ describe('nodeContext loadWorkflowFiles', () => {
     const loading = nodeContext(cwd).loadWorkflowFiles('workflows');
 
     await expect(loading).rejects.toMatchObject({ code: 'ENOTDIR' });
+  });
+});
+
+describe('nodeContext lock file', () => {
+  test('Should read the text of the lock file when the folder has one', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'boilerlift.lock.json', '{"version":1,"instances":{}}\n');
+
+    const text = await nodeContext(cwd).readLockFile('boilerlift.lock.json');
+
+    expect(text).toBe('{"version":1,"instances":{}}\n');
+  });
+
+  test('Should read undefined when the folder has no lock file', async () => {
+    const cwd = await tempFolder();
+
+    const text = await nodeContext(cwd).readLockFile('boilerlift.lock.json');
+
+    expect(text).toBeUndefined();
+  });
+
+  test('Should write the whole lock file under the folder when it writes the lock file', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'boilerlift.lock.json', 'old text that is longer than the new one\n');
+
+    const written = await nodeContext(cwd).writeLockFile('boilerlift.lock.json', '{}\n');
+
+    expect({ written, text: await readFile(join(cwd, 'boilerlift.lock.json'), 'utf8') }).toEqual({ written: { ok: true, value: undefined }, text: '{}\n' });
+  });
+
+  test('Should return the reason when the lock file cannot be written', async () => {
+    const cwd = await tempFolder();
+    await mkdir(join(cwd, 'boilerlift.lock.json'));
+
+    const written = await nodeContext(cwd).writeLockFile('boilerlift.lock.json', '{}\n');
+
+    expect({ ok: written.ok, namesTheFile: !written.ok && written.error.reason.includes('boilerlift.lock.json') }).toEqual({
+      ok: false,
+      namesTheFile: true,
+    });
   });
 });

@@ -16,20 +16,20 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Local workflow**: a workflow file that passed every check, ready to deploy: its stable name, path, name, nodes, connections and settings.
 - **Node**: one step of an n8n workflow, as the export lists it under `nodes`. _Avoid_: node for the runtime; write Node.js.
 - **Connection**: a link from the output of one node to another node, as the export lists it under `connections`. _Avoid_: connection for the instance connection.
-- **Stable name**: the identity of a workflow across runs and instances: the file base name without `.workflow.ts` / `.json`, 1 to 16 of `a-z`, `0-9` and `-`.
-- **Stable tag**: the tag `boilerlift:<stable-name>` that a workflow carries on the instance, by which `deploy` finds it again.
+- **Stable name**: the name of a workflow across runs and instances: the file base name without `.workflow.ts` / `.json`, 1 to 64 of `a-z`, `0-9` and `-`.
+- **Lock file**: `boilerlift.lock.json` at the project root, committed with it: for each instance (its cleaned-up `N8N_URL`), the n8n id of each stable name that `deploy` created there. `deploy` finds its workflows by these ids only. _Avoid_: stable tag, the identity before ADR 0009.
 
 ### Versions on the instance
 
 - **Draft**: the latest saved version of a workflow on the instance. `deploy` writes only drafts.
 - **Published**: the version of a workflow that runs on its triggers. It changes only when the user publishes. _Avoid_: live.
-- **Archived**: a workflow deleted in the n8n editor. It stays on the instance, with its id and its tags, until it is unarchived. A workflow that is not archived is unarchived. _Avoid_: deleted, live.
+- **Archived**: a workflow deleted in the n8n editor. It stays on the instance, with its id, until it is unarchived. A workflow that is not archived is unarchived. _Avoid_: deleted, live.
 - **Restored**: an archived workflow that `deploy` unarchived and brought back as an unpublished draft.
 
 ### Deploy
 
-- **Deploy**: delivering every local workflow to the instance: create the new ones, update the changed ones as drafts, restore the archived ones, skip the unchanged ones.
+- **Deploy**: delivering every local workflow to the instance: create the new ones, update the changed ones as drafts, restore the archived ones, skip the unchanged ones, and record the id of each one it creates in the lock file.
 - **Plan**: what a deploy would do, worked out from reads only: one action per local workflow, the warnings, and the blocker if one stopped it. A dry run shows the plan; a real deploy applies it.
-- **Action**: what deploy does with one local workflow: `created`, `updated`, `skipped`, `restored`, `failed` or `not-processed` (a blocker stopped the run first).
-- **Blocker**: a failure that stops the whole run: the instance cannot be reached, it rejects the API key, or it cannot save drafts. A failure on one workflow is not a blocker. _Avoid_: fatal, stop.
+- **Action**: what deploy does with one local workflow: `created`, `recreated` (its recorded id answers 404, so it is created again from code), `updated`, `skipped`, `restored`, `failed` or `not-processed` (a blocker stopped the run first).
+- **Blocker**: a failure that stops the whole run: the instance cannot be reached, it rejects the API key, it cannot save drafts, or the lock file cannot be written after a create. A failure on one workflow is not a blocker. _Avoid_: fatal, stop.
 - **Dry run**: `deploy --dry-run` computes deploy's plan and writes nothing.

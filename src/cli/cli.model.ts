@@ -1,5 +1,6 @@
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
+import { Result } from '#src/core/common/result';
 
 export type { WorkflowFile };
 
@@ -65,6 +66,13 @@ export interface CommandContext {
    * exist. A file that cannot be parsed or imported comes back with an `error` instead of `content`.
    */
   loadWorkflowFiles(dir: string): Promise<WorkflowFile[]>;
+  /** Raw text of the lock file at `path`, relative to the current folder, or `undefined` when there is no file. */
+  readLockFile(path: string): Promise<string | undefined>;
+  /**
+   * Writes `text` as the whole lock file at `path`, relative to the current folder. A disk error comes back as a
+   * failure with its `reason`, never a throw.
+   */
+  writeLockFile(path: string, text: string): Promise<Result<void, { reason: string }>>;
 }
 
 /** A command as the registry and runCli see it, its option types erased. Build one with defineCommand. */

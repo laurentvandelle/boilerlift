@@ -39,12 +39,12 @@ export interface N8nTag {
   name: string;
 }
 
-/** A workflow as `GET /api/v1/workflows` lists it. The client defaults omitted `tags` to `[]` and `isArchived` to false. */
+/** A workflow as the public API returns it. The client defaults omitted `tags` to `[]` and `isArchived` to false. */
 export interface N8nWorkflowSummary {
   id: WorkflowId;
   name: string;
   tags: N8nTag[];
-  /** A workflow deleted in the editor is only archived: it stays listed and keeps its tags. */
+  /** A workflow deleted in the editor is only archived: `GET /workflows/{id}` still returns it. */
   isArchived: boolean;
 }
 
@@ -70,8 +70,7 @@ export interface N8nClient {
   checkApiKey(): Promise<Result<ProbeAnswer, ProbeFailure>>;
   /** `GET /api/v1/openapi.yml`, without the API key: the public API spec the instance serves, as text. */
   readApiSpec(): Promise<Result<ApiAnswer<string>, ApiFailure>>;
-  /** Every workflow on the instance, archived ones included, following `nextCursor`. */
-  listWorkflows(): Promise<Result<ApiAnswer<N8nWorkflowSummary[]>, ApiFailure>>;
+  /** `GET /api/v1/workflows/{id}`: the workflow and its current draft. An id the instance does not know answers 404. */
   getWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflow>, ApiFailure>>;
   /** `POST /api/v1/workflows`: the new workflow is never published. */
   createWorkflow(body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
@@ -79,9 +78,4 @@ export interface N8nClient {
   updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
   unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
-  /** Every tag on the instance, following `nextCursor`. */
-  listTags(): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
-  createTag(name: string): Promise<Result<ApiAnswer<N8nTag>, ApiFailure>>;
-  /** `PUT /api/v1/workflows/{id}/tags`: replaces the workflow's tags. */
-  setWorkflowTags(id: WorkflowId, tagIds: TagId[]): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
 }

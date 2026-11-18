@@ -1,10 +1,17 @@
 import { CommandDefinition } from '#src/cli/cli.model';
-import { renderConfigError, renderInvalidFiles, renderNothingToDeploy, renderReport } from '#src/cli/commands/deploy/deploy.render';
+import {
+  renderConfigError,
+  renderInvalidFiles,
+  renderInvalidLockFile,
+  renderNothingToDeploy,
+  renderReport,
+} from '#src/cli/commands/deploy/deploy.render';
 import { defineCommand } from '#src/cli/define-command';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { resolveConnectionConfig } from '#src/core/config/connection-config';
 import { planToReport } from '#src/core/deliver/apply-plan';
 import { deploy } from '#src/core/deliver/deploy';
+import { LOCK_FILE, lockWriter, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
 import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 import { createN8nClient } from '#src/services/n8n/n8n-client';
@@ -15,11 +22,17 @@ const USAGE = `lift deploy [--dry-run] [--json]
 
 Delivers every workflow under ./workflows (*.workflow.ts with a default export, or *.json),
 pasted from an n8n export, to your n8n instance:
-  new workflows are created (never published) and tagged boilerlift:<stable-name>,
+  new workflows are created (never published) and their n8n ids recorded in ./${LOCK_FILE},
   changed workflows are updated as drafts: the published version keeps running,
   unchanged workflows are skipped,
   workflows deleted (archived) in the n8n editor are restored as unpublished drafts.
-The stable name is the file name without .workflow.ts / .json: 1 to 16 of a-z, 0-9 and -.
+The stable name is the file name without .workflow.ts / .json: 1 to 64 of a-z, 0-9 and -.
+
+${LOCK_FILE} records, for each instance (N8N_URL), the n8n id of each stable name. Deploy finds
+your workflows by these ids only: never by name or tag, and it never touches a workflow it does
+not record. Commit the file after each deploy that changes it, so the next deploy, from any
+machine, updates the same workflows. A recorded id that n8n no longer has (deleted for good)
+is created again from code, and the new id recorded.
 
 Nothing is written until the instance proves it saves drafts (n8n ${MIN_N8N_VERSION} or later).
 A failure on one workflow fails only that workflow; the others are still delivered.
@@ -34,7 +47,8 @@ Exit codes:
   3  The n8n instance cannot be reached
   4  The API key is rejected
   5  At least one workflow failed; the others were delivered
-  6  The instance is older than n8n ${MIN_N8N_VERSION}: nothing was written`;
+  6  The instance is older than n8n ${MIN_N8N_VERSION}: nothing was written
+  7  A workflow was created but ${LOCK_FILE} could not be written: the run stopped there`;
 
 export const deployCommand: CommandDefinition = defineCommand({
   name: 'deploy',
@@ -61,9 +75,14 @@ export const deployCommand: CommandDefinition = defineCommand({
     if (workflows.length === 0) {
       return renderNothingToDeploy(WORKFLOWS_DIR, instance, format);
     }
+    const lock = parseLockFile(await ctx.readLockFile(LOCK_FILE));
+    if (!lock.ok) {
+      return renderInvalidLockFile(lock.error);
+    }
     const client = createN8nClient({ config, fetch: ctx.fetch });
-    const deployInput = { workflows, client };
-    const report = format.dryRun ? planToReport(await planDeploy(deployInput)) : await deploy(deployInput);
+    const deployInput = { workflows, client, managed: managedIds(lock.value, instance) };
+    const writer = lockWriter(lock.value, instance, (text) => ctx.writeLockFile(LOCK_FILE, text));
+    const report = format.dryRun ? planToReport(await planDeploy(deployInput)) : await deploy(deployInput, writer);
     return renderReport(instance, report, format);
   },
 });

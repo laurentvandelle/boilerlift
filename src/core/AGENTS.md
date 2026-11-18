@@ -8,7 +8,8 @@
   - A shared folder (`config/`, `n8n/`, `common/`) imports neither `compile/` nor `deliver/`.
   - `core/` never imports `src/services/`. Use the `N8nClient` port of `n8n/n8n.model.ts`; its adapter lives in `src/services/n8n/`.
 - A new folder needs its own element and policy in `eslint.config.mts`: a file in no element fails `boundaries/no-unknown-files`.
-- A `StableName`, `WorkflowId` or `TagId` comes only from its guard: `isStableName` (`compile/load-workflows.ts`), `isWorkflowId` and `isTagId` (`n8n/n8n-ids.ts`). A `StableTag` comes only from `stableTag()` (`deliver/stable-tag.ts`). The ban on type assertions leaves no other way to make one.
+- A `StableName`, `WorkflowId` or `TagId` comes only from its guard: `isStableName` (`compile/load-workflows.ts`), `isWorkflowId` and `isTagId` (`n8n/n8n-ids.ts`). The ban on type assertions leaves no other way to make one.
+- The managed workflow ids come only from `managedIds` (`deliver/lock-file.ts`), read from the lock file. Deploy never finds a workflow by its name or tag (`docs/adr/0009-lock-file-identity.md`). No check enforces this.
 
 ## Shape
 

@@ -28,6 +28,9 @@ export const EXIT_PARTIAL_FAILURE = 5;
 /** The instance cannot save drafts (older than MIN_N8N_VERSION in core/n8n/n8n-api.ts): nothing was written. */
 export const EXIT_DRAFTS_UNSUPPORTED = 6;
 
+/** Deploy created a workflow but could not record its id in boilerlift.lock.json: the run stopped there. */
+export const EXIT_LOCK_WRITE_FAILED = 7;
+
 /** Every exit code a command can return. EXIT_UNEXPECTED is EXIT_USAGE's code, so the union lists it once. */
 export type ExitCode =
   | typeof EXIT_OK
@@ -36,7 +39,8 @@ export type ExitCode =
   | typeof EXIT_UNREACHABLE
   | typeof EXIT_API_KEY_REJECTED
   | typeof EXIT_PARTIAL_FAILURE
-  | typeof EXIT_DRAFTS_UNSUPPORTED;
+  | typeof EXIT_DRAFTS_UNSUPPORTED
+  | typeof EXIT_LOCK_WRITE_FAILED;
 
 /** The exit code of a failure: any code but EXIT_OK. */
 export type FailureExitCode = Exclude<ExitCode, typeof EXIT_OK>;
