@@ -1,6 +1,6 @@
 {
   "name": "boilerlift",
-  "description": "Write n8n workflows in TypeScript, test them, and lift them from dev to prod. Code is the source. n8n is the runtime.",
+  "description": "Version, test and deploy your n8n workflows to every environment and client, from one Git repo.",
   "author": "laurentvandelle",
   "version": "0.0.1",
   "main": "dist/index.js",
@@ -60,11 +60,14 @@
   },
   "homepage": "https://github.com/laurentvandelle/boilerlift#readme",
   "keywords": [
-    "boilerlift",
     "n8n",
-    "cli",
+    "n8n-workflows",
+    "workflow-automation",
     "workflow-as-code",
-    "typescript"
+    "typescript",
+    "cli",
+    "deployment",
+    "gitops"
   ],
   "engines": {
     "node": ">=22.18"

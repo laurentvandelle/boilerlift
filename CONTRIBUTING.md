@@ -30,6 +30,8 @@ npm run verify   # lint, typecheck, tests
 | Lint with autofix                                                    | `npm run lint`       |
 | Type-check                                                           | `npm run typecheck`  |
 
+`npm start` builds, then runs `debug/main.ts` against `dist/` as an external consumer would. With no argument it runs a real `lift deploy` of `debug/workflows` to the target in `debug/boilerlift.config.ts`, whose url and API key come from `debug/.env`: point it at a test instance.
+
 ## Project layout
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) before crossing a module boundary or adding a dependency, and [GLOSSARY.md](GLOSSARY.md) before naming a domain concept, and [docs/testing.md](docs/testing.md) before writing a test. Architecture decisions are recorded in [docs/adr](docs/adr/README.md).

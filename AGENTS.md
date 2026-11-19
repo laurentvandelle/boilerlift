@@ -8,7 +8,7 @@ This repository is `boilerlift`, a TypeScript CLI published to npm that validate
 
 ## Commands
 
-Local setup: see `README.md`. Package manager: npm (`package-lock.json`).
+Local setup: see `CONTRIBUTING.md`. Package manager: npm (`package-lock.json`).
 
 | Task                                          | Command              |
 | --------------------------------------------- | -------------------- |
