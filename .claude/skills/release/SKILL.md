@@ -109,4 +109,11 @@ Every step of `.github/workflows/release.yml` checks before it acts: it skips th
 
 The workflow authenticates with npm trusted publishing (OIDC): there is no npm token in the repository secrets. The maintainer sets it up once, by hand, on npmjs.com: package `boilerlift` → Settings → Trusted publishing → GitHub Actions, with owner `laurentvandelle`, repository `boilerlift`, workflow `release.yml`, no environment.
 
-npm configures a trusted publisher on an existing package only. If `boilerlift` is not on npm yet when the first release pull request is merged, the workflow's npm step fails and its tag and release steps do not run. The maintainer then publishes that merged commit once from their machine (`npm publish --access public` on an up-to-date `main`), configures the trusted publisher, and dispatches the workflow: it skips npm and creates the tag and the GitHub release.
+npm configures a trusted publisher on an existing package only, and a new trusted publisher expires unless it publishes within 2 days. When `boilerlift` is not on npm yet, the maintainer bootstraps it before the first release:
+
+1. Publish a placeholder `0.0.1` by hand: `npm login`, then `npm publish --access public` on an up-to-date `main` still at `0.0.1`. CHANGELOG.md has no `0.0.1` section, so the release workflow never acts on it.
+2. Configure the trusted publisher as above.
+3. Within 2 days, run this skill for `0.1.0` and merge its release pull request: the workflow publishes `0.1.0` with provenance, tags it and creates its GitHub release.
+4. Optionally deprecate the placeholder: `npm deprecate boilerlift@0.0.1 "placeholder before the first release"`.
+
+Check first with `npm view boilerlift version`: a version printed means the package exists and only step 2 may be left.
