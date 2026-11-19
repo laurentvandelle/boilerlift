@@ -104,7 +104,7 @@ describe('targetsToRun', () => {
       error: {
         kind: 'invalid-config',
         problems: [
-          'target "Dev": a target name must be 1 to 64 lowercase letters, digits or dashes',
+          'target "Dev": a target name must be 1 to 13 lowercase letters, digits or dashes, so its tag boilerlift:<name> fits the 24 characters of an n8n tag name',
           'target "prod": "url" must be an http:// or https:// URL, found "ftp://prod.example.com"',
           'target "prod": "apiKey" must be a string, such as process.env.N8N_API_KEY',
           `target "prod": "workflows" must be the folder of its workflow files, such as './workflows'`,
@@ -112,6 +112,52 @@ describe('targetsToRun', () => {
         ],
       },
     });
+  });
+
+  test('Should keep the target tag on when the target leaves "tag" out', () => {
+    const file = loaded({ targets: { dev: DEV } });
+
+    const result = targetsToRun(file, { kind: 'default' });
+
+    expect(result).toMatchObject({ ok: true, value: { targets: [{ name: 'dev', tag: true }] } });
+  });
+
+  test('Should turn the target tag off when the target sets "tag" to false', () => {
+    const file = loaded({ targets: { dev: { ...DEV, tag: false } } });
+
+    const result = targetsToRun(file, { kind: 'default' });
+
+    expect(result).toMatchObject({ ok: true, value: { targets: [{ name: 'dev', tag: false }] } });
+  });
+
+  test('Should fail as an invalid config when "tag" is not a boolean', () => {
+    const file = loaded({ targets: { dev: { ...DEV, tag: 'no' } } });
+
+    const result = targetsToRun(file, { kind: 'default' });
+
+    expect(result).toEqual({ ok: false, error: { kind: 'invalid-config', problems: ['target "dev": "tag" must be true or false'] } });
+  });
+
+  test.each([true, false])('Should fail as an invalid config when the target name is longer than 13 characters and tag is %s', (tag) => {
+    const file = loaded({ targets: { 'fourteen-chars': { ...DEV, tag } } });
+
+    const result = targetsToRun(file, { kind: 'default' });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: 'invalid-config',
+        problems: ['target "fourteen-chars": a target name must be 1 to 13 lowercase letters, digits or dashes, so its tag boilerlift:<name> fits the 24 characters of an n8n tag name'],
+      },
+    });
+  });
+
+  test('Should accept the target name when it is 13 characters long', () => {
+    const file = loaded({ targets: { 'thirteen-char': DEV } });
+
+    const result = targetsToRun(file, { kind: 'default' });
+
+    expect(result.ok).toBe(true);
   });
 
   test('Should never show the API key when it reports the problems of a target', () => {

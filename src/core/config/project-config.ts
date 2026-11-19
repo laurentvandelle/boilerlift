@@ -13,10 +13,24 @@ import { Result, err, ok } from '#src/core/common/result';
 /** The project config file, in the current folder. */
 export const CONFIG_FILE = 'boilerlift.config.ts';
 
-/** A target name: 1 to 64 of a-z, 0-9 and -, like a stable name. */
-const TARGET_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
+/** What the target tag puts before the target name: `boilerlift:dev`. */
+export const TARGET_TAG_PREFIX = 'boilerlift:';
+
+/** The longest tag name n8n takes. */
+const N8N_TAG_NAME_MAX = 24;
+
+/** The longest target name, so that its target tag fits an n8n tag name: 13. */
+const TARGET_NAME_MAX = N8N_TAG_NAME_MAX - TARGET_TAG_PREFIX.length;
+
+/** A target name: 1 to TARGET_NAME_MAX of a-z, 0-9 and -. */
+const TARGET_NAME_PATTERN = new RegExp(`^[a-z0-9-]{1,${TARGET_NAME_MAX}}$`);
 
 const URL_PROTOCOLS = ['http:', 'https:'];
+
+/** The target tag of the target `name`: the n8n tag deploy adds to its workflows, `boilerlift:dev` (ADR 0014). */
+export function targetTagName(name: string): string {
+  return `${TARGET_TAG_PREFIX}${name}`;
+}
 
 /**
  * Types the default export of `boilerlift.config.ts` in the editor and returns it unchanged. The CLI checks it again
@@ -65,7 +79,7 @@ function parseContent(content: unknown): Result<ProjectConfig, ConfigError> {
 function parseTarget(name: string, raw: unknown): Result<DeclaredTarget, string[]> {
   const where = `target "${name}"`;
   if (!TARGET_NAME_PATTERN.test(name)) {
-    return err([`${where}: a target name must be 1 to 64 lowercase letters, digits or dashes`]);
+    return err([`${where}: a target name must be 1 to ${TARGET_NAME_MAX} lowercase letters, digits or dashes, so its tag ${TARGET_TAG_PREFIX}<name> fits the ${N8N_TAG_NAME_MAX} characters of an n8n tag name`]);
   }
   if (!isRecord(raw)) {
     return err([`${where} must be an object with url, apiKey and workflows`]);
@@ -87,10 +101,14 @@ function parseTarget(name: string, raw: unknown): Result<DeclaredTarget, string[
   if (workflows === '') {
     problems.push(`${where}: "workflows" must be the folder of its workflow files, such as './workflows'`);
   }
-  if (problems.length > 0 || url === null || apiKey === null) {
+  const tag = raw.tag ?? true;
+  if (typeof tag !== 'boolean') {
+    problems.push(`${where}: "tag" must be true or false`);
+  }
+  if (problems.length > 0 || url === null || apiKey === null || typeof tag !== 'boolean') {
     return err(problems);
   }
-  return ok({ name, url: url.replace(/\/+$/, ''), apiKey, workflows });
+  return ok({ name, url: url.replace(/\/+$/, ''), apiKey, workflows, tag });
 }
 
 /** A string, trimmed. `undefined` (an unset environment variable) reads as blank; anything else is `null`. */
@@ -136,6 +154,7 @@ function resolveTargets(targets: DeclaredTarget[], available: string[]): Result<
     resolved.push({
       name: target.name,
       workflows: target.workflows,
+      tag: target.tag,
       connection: { url: { value: target.url, source: CONFIG_FILE }, apiKey: { value: target.apiKey, source: CONFIG_FILE } },
     });
   }

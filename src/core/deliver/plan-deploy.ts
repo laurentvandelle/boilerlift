@@ -1,9 +1,9 @@
-import { LocalWorkflow } from '#src/core/compile/workflow.model';
+import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { describeFailure, draftsUnsupported, isFatal, runEnd } from '#src/core/deliver/deploy-failure';
 import { DeployError, DeployInput, DeployPlan, DeployWarning, PlannedStep } from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { DRAFT_PARAM } from '#src/core/n8n/n8n-api';
-import { WorkflowId } from '#src/core/n8n/n8n.model';
+import { N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**
  * Computes what deploy would do, with reads only: the API spec, then one GET per workflow the lock file records
@@ -22,6 +22,7 @@ export async function planDeploy({ workflows, client, managed }: DeployInput): P
 
   const warnings: DeployWarning[] = [];
   const steps: PlannedStep[] = [];
+  const tags = new Map<StableName, N8nTag[]>();
   let fatal: DeployError | undefined;
   for (const workflow of sortByStableName(workflows)) {
     if (fatal !== undefined) {
@@ -35,6 +36,7 @@ export async function planDeploy({ workflows, client, managed }: DeployInput): P
     }
     const draft = await client.getWorkflow(id);
     if (draft.ok) {
+      tags.set(workflow.stableName, draft.value.body.tags);
       if (draft.value.body.isArchived) {
         warnings.push({ kind: 'restored', stableName: workflow.stableName, id });
         steps.push({ workflow, action: 'restored', id });
@@ -53,11 +55,11 @@ export async function planDeploy({ workflows, client, managed }: DeployInput): P
       fatal = error;
     }
   }
-  return { steps, warnings, ...runEnd(steps, fatal) };
+  return { steps, warnings, tags, ...runEnd(steps, fatal) };
 }
 
 function stopped(error: DeployError): DeployPlan {
-  return { steps: [], warnings: [], ...runEnd([], error) };
+  return { steps: [], warnings: [], tags: new Map(), ...runEnd([], error) };
 }
 
 function sortByStableName(workflows: LocalWorkflow[]): LocalWorkflow[] {

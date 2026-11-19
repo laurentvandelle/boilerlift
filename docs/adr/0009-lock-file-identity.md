@@ -19,4 +19,5 @@ status: accepted, supersedes the identity part of ADR-0002
 - A workflow on the instance that the record does not list is never read or changed. A workflow removed from the project keeps its entry and is left alone.
 - A lock file that cannot be read or is invalid stops deploy before any call (exit 1). A record that cannot be written after a create stops the run (exit 7) and names the created id, so the user can record it by hand.
 - Deploy no longer reads or writes tags. The tags earlier versions set stay on the workflows, and those workflows are not taken over: with no record, deploy creates them again. Delete or archive the old copies in the n8n editor.
+- Later, deploy writes a display-only target tag again, which recognition never reads: [ADR 0014](0014-display-only-target-tag.md).
 - With no tag-length limit, a stable name now runs from 1 to 64 characters (`^[a-z0-9-]{1,64}$`).

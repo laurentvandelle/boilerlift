@@ -57,7 +57,7 @@ export async function applyPlan(plan: DeployPlan, client: N8nClient, lock: LockW
  * The report a plan stands for, without the data apply needs. A dry run returns it: the lock file would change when
  * some workflow would be created or recreated.
  */
-export function planToReport({ steps, warnings, ...end }: DeployPlan): DeployReport {
+export function planToReport({ steps, warnings, tags: _tags, ...end }: DeployPlan): DeployReport {
   const changed = end.error === undefined && steps.some(({ action }) => action === 'created' || action === 'recreated');
   return { results: steps.map(resultOf), warnings, lockFile: { path: LOCK_FILE, changed }, ...end };
 }
