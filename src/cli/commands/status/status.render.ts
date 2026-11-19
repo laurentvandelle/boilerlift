@@ -60,11 +60,6 @@ function nextCommand(status: WorkflowStatus, target: StatusTarget, format: Statu
   }
 }
 
-/** The next step the text shows: the command, or what to do by hand. */
-function nextStep(status: WorkflowStatus, target: StatusTarget, format: StatusFormat): string | undefined {
-  return status.state === 'draft-pending' ? PUBLISH_STEP : (nextCommand(status, target, format) ?? undefined);
-}
-
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
 export function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]): TargetRun {
   const message = 'Invalid workflow files. Status cannot compare them.';
@@ -159,10 +154,13 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
   const titles = report.workflows.map(titleOf);
   const width = Math.max(0, ...titles.map((title) => title.length)) + 2;
   report.workflows.forEach((status, index) => {
-    stdout.push(`${MARKS[status.state]} ${(titles[index] ?? '').padEnd(width)}${detailOf(status)}`);
-    const next = nextStep(status, target, format);
-    if (next !== undefined) {
-      stdout.push(`  → ${next}`);
+    const line = `${MARKS[status.state]} ${(titles[index] ?? '').padEnd(width)}${detailOf(status)}`;
+    const next = nextCommand(status, target, format);
+    if (status.state === 'draft-pending') {
+      // Nothing to run: the step to do by hand ends the state line.
+      stdout.push(`${line} → ${PUBLISH_STEP}`);
+    } else {
+      stdout.push(line, ...(next === null ? [] : [`  → ${next}`]));
     }
   });
   stdout.push(summaryLine(summarize(report.workflows)));
