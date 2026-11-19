@@ -46,7 +46,11 @@ The `AGENTS.md` files describe conventions per folder. They are written for codi
 4. Use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages, for example `feat(cli): add deliver command` or `fix: handle empty workflow`.
 5. Open the pull request and fill in the template. Link the issue it closes.
 
-Do not edit `dist/` or bump the version in `package.json`. Releases are done by the maintainer.
+Do not edit `dist/`, bump the version in `package.json` or edit `CHANGELOG.md`. Releases are done by the maintainer.
+
+## Releases
+
+The maintainer runs the release skill (`.claude/skills/release/SKILL.md`). It proposes the next version from the commits since the last `v*` tag, writes the [CHANGELOG.md](CHANGELOG.md) entry, and opens a `chore(release): vX.Y.Z` pull request. Merging that pull request runs `.github/workflows/release.yml`: after lint, typecheck, tests and build pass, it publishes the version to npm with provenance, tags the merge commit `vX.Y.Z`, and creates the GitHub release from the CHANGELOG section.
 
 ## Code of conduct
 

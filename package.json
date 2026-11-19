@@ -31,7 +31,6 @@
     "lint:check": "eslint --flag unstable_native_nodejs_ts_config --max-warnings 0 src",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pub": "npm version patch && npm publish",
     "typecheck": "tsc --noEmit",
     "verify": "npm run lint:check && npm run typecheck && npm test",
     "prepublishOnly": "npm run verify && npm run build",
