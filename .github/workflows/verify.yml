@@ -37,7 +37,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies from package-lock.json
-        run: npm i
+        run: npm ci
 
       - name: Lint, typecheck and run tests
         run: npm run verify
