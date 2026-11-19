@@ -1,0 +1,147 @@
+name: Release 🚀
+
+# Publishes the version in package.json once its release PR (`chore(release): vX.Y.Z`, opened by the
+# release skill in .claude/skills/release/SKILL.md) is merged into main. Every other push to main finds
+# nothing to do: its version is already fully released, or CHANGELOG.md has no section for it.
+# Every step checks before it acts, so a re-run (or a dispatch on the same commit) finishes a partial
+# release without duplicating anything. Decision record: docs/adr/0012-release-pr-then-publish-on-merge.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the vX.Y.Z tag and the GitHub release
+  id-token: write # npm trusted publishing (OIDC) and provenance: no long-lived npm token
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish to npm, tag and create the GitHub release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # npm trusted publishing needs npm 11.5.1 or later.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Find what is left to release
+        id: check
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          # The GitHub release body is exactly the CHANGELOG.md section of this version, without its heading.
+          awk -v heading="## [$version]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [ ! -s "$RUNNER_TEMP/release-notes.md" ] || ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+            echo "CHANGELOG.md has no section for $version: not a release commit, nothing to do."
+            echo "reason=CHANGELOG.md has no section for $version: not a release commit" >> "$GITHUB_OUTPUT"
+            echo "npm=skip" >> "$GITHUB_OUTPUT"
+            echo "tag_needed=false" >> "$GITHUB_OUTPUT"
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
+            echo "work=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if npm view "$name@$version" version 2>/dev/null | grep -q .; then npm_needed=false; else npm_needed=true; fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then tag_needed=false; else tag_needed=true; fi
+          if gh release view "$tag" >/dev/null 2>&1; then release_needed=false; else release_needed=true; fi
+
+          echo "npm=$([ "$npm_needed" = true ] && echo publish || echo skip)" >> "$GITHUB_OUTPUT"
+          echo "tag_needed=$tag_needed" >> "$GITHUB_OUTPUT"
+          echo "release_needed=$release_needed" >> "$GITHUB_OUTPUT"
+          if [ "$npm_needed$tag_needed$release_needed" = falsefalsefalse ]; then
+            echo "$tag is already fully released: nothing to do."
+            echo "reason=$tag is already fully released" >> "$GITHUB_OUTPUT"
+            echo "work=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "work=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies from package-lock.json
+        if: steps.check.outputs.work == 'true'
+        run: npm ci
+
+      # Nothing is published unless lint, typecheck, tests and build pass.
+      - name: Lint, typecheck and run tests
+        if: steps.check.outputs.work == 'true'
+        run: npm run verify
+
+      - name: Build into dist/
+        if: steps.check.outputs.work == 'true'
+        run: npm run build
+
+      - name: Publish to npm with provenance
+        id: npm
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.npm == 'publish'
+        run: npm publish --provenance --access public
+
+      - name: Create the tag on the merge commit
+        id: tag
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.tag_needed == 'true'
+        run: gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/${{ steps.check.outputs.tag }}" -f sha="$GITHUB_SHA"
+
+      - name: Create the GitHub release
+        id: release
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.release_needed == 'true'
+        run: >-
+          gh release create "${{ steps.check.outputs.tag }}"
+          --verify-tag
+          --title "${{ steps.check.outputs.tag }}"
+          --notes-file "$RUNNER_TEMP/release-notes.md"
+
+      - name: Write the job summary
+        if: always()
+        env:
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          REASON: ${{ steps.check.outputs.reason }}
+          TAG: ${{ steps.check.outputs.tag }}
+          WORK: ${{ steps.check.outputs.work }}
+          NPM_TODO: ${{ steps.check.outputs.npm == 'publish' }}
+          TAG_TODO: ${{ steps.check.outputs.tag_needed }}
+          RELEASE_TODO: ${{ steps.check.outputs.release_needed }}
+          NPM_OUTCOME: ${{ steps.npm.outcome }}
+          TAG_OUTCOME: ${{ steps.tag.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+        run: |
+          # $1: whether the check found the step left to do. $2: the outcome of the step.
+          status() {
+            if [ "$CHECK_OUTCOME" != success ]; then echo "not done"
+            elif [ "$WORK" = false ] && [ "$REASON" != "${REASON%fully released}" ]; then echo "skipped (already done)"
+            elif [ "$WORK" = false ]; then echo "not done"
+            elif [ "$1" != true ]; then echo "skipped (already done)"
+            elif [ "$2" = success ]; then echo "published"
+            else echo "not done"; fi
+          }
+          {
+            echo "## Release ${TAG:-(version unknown)}"
+            echo
+            if [ -n "$REASON" ]; then echo "$REASON."; echo; fi
+            echo "| Step | Status |"
+            echo "| --- | --- |"
+            echo "| npm | $(status "$NPM_TODO" "$NPM_OUTCOME") |"
+            echo "| tag | $(status "$TAG_TODO" "$TAG_OUTCOME") |"
+            echo "| GitHub release | $(status "$RELEASE_TODO" "$RELEASE_OUTCOME") |"
+          } >> "$GITHUB_STEP_SUMMARY"
