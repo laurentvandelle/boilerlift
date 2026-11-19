@@ -2,7 +2,7 @@
   "name": "boilerlift",
   "description": "Version, test and deploy your n8n workflows to every environment and client, from one Git repo.",
   "author": "laurentvandelle",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
