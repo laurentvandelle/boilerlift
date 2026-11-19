@@ -1,13 +1,23 @@
 import { Result, err, ok } from '#src/core/common/result';
 import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
-import { ApiAnswer, ApiFailure, N8nClient, N8nListedWorkflow, ProbeAnswer, ProbeFailure, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiAnswer, ApiFailure, N8nClient, N8nListedWorkflow, N8nTag, ProbeAnswer, ProbeFailure, WorkflowId } from '#src/core/n8n/n8n.model';
 import { createHttp, jsonBody, textBody } from '#src/services/http/http';
 import { HttpAnswer, HttpFailure } from '#src/services/http/http.model';
 import { N8nClientOptions } from '#src/services/n8n/n8n-client.model';
-import { workflowPageParser, workflowParser, workflowSummaryParser } from '#src/services/n8n/n8n-response';
+import {
+  tagListParser,
+  tagPageParser,
+  tagParser,
+  workflowPageParser,
+  workflowParser,
+  workflowSummaryParser,
+} from '#src/services/n8n/n8n-response';
 
 /** The largest page `GET /api/v1/workflows` serves. */
 export const LIST_PAGE_SIZE = 250;
+
+/** The largest page `GET /tags` returns. */
+const TAG_PAGE_LIMIT = 250;
 
 /**
  * A minimal client for the n8n instance and its public API, over the HTTP transport of `services/http/`. Every JSON
@@ -60,6 +70,24 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
 
   const workflowUrl = (id: WorkflowId): string => `${api}/workflows/${encodeURIComponent(id)}`;
 
+  /** Reads `GET /tags` page by page, following `nextCursor`. The first failure stops it. */
+  const listTags = async (): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>> => {
+    const tags: N8nTag[] = [];
+    let cursor: string | null = null;
+    for (;;) {
+      const query: string = `limit=${TAG_PAGE_LIMIT}${cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`}`;
+      const page = await http.getRequest(`${api}/tags?${query}`, { headers: auth, response: jsonBody(tagPageParser) });
+      if (!page.ok) {
+        return page;
+      }
+      tags.push(...page.value.body.data);
+      cursor = page.value.body.nextCursor;
+      if (cursor === null) {
+        return ok({ call: page.value.call, status: page.value.status, body: tags });
+      }
+    }
+  };
+
   return {
     checkHealth: () => probe(http.getRequest(`${root}/healthz`, { response: textBody })),
     checkApiKey: () => probe(http.getRequest(`${api}/workflows?limit=1`, { headers: auth, response: textBody })),
@@ -73,5 +101,13 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
       http.putRequest(`${workflowUrl(id)}?${DRAFT_PARAM}=false`, { headers: auth, body, response: jsonBody(workflowSummaryParser) }),
     unarchiveWorkflow: (id) =>
       http.postRequest(`${workflowUrl(id)}/unarchive`, { headers: auth, response: jsonBody(workflowSummaryParser) }),
+    listTags,
+    createTag: (name) => http.postRequest(`${api}/tags`, { headers: auth, body: { name }, response: jsonBody(tagParser) }),
+    updateWorkflowTags: (id, tags) =>
+      http.putRequest(`${workflowUrl(id)}/tags`, {
+        headers: auth,
+        body: tags.map((tagId) => ({ id: tagId })),
+        response: jsonBody(tagListParser),
+      }),
   };
 }

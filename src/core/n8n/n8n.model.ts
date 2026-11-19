@@ -96,4 +96,13 @@ export interface N8nClient {
   updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
   unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
+  /** `GET /api/v1/tags`, every page: the tags of the instance. */
+  listTags(): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
+  /** `POST /api/v1/tags`: a new tag. A name the instance already has answers 409. */
+  createTag(name: string): Promise<Result<ApiAnswer<N8nTag>, ApiFailure>>;
+  /**
+   * `PUT /api/v1/workflows/{id}/tags`: the workflow's tags become exactly `tags`, so pass the ones it keeps too. Returns
+   * the new list.
+   */
+  updateWorkflowTags(id: WorkflowId, tags: TagId[]): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
 }

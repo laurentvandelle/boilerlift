@@ -34,6 +34,8 @@ export interface FakeN8nOptions {
    * ones included with `isArchived`, and answers 404 for any other id.
    */
   workflows?: N8nWorkflow[];
+  /** More tags of the instance, that `GET /tags` lists. The tags of the seed workflows are listed too. */
+  tags?: FakeTag[];
   /** The API spec the instance serves. The default one supports drafts. */
   spec?: string;
   /**
@@ -51,6 +53,8 @@ export interface FakeN8n {
   fetch: typeof fetch;
   /** The workflows the instance holds now. */
   workflows: N8nWorkflow[];
+  /** The tags the instance holds now. */
+  tags: N8nTag[];
   /** Every call made through either door, named like `ApiFailure.call`: `PUT /api/v1/workflows/abc`. */
   calls: string[];
   /** Every request `fetch` received, as `METHOD URL` with the query string: `GET https://…/healthz`. */
@@ -116,8 +120,14 @@ export function fakeN8nWorkflow(
   };
 }
 
-export function fakeN8n({ workflows: seed = [], spec = DRAFT_SPEC, failures = [] }: FakeN8nOptions = {}): FakeN8n {
+export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT_SPEC, failures = [] }: FakeN8nOptions = {}): FakeN8n {
   const workflows = structuredClone(seed);
+  const tags: N8nTag[] = [];
+  for (const tag of [...tagSeed.map(fakeTag), ...workflows.flatMap((workflow) => workflow.tags)]) {
+    if (!tags.some(({ id }) => id === tag.id)) {
+      tags.push(structuredClone(tag));
+    }
+  }
   const calls: string[] = [];
   const requests: string[] = [];
   let lastId = 0;
@@ -182,6 +192,28 @@ export function fakeN8n({ workflows: seed = [], spec = DRAFT_SPEC, failures = []
         workflow.isArchived = false;
         return structuredClone(workflow);
       }),
+    listTags: () => answer(`GET ${API_PATH}/tags`, (call) => answered(call, structuredClone(tags))),
+    createTag: (name) =>
+      answer(`POST ${API_PATH}/tags`, (call) => {
+        if (tags.some((tag) => tag.name === name)) {
+          return err(httpError(call, 409, 'Tag already exists'));
+        }
+        const tag: N8nTag = { id: fakeTagId(newId('t')), name };
+        tags.push(tag);
+        return answered(call, structuredClone(tag));
+      }),
+    updateWorkflowTags: (id, tagIds) => {
+      const call = `PUT ${API_PATH}/workflows/${id}/tags`;
+      return answer(call, () => {
+        const workflow = workflows.find((candidate) => candidate.id === id);
+        const chosen = tagIds.map((tagId) => tags.find((tag) => tag.id === tagId));
+        if (workflow === undefined || chosen.some((tag) => tag === undefined)) {
+          return err(httpError(call, 404, 'Not Found'));
+        }
+        workflow.tags = chosen.filter((tag): tag is N8nTag => tag !== undefined);
+        return answered(call, structuredClone(workflow.tags));
+      });
+    },
   };
 
   /** Routes one HTTP request to the client door, then renders its answer as n8n would. */
@@ -211,6 +243,8 @@ export function fakeN8n({ workflows: seed = [], spec = DRAFT_SPEC, failures = []
       return isWorkflowBody(body) ? respond(await client.updateWorkflow(id, body)) : invalidBody();
     case 'POST workflows/{id}/unarchive':
       return respond(await client.unarchiveWorkflow(id));
+    case 'PUT workflows/{id}/tags':
+      return isTagIdList(body) ? respond(await client.updateWorkflowTags(id, body.map((tag) => tag.id))) : invalidBody();
     default:
       return noRoute(method, url);
     }
@@ -228,12 +262,17 @@ export function fakeN8n({ workflows: seed = [], spec = DRAFT_SPEC, failures = []
       return url.searchParams.get('limit') === '1' ? respondToProbe(await client.checkApiKey()) : respondPage(await client.listWorkflows(), url);
     case 'POST workflows':
       return isWorkflowBody(body) ? respond(await client.createWorkflow(body)) : invalidBody();
+    case 'GET tags':
+      // One page holds every tag: nextCursor is null.
+      return respond(await client.listTags(), 'page');
+    case 'POST tags':
+      return isRecord(body) && typeof body.name === 'string' ? respond(await client.createTag(body.name)) : invalidBody();
     default:
       return noRoute(method, url);
     }
   };
 
-  return { client, fetch: answerHttp, workflows, calls, requests };
+  return { client, fetch: answerHttp, workflows, tags, calls, requests };
 }
 
 function answered<T>(call: string, body: T): Result<ApiAnswer<T>, ApiFailure> {
@@ -315,6 +354,11 @@ function isWorkflowBody(value: unknown): value is N8nWorkflowBody {
     isRecord(value.connections) &&
     isRecord(value.settings)
   );
+}
+
+/** The body of `PUT /workflows/{id}/tags`: a list of `{ id }`. */
+function isTagIdList(value: unknown): value is { id: TagId }[] {
+  return Array.isArray(value) && value.every((entry: unknown) => isRecord(entry) && isTagId(entry.id));
 }
 
 /**

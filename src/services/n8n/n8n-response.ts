@@ -26,6 +26,40 @@ export const workflowPageParser: JsonParser<WorkflowPage> = {
   parse: parseWorkflowPage,
 };
 
+export const tagParser: JsonParser<N8nTag> = {
+  expected: 'a tag (id, name)',
+  parse: parseTag,
+};
+
+export const tagListParser: JsonParser<N8nTag[]> = {
+  expected: 'a list of tags (id, name)',
+  parse: (value) => parseList(value, parseTag),
+};
+
+/** One page of `GET /tags`: its tags, and the cursor of the next page (`null` on the last one). */
+export interface TagPage {
+  data: N8nTag[];
+  nextCursor: string | null;
+}
+
+export const tagPageParser: JsonParser<TagPage> = {
+  expected: 'a page of tags (data, nextCursor)',
+  parse: parseTagPage,
+};
+
+/** An omitted `nextCursor` reads as the last page. */
+function parseTagPage(value: unknown): TagPage | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const data = parseList(value.data, parseTag);
+  const nextCursor = value.nextCursor ?? null;
+  if (data === undefined || (nextCursor !== null && typeof nextCursor !== 'string')) {
+    return undefined;
+  }
+  return { data, nextCursor: nextCursor === '' ? null : nextCursor };
+}
+
 function parseTag(value: unknown): N8nTag | undefined {
   if (!isRecord(value)) {
     return undefined;
