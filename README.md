@@ -2,7 +2,7 @@
 
 **Version, test and deploy your n8n workflows to every environment and client, from one Git repo.**
 
-![A workflow of generic nodes lifted from a dev environment to several client environments](https://raw.githubusercontent.com/laurentvandelle/boilerlift/main/.github/assets/boilerlift-lift.gif)
+![A lift raising a block of generic workflow nodes](https://raw.githubusercontent.com/laurentvandelle/boilerlift/main/.github/assets/boilerlift-lift.gif)
 
 [![npm version](https://img.shields.io/npm/v/boilerlift)](https://www.npmjs.com/package/boilerlift)
 [![CI](https://github.com/laurentvandelle/boilerlift/actions/workflows/verify.yml/badge.svg?branch=main)](https://github.com/laurentvandelle/boilerlift/actions/workflows/verify.yml?query=branch%3Amain)
