@@ -1,3 +1,7 @@
+---
+status: accepted, amended by ADR-0011
+---
+
 # Adapters to the outside world live in src/services
 
 `core/` declares what it needs from the outside world as ports (`N8nClient` in `core/n8n/n8n.model.ts`) and holds no adapter. The adapters that implement them live in a third layer, `src/services/`: `http/` is a generic HTTP transport that knows no service, and `n8n/` implements `N8nClient` over it. The direction is `cli` → `services` → `core`, and only the commands import `services/`, building the client from the injected `ctx.fetch`. `fetch` stays a parameter, so every layer stays testable with fakes, and lint enforces the directions with `eslint-plugin-boundaries`.

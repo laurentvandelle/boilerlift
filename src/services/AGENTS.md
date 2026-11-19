@@ -5,7 +5,7 @@
 - Each folder imports only what its `boundaries/dependencies` policy in `eslint.config.mts` allows. Lint enforces all of these:
   - `http/` imports only `http/` and `core/common/`. It knows no service: no n8n path, header or body shape.
   - `n8n/` may import `n8n/`, `http/`, `core/n8n/`, `core/config/` and `core/common/`.
-  - Only `cli/commands/` import `services/`. `core/` and the rest of `cli/` never do.
+  - Only `cli/targets-need.ts` imports `services/`, for the commands that declare the `'targets'` need. `core/`, the commands and the rest of `cli/` never do.
 - `fetch` comes in as a parameter (`HttpOptions`, `N8nClientOptions`), never the global one. The I/O, time and randomness bans of `src/AGENTS.md` hold here too. Lint enforces it.
 - A new folder needs its own element and policy in `eslint.config.mts`, and its type in `SERVICES`.
 
