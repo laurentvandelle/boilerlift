@@ -36,7 +36,7 @@ lift deploy → prod (https://your-n8n.example.com)
 ! restored       lead-scoring   workflows/lead-scoring.json (unpublished draft)
 ⚠ lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
 1 created, 1 updated, 1 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
-Tag prod added to 4 workflows
+Tag boilerlift:prod added to 4 workflows
 boilerlift.lock.json updated — commit it
 ```
 
@@ -51,16 +51,16 @@ boilerlift.lock.json updated — commit it
 
 ## The target tag
 
-Unless the target sets `tag: false` in `boilerlift.config.ts`, `deploy` makes sure every workflow it delivers carries a tag named after the target (`prod` above), so people working in n8n can see which target a workflow belongs to. Skipped workflows get it too, so workflows deployed by an earlier version are tagged on the next run.
+Unless the target sets `tag: false` in `boilerlift.config.ts`, `deploy` makes sure every workflow it delivers carries the tag `boilerlift:<target>` (`boilerlift:prod` above), so people working in n8n can see which target a workflow belongs to. Skipped workflows get it too, so workflows deployed by an earlier version are tagged on the next run.
 
 - The tag is found on the instance by name, and created the first time.
-- The workflow's other tags are kept. A workflow that already has the tag gets no tag write, and the summary line `Tag prod added to 4 workflows` shows only when at least one workflow received it.
+- The workflow's other tags are kept. A workflow that already has the tag gets no tag write, and the summary line `Tag boilerlift:prod added to 4 workflows` shows only when at least one workflow received it.
 - The tag never changes an action: a skipped workflow stays `skipped`.
 - If the tag cannot be created or added, for example when the API key has no rights on tags, a warning names the workflow and the error. The workflow still counts as deployed, the lock file is still written, and the exit code does not change.
 - With `tag: false`, deploy makes no tag call. Turning it off does not remove the tag from workflows already tagged.
 - The tag is for display only: deploy never uses it, or any tag, to find your workflows ([ADR 0014](../adr/0014-display-only-target-tag.md)).
 
-With `--json`, the report carries `"tag": { "name": "prod", "added": 4 }`, or `"tag": null` when the target turns it off.
+With `--json`, the report carries `"tag": { "name": "boilerlift:prod", "added": 4 }`, or `"tag": null` when the target turns it off.
 
 The actions and the JSON report are typed in [`src/core/deliver/deploy.model.ts`](../../src/core/deliver/deploy.model.ts).
 
@@ -100,7 +100,7 @@ lift deploy --dry-run → prod (https://your-n8n.example.com)
 = would skip     daily-report   unchanged
 + would create   invoice-sync   workflows/invoice-sync.workflow.ts
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
-Tag prod would be added to 3 workflows
+Tag boilerlift:prod would be added to 3 workflows
 Dry run: nothing was written. Run lift deploy to apply.
 n8n can still reject a write; this preview covers what reads can show.
 boilerlift.lock.json would update — commit it after lift deploy

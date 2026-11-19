@@ -25,11 +25,11 @@ export default defineConfig({
 
 | Field       | Value |
 | ----------- | ----- |
-| key         | The target name: 1 to 24 lowercase letters, digits or dashes (24 is the longest tag name n8n takes). Targets are listed and run in the order you declare them. |
+| key         | The target name: 1 to 13 lowercase letters, digits or dashes, so its tag `boilerlift:<name>` fits n8n's 24-character tag names. Targets are listed and run in the order you declare them. |
 | `url`       | Root URL of the n8n instance, `http://` or `https://`. Boilerlift adds `/api/v1` itself. Write it, or read it from the environment. |
 | `apiKey`    | The n8n API key (n8n → Settings → n8n API). Read it from an environment variable of your choice, such as `process.env.PROD_N8N_API_KEY`: never write the key itself in the file. |
 | `workflows` | The folder of the workflow files for this target, from the project root. Always explicit. |
-| `tag`       | Optional, `true` by default. `deploy` adds a tag named after the target (here `dev`) to every workflow it delivers, so you can see in n8n which target a workflow belongs to. Set `false` to turn it off. The tag is for display only: deploy never uses it to find your workflows. |
+| `tag`       | Optional, `true` by default. `deploy` adds the tag `boilerlift:<target>` (here `boilerlift:dev`) to every workflow it delivers, so you can see in n8n which target a workflow belongs to. Set `false` to turn it off. The tag is for display only: deploy never uses it to find your workflows. |
 
 The types of the file are `defineConfig` and its config types, exported from `'boilerlift'` ([`src/index.ts`](../src/index.ts)).
 
