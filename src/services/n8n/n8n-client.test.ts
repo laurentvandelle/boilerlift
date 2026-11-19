@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { ConnectionConfig } from '#src/core/config/config.model';
 import { createN8nClient } from '#src/services/n8n/n8n-client';
-import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
+import { fakeTagId, fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 
 const CONFIG: ConnectionConfig = {
   url: { value: 'https://n8n.example.com', source: 'boilerlift.config.ts' },
@@ -232,5 +232,63 @@ describe('createN8nClient public API calls', () => {
     const result = await client.createWorkflow({ name: 'A', nodes: [], connections: {}, settings: {} });
 
     expect(result).toMatchObject({ ok: false, error: { kind: 'invalid-response', call: 'POST /api/v1/workflows' } });
+  });
+
+  test('Should follow nextCursor and return every tag when it lists the tags', async () => {
+    const pages = [
+      { data: [{ id: 't1', name: 'dev', createdAt: '2026-01-01' }], nextCursor: 'next page' },
+      { data: [{ id: 't2', name: 'prod' }], nextCursor: null },
+    ];
+    let page = 0;
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json(pages[page++])));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listTags();
+
+    expect(result).toEqual({
+      ok: true,
+      value: { call: 'GET /api/v1/tags', status: 200, body: [{ id: 't1', name: 'dev' }, { id: 't2', name: 'prod' }] },
+    });
+    expect(calls.map(({ url }) => url)).toEqual([
+      'https://n8n.example.com/api/v1/tags?limit=250',
+      'https://n8n.example.com/api/v1/tags?limit=250&cursor=next%20page',
+    ]);
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+  });
+
+  test('Should fail as an invalid response when a tag page has no data list', async () => {
+    const { fetch } = fakeFetch(() => Promise.resolve(json({ nextCursor: null })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listTags();
+
+    expect(result).toMatchObject({ ok: false, error: { kind: 'invalid-response', call: 'GET /api/v1/tags' } });
+  });
+
+  test('Should post the name when it creates a tag', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 't1', name: 'dev' }, 201)));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.createTag('dev');
+
+    expect(result).toEqual({ ok: true, value: { call: 'POST /api/v1/tags', status: 201, body: { id: 't1', name: 'dev' } } });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/tags');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(sentBody(calls[0])).toEqual({ name: 'dev' });
+  });
+
+  test('Should put the list of tag ids when it sets the tags of a workflow', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json([{ id: 'h', name: 'hand-added' }, { id: 't1', name: 'dev' }])));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.updateWorkflowTags(ABC, [fakeTagId('h'), fakeTagId('t1')]);
+
+    expect(result).toEqual({
+      ok: true,
+      value: { call: 'PUT /api/v1/workflows/abc/tags', status: 200, body: [{ id: 'h', name: 'hand-added' }, { id: 't1', name: 'dev' }] },
+    });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/tags');
+    expect(calls[0]?.init?.method).toBe('PUT');
+    expect(sentBody(calls[0])).toEqual([{ id: 'h' }, { id: 't1' }]);
   });
 });

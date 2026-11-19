@@ -23,12 +23,10 @@ import {
 import { err, ok } from '#src/core/common/result';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
-import { planToReport } from '#src/core/deliver/apply-plan';
-import { deploy } from '#src/core/deliver/deploy';
+import { deploy, previewDeploy } from '#src/core/deliver/deploy';
 import { DeployInput, DeployReport } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE, lockWriter, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
 import { LockWriter } from '#src/core/deliver/lock-file.model';
-import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { findSharedEntries } from '#src/core/deliver/shared-entries';
 import { MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 
@@ -39,6 +37,8 @@ const DESCRIPTION = `Delivers every workflow in the workflows folder of a target
   unchanged workflows are skipped,
   workflows deleted (archived) in the n8n editor are restored as unpublished drafts.
 The stable name is the file name without .workflow.ts / .json: 1 to 64 of a-z, 0-9 and -.
+Each delivered workflow also gets a tag named after the target, for display in n8n only; set
+tag: false on the target in ./${CONFIG_FILE} to turn it off. A tag failure is only a warning.
 
 ${LOCK_FILE} records, for each instance (the url of a target), the n8n id of each stable name. Deploy finds
 your workflows by these ids only: never by name or tag, and it never touches a workflow it does
@@ -94,7 +94,7 @@ export const deployCommand: CommandDefinition = defineCommand({
   },
   modes: {
     'dry-run': (files, deps) =>
-      eachTarget(files, deps, { dryRun: true }, async (input) => planToReport(await planDeploy(input))),
+      eachTarget(files, deps, { dryRun: true }, previewDeploy),
   },
   default: (files, deps) => eachTarget(files, deps, { dryRun: false }, deploy),
   render: (runs, { format, target }) => renderTargets(runs, { json: format.json, all: target.kind === 'all' }),
@@ -152,6 +152,11 @@ async function deployTarget(
   if (!lock.ok) {
     return renderInvalidLockFile(where, lock.error);
   }
-  const input = { workflows, client: target.client, managed: managedIds(lock.value, instance) };
+  const input: DeployInput = {
+    workflows,
+    client: target.client,
+    managed: managedIds(lock.value, instance),
+    ...(target.tag ? { targetTag: target.name } : {}),
+  };
   return renderReport(where, await run(input, lockWriter(lock.value, instance, (text) => writeLockFile(LOCK_FILE, text))), format);
 }

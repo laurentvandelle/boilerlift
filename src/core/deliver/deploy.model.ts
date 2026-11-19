@@ -1,6 +1,6 @@
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/core/common/exit-codes';
-import { N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
+import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'recreated' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';
 
@@ -71,8 +71,21 @@ export interface DeployError extends WorkflowError {
  * Something that went through but that the user should know about. It is data: the deploy command words it as what
  * deploy did, or for a dry run as what deploy would do.
  * - `restored`: the recorded workflow was archived in n8n, and deploy restores it as an unpublished draft.
+ * - `tag-failed`: the workflow was delivered, but the target tag `tag` could not be found, created or added to it:
+ *   `call` failed with `detail`. It changes neither the action nor the exit code.
  */
-export type DeployWarning = { kind: 'restored'; stableName: StableName; id: WorkflowId };
+export type DeployWarning =
+  | { kind: 'restored'; stableName: StableName; id: WorkflowId }
+  | { kind: 'tag-failed'; stableName: StableName; tag: string; call: string; detail: string };
+
+/**
+ * The target tag of a report: its name, and how many workflows received it, or for a dry run would receive it. A
+ * workflow that already has it does not count.
+ */
+export interface TargetTagStatus {
+  name: string;
+  added: number;
+}
 
 /**
  * How a run ended. A run that went to the end exits 0, or 5 when a workflow failed. A run stopped by a failure
@@ -96,6 +109,8 @@ export type DeployReport = {
   results: DeployResult[];
   warnings: DeployWarning[];
   lockFile: LockFileStatus;
+  /** Absent when the target turns the tag off. */
+  tag?: TargetTagStatus;
 } & RunEnd;
 
 export interface DeployInput {
@@ -103,6 +118,8 @@ export interface DeployInput {
   client: N8nClient;
   /** The ids the lock file records for this instance, by stable name (`managedIds`). The only managed workflows. */
   managed: Map<StableName, WorkflowId>;
+  /** The target tag to add to every delivered workflow: the target's name. Absent when the target turns it off. */
+  targetTag?: string;
 }
 
 /** One workflow in a deploy plan: the action a deploy would take, and what apply needs to take it. */
@@ -113,4 +130,6 @@ export type DeployPlan = {
   /** Every local workflow, in stable-name order. Empty when the plan stopped before any workflow. */
   steps: PlannedStep[];
   warnings: DeployWarning[];
+  /** The tags each workflow the plan read has on the instance, by stable name. A workflow it did not read has none. */
+  tags: Map<StableName, N8nTag[]>;
 } & RunEnd;

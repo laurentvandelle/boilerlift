@@ -23,6 +23,11 @@ export interface TargetConfig {
   apiKey: string | undefined;
   /** The folder of the workflow files to deploy to this target, from the folder of the config file. */
   workflows: string;
+  /**
+   * Whether deploy adds the target tag, named after the target, to each workflow it delivers here, for display in n8n.
+   * Default `true`.
+   */
+  tag?: boolean;
 }
 
 /** What `boilerlift.config.ts` exports by default: the targets, by name, in the order they are listed and run. */
@@ -38,6 +43,8 @@ export interface DeclaredTarget {
   /** Not blank. */
   apiKey: string;
   workflows: string;
+  /** Whether deploy adds the target tag. `true` when the config leaves it out. */
+  tag: boolean;
 }
 
 /** The project config: its targets, in declaration order. Never empty. */
@@ -49,6 +56,8 @@ export interface ProjectConfig {
 export interface Target {
   name: string;
   workflows: string;
+  /** Whether deploy adds the target tag, named `name`. */
+  tag: boolean;
   connection: ConnectionConfig;
 }
 

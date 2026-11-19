@@ -13,8 +13,8 @@ import { Result, err, ok } from '#src/core/common/result';
 /** The project config file, in the current folder. */
 export const CONFIG_FILE = 'boilerlift.config.ts';
 
-/** A target name: 1 to 64 of a-z, 0-9 and -, like a stable name. */
-const TARGET_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
+/** A target name: 1 to 24 of a-z, 0-9 and -. 24 is the longest tag name n8n takes, and the target tag is the name. */
+const TARGET_NAME_PATTERN = /^[a-z0-9-]{1,24}$/;
 
 const URL_PROTOCOLS = ['http:', 'https:'];
 
@@ -65,7 +65,7 @@ function parseContent(content: unknown): Result<ProjectConfig, ConfigError> {
 function parseTarget(name: string, raw: unknown): Result<DeclaredTarget, string[]> {
   const where = `target "${name}"`;
   if (!TARGET_NAME_PATTERN.test(name)) {
-    return err([`${where}: a target name must be 1 to 64 lowercase letters, digits or dashes`]);
+    return err([`${where}: a target name must be 1 to 24 lowercase letters, digits or dashes (24 is the longest tag name n8n takes)`]);
   }
   if (!isRecord(raw)) {
     return err([`${where} must be an object with url, apiKey and workflows`]);
@@ -87,10 +87,14 @@ function parseTarget(name: string, raw: unknown): Result<DeclaredTarget, string[
   if (workflows === '') {
     problems.push(`${where}: "workflows" must be the folder of its workflow files, such as './workflows'`);
   }
-  if (problems.length > 0 || url === null || apiKey === null) {
+  const tag = raw.tag ?? true;
+  if (typeof tag !== 'boolean') {
+    problems.push(`${where}: "tag" must be true or false`);
+  }
+  if (problems.length > 0 || url === null || apiKey === null || typeof tag !== 'boolean') {
     return err(problems);
   }
-  return ok({ name, url: url.replace(/\/+$/, ''), apiKey, workflows });
+  return ok({ name, url: url.replace(/\/+$/, ''), apiKey, workflows, tag });
 }
 
 /** A string, trimmed. `undefined` (an unset environment variable) reads as blank; anything else is `null`. */
@@ -136,6 +140,7 @@ function resolveTargets(targets: DeclaredTarget[], available: string[]): Result<
     resolved.push({
       name: target.name,
       workflows: target.workflows,
+      tag: target.tag,
       connection: { url: { value: target.url, source: CONFIG_FILE }, apiKey: { value: target.apiKey, source: CONFIG_FILE } },
     });
   }

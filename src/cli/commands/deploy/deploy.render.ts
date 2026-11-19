@@ -55,6 +55,8 @@ interface Wording {
   outcomes: Record<DeployWarning['kind'], string>;
   /** The line that tells the user to commit the lock file, when it changed or would change. */
   lockFile: string;
+  /** The line under the summary when the target tag went, or would go, on `added` workflows. */
+  tag: (name: string, added: number) => string;
 }
 
 const DEPLOY_WORDING: Wording = {
@@ -75,8 +77,9 @@ const DEPLOY_WORDING: Wording = {
     return [`${created} created, ${recreatedCount}${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`];
   },
   failed: 'Failed',
-  outcomes: { restored: 'it is back' },
+  outcomes: { restored: 'it is back', 'tag-failed': 'the workflow is deployed without it' },
   lockFile: `${LOCK_FILE} updated — commit it`,
+  tag: (name, added) => `Tag ${name} added to ${added} workflows`,
 };
 
 const DRY_RUN_WORDING: Wording = {
@@ -97,8 +100,9 @@ const DRY_RUN_WORDING: Wording = {
     'n8n can still reject a write; this preview covers what reads can show.',
   ],
   failed: 'Would fail',
-  outcomes: { restored: 'deploy would bring it back' },
+  outcomes: { restored: 'deploy would bring it back', 'tag-failed': 'the workflow would be deployed without it' },
   lockFile: `${LOCK_FILE} would update — commit it after lift deploy`,
+  tag: (name, added) => `Tag ${name} would be added to ${added} workflows`,
 };
 
 const LABELS = [DEPLOY_WORDING, DRY_RUN_WORDING].flatMap(({ labels }) => Object.values(labels));
@@ -234,6 +238,8 @@ function warningText(warning: DeployWarning, wording: Wording): string {
   switch (warning.kind) {
   case 'restored':
     return `${stableName}: workflow ${warning.id} was archived in n8n; ${outcome} as an unpublished draft`;
+  case 'tag-failed':
+    return `${stableName}: tag ${warning.tag} not added (${warning.call} → ${warning.detail}); ${outcome}`;
   }
 }
 
@@ -252,7 +258,12 @@ function renderText(target: DeployTarget, report: DeployReport, wording: Wording
     const stderr = [`✗ ${error.call} → ${error.detail}`, `  → ${error.hint}`, 'Nothing was written to n8n.'];
     return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: `${stderr.join('\n')}\n` };
   }
-  stdout.push(...wording.summary(summarize(report.results)));
+  const [summary = '', ...notes] = wording.summary(summarize(report.results));
+  stdout.push(summary);
+  if (report.tag !== undefined && report.tag.added > 0) {
+    stdout.push(wording.tag(report.tag.name, report.tag.added));
+  }
+  stdout.push(...notes);
   if (report.lockFile.changed) {
     stdout.push(wording.lockFile);
   }
@@ -298,6 +309,7 @@ function jsonPayload(instance: string, report: DeployReport, wording: Wording): 
     summary: summarize(report.results),
     warnings: report.warnings.map((warning) => warningText(warning, wording)),
     lockFile: report.lockFile,
+    tag: report.tag ?? null,
     error: error === undefined ? null : { call: error.call, detail: error.detail, hint: error.hint },
     exitCode: report.exitCode,
   };
