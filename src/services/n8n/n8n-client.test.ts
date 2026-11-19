@@ -164,7 +164,7 @@ describe('createN8nClient public API calls', () => {
     expect(result).toEqual({ ok: false, error: { kind: 'unreachable', call: 'GET /api/v1/workflows/abc', reason: 'connection refused' } });
   });
 
-  test('Should default tags, isArchived and settings when a fetched workflow has none', async () => {
+  test('Should default tags, isArchived, settings and version ids when a fetched workflow has none', async () => {
     const { fetch } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', nodes: [], connections: {} })));
     const client = createN8nClient({ config: CONFIG, fetch });
 
@@ -175,9 +175,100 @@ describe('createN8nClient public API calls', () => {
       value: {
         call: 'GET /api/v1/workflows/abc',
         status: 200,
-        body: { id: 'abc', name: 'A', tags: [], isArchived: false, nodes: [], connections: {}, settings: {} },
+        body: {
+          id: 'abc',
+          name: 'A',
+          tags: [],
+          isArchived: false,
+          versionId: null,
+          activeVersionId: null,
+          nodes: [],
+          connections: {},
+          settings: {},
+        },
       },
     });
+  });
+
+  test('Should read the draft and published version ids when it fetches a workflow', async () => {
+    const { fetch } = fakeFetch(() =>
+      Promise.resolve(json({ id: 'abc', name: 'A', nodes: [], connections: {}, versionId: 'v2', activeVersionId: 'v1' })),
+    );
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.getWorkflow(ABC);
+
+    expect(result.ok && result.value.body).toMatchObject({ versionId: 'v2', activeVersionId: 'v1' });
+  });
+
+  test('Should report an invalid response when a version id is not a string', async () => {
+    const { fetch } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', nodes: [], connections: {}, versionId: 2 })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.getWorkflow(ABC);
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: 'invalid-response',
+        call: 'GET /api/v1/workflows/abc',
+        status: 200,
+        detail: 'the body is not a workflow (id, name, nodes, connections)',
+      },
+    });
+  });
+
+  test('Should follow nextCursor with the API key when it lists workflows', async () => {
+    const pages = [
+      json({ data: [{ id: 'a', name: 'A', versionId: 'v1', activeVersionId: null }], nextCursor: 'next-page' }),
+      json({ data: [{ id: 'b', name: 'B', isArchived: true, versionId: 'v2', activeVersionId: 'v2' }], nextCursor: null }),
+    ];
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(pages.shift() ?? json({ data: [], nextCursor: null })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listWorkflows();
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        call: 'GET /api/v1/workflows',
+        status: 200,
+        body: [
+          { id: 'a', name: 'A', tags: [], isArchived: false, versionId: 'v1', activeVersionId: null },
+          { id: 'b', name: 'B', tags: [], isArchived: true, versionId: 'v2', activeVersionId: 'v2' },
+        ],
+      },
+    });
+    expect(calls.map((call) => call.url)).toEqual([
+      'https://n8n.example.com/api/v1/workflows?limit=250&excludePinnedData=true',
+      'https://n8n.example.com/api/v1/workflows?limit=250&excludePinnedData=true&cursor=next-page',
+    ]);
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+  });
+
+  test('Should report an invalid response when a page of workflows has no data list', async () => {
+    const { fetch } = fakeFetch(() => Promise.resolve(json({ items: [] })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listWorkflows();
+
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'invalid-response', call: 'GET /api/v1/workflows', status: 200, detail: 'the body is not a page of workflows (data, nextCursor)' },
+    });
+  });
+
+  test('Should stop at the failed page when a page of workflows answers an HTTP error', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(new Response('{"message":"unauthorized"}', { status: 401 })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listWorkflows();
+
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: 'http-error', call: 'GET /api/v1/workflows', status: 401, message: 'unauthorized' },
+    });
+    expect(calls).toHaveLength(1);
   });
 
   test('Should report an invalid response when a success answer is not JSON', async () => {

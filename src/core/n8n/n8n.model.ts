@@ -48,8 +48,21 @@ export interface N8nWorkflowSummary {
   isArchived: boolean;
 }
 
+/**
+ * The two versions of a workflow (n8n 2.35.0 or later): `versionId` is its current draft, `activeVersionId` the version
+ * that is published, null when none is. The draft is not live while the two differ. The client defaults omitted ids to
+ * null.
+ */
+export interface N8nWorkflowVersions {
+  versionId: string | null;
+  activeVersionId: string | null;
+}
+
+/** A workflow as `GET /api/v1/workflows` lists it: a summary and its versions, without its content. */
+export interface N8nListedWorkflow extends N8nWorkflowSummary, N8nWorkflowVersions {}
+
 /** A workflow as `GET /api/v1/workflows/{id}` returns it: the top-level fields are the current draft. Omitted `settings` default to `{}`. */
-export interface N8nWorkflow extends N8nWorkflowSummary {
+export interface N8nWorkflow extends N8nWorkflowSummary, N8nWorkflowVersions {
   nodes: unknown[];
   connections: Record<string, unknown>;
   settings: Record<string, unknown>;
@@ -72,6 +85,11 @@ export interface N8nClient {
   readApiSpec(): Promise<Result<ApiAnswer<string>, ApiFailure>>;
   /** `GET /api/v1/workflows/{id}`: the workflow and its current draft. An id the instance does not know answers 404. */
   getWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflow>, ApiFailure>>;
+  /**
+   * `GET /api/v1/workflows`, every page: every workflow of the instance the API key can see, archived ones included
+   * (`isArchived`).
+   */
+  listWorkflows(): Promise<Result<ApiAnswer<N8nListedWorkflow[]>, ApiFailure>>;
   /** `POST /api/v1/workflows`: the new workflow is never published. */
   createWorkflow(body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `PUT /api/v1/workflows/{id}?publishIfActive=false`: the change lands as a draft. */
