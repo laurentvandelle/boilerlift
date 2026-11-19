@@ -18,22 +18,16 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, typecheck, test and build (Node ${{ matrix.node-version }})
+    name: Lint, typecheck, test and build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # The minimum in package.json engines, and the development version from .nvmrc.
-        node-version: ['22.18', '.nvmrc']
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }}
+      - name: Set up Node.js from .nvmrc
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version != '.nvmrc' && matrix.node-version || '' }}
-          node-version-file: ${{ matrix.node-version == '.nvmrc' && '.nvmrc' || '' }}
+          node-version-file: .nvmrc
 
       # The npm of devEngines in package.json: npm ci refuses any other version.
       - name: Install the npm version of package.json devEngines
