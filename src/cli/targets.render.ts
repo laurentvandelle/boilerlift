@@ -2,7 +2,17 @@ import { CliResult } from '#src/cli/cli.model';
 import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
 import { describeConfigError } from '#src/core/config/config-error';
 import { ConfigError } from '#src/core/config/config.model';
-import { availableTargets } from '#src/core/config/project-config';
+import { CONFIG_FILE, availableTargets } from '#src/core/config/project-config';
+import { API_PATH } from '#src/core/n8n/n8n-api';
+
+/** The help section of every command that runs on targets: where they are declared, and how one is picked. */
+export const TARGETS_HELP = `Targets (declared in ./${CONFIG_FILE}):
+  url     Root URL of the n8n instance (Boilerlift adds ${API_PATH})
+  apiKey  Its n8n API key (n8n → Settings → n8n API). Read it from the environment in the
+          file, for example process.env.N8N_API_KEY: the variables of ./.env are loaded
+          first, and a variable already set in the environment wins.
+With one target declared, the command runs on it. With several, name one with --target,
+or run on every one in turn with --all.`;
 
 /** What a command that runs on targets produced for one of them: its text, its --json payload and its recap line. */
 export interface TargetRun {

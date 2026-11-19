@@ -53,8 +53,9 @@ function targetOptionOf(arg: string): CommandOption | undefined {
 }
 
 /**
- * Parses the options of `command`, then runs it. Only a parse error is a usage error. An error the command throws is
- * a bug or a broken environment: it reaches bin.ts, which reports it with crashResult.
+ * Parses the options of `command`, then runs it. Only a parse error, `--target` with `--all`, or two mode options at
+ * once is a usage error. An error the command throws is a bug or a broken environment: it reaches bin.ts, which
+ * reports it with crashResult.
  */
 async function runCommand(command: CommandDefinition, args: string[], ctx: CommandContext): Promise<CliResult> {
   const input = parseInput(command, args);
@@ -66,6 +67,10 @@ async function runCommand(command: CommandDefinition, args: string[], ctx: Comma
   }
   if (command.targets && input.value.values.target !== undefined && input.value.values.all === true) {
     return usageError('--target and --all cannot be used together: name one target, or run on every one.', renderCommandHelp(command));
+  }
+  const modes = command.modes.filter((name) => input.value.values[name] === true);
+  if (modes.length > 1) {
+    return usageError(`${modes.map((name) => `--${name}`).join(' and ')} cannot be used together`, renderCommandHelp(command));
   }
   return command.run(input.value, ctx);
 }

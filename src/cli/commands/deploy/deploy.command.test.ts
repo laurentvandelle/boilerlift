@@ -486,14 +486,18 @@ boilerlift.lock.json would update — commit it after lift deploy
     expect(JSON.parse(result.stdout)).toMatchObject({ dryRun: true, results: [], exitCode: 0 });
   });
 
-  test('Should list --dry-run in the usage and options when the help is generated from them', () => {
-    const { usage, options } = deployCommand;
+  test('Should declare --dry-run as a mode and --json as a format when the help is generated from the options', () => {
+    const { options, modes, help } = deployCommand;
 
-    const dryRun = options['dry-run'];
+    const declared = [options['dry-run'], options.json];
 
-    expect(usage).toContain('lift deploy [--target <name> | --all] [--dry-run] [--json]');
-    expect(usage).toContain('It exits with the same codes as a real deploy.');
-    expect(dryRun).toEqual({ type: 'boolean', description: 'Show what deploy would do; write nothing' });
+    expect(declared).toEqual([
+      { type: 'boolean', description: 'Show what deploy would do; write nothing', mode: true },
+      { type: 'boolean', description: 'Print the report as JSON', format: true },
+    ]);
+    expect(modes).toEqual(['dry-run']);
+    expect(help.description).toContain('It exits with the same codes as a real deploy.');
+    expect(deployCommand.targets).toBe(true);
   });
 
   test('Should exit 1 and send nothing when the url of the target uses another scheme than http or https', async () => {
@@ -702,8 +706,9 @@ Next: Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boi
     });
   });
 
-  test('Should explain the lock file, the recreate rule, the 64-character names and exit code 7 when the help is generated from the usage', () => {
-    const { usage } = deployCommand;
+  test('Should explain the lock file, the recreate rule, the 64-character names and exit code 7 when the help is generated from its fields', () => {
+    const { description = '', exitCodes } = deployCommand.help;
+    const usage = [description, ...exitCodes.map(([code, meaning]) => `${code}  ${meaning}`)].join('\n');
 
     const lines = [
       'Commit the file after each deploy that changes it',

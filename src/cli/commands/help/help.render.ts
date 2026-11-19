@@ -1,5 +1,6 @@
 import { CliResult, CommandDefinition, CommandOption } from '#src/cli/cli.model';
 import { GLOBAL_OPTIONS, commandOptions } from '#src/cli/commands/help/help.options';
+import { TARGETS_HELP } from '#src/cli/targets.render';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 
 /** A help text on stdout, exit 0. */
@@ -33,14 +34,40 @@ Run \`lift help <command>\` for the options of one command.
 `;
 }
 
+/**
+ * The help of one command, built from its definition: the usage line (from its name, positionals and options), the
+ * summary, the description, how it picks its targets (when it needs them), its options with `-h, --help`, and its exit
+ * codes.
+ */
 export function renderCommandHelp(command: CommandDefinition): string {
-  const options = table(optionRows(commandOptions(command)));
-  return `Usage: ${command.usage}
+  const sections = [
+    `Usage: ${usageLine(command)}`,
+    command.summary,
+    ...(command.help.description === undefined ? [] : [command.help.description]),
+    ...(command.targets ? [TARGETS_HELP] : []),
+    `Options:\n${table(optionRows(commandOptions(command)))}`,
+    `Exit codes:\n${table(command.help.exitCodes.map(([code, meaning]): Row => [String(code), meaning]))}${
+      command.targets ? 'With --all, the exit code is the highest of the targets.\n' : ''
+    }`,
+  ];
+  return sections.map((section) => section.replace(/\n$/, '')).join('\n\n') + '\n';
+}
 
-${command.summary}
-
-Options:
-${options}`;
+/**
+ * `lift <name> [positionals] [--target <name> | --all] [--flag] [--text <text>]`, from the declared options and the
+ * target options when the command needs targets; `--help` is left out.
+ */
+function usageLine(command: CommandDefinition): string {
+  const options = Object.entries(command.options).map(([name, option]) =>
+    option.type === 'string' ? `[--${name} <${option.valueName ?? name}>]` : `[--${name}]`,
+  );
+  return [
+    'lift',
+    command.name,
+    ...(command.help.positionals === undefined ? [] : [command.help.positionals]),
+    ...(command.targets ? ['[--target <name> | --all]'] : []),
+    ...options,
+  ].join(' ');
 }
 
 /** One line of a help table: the left column, then its description. */
@@ -54,7 +81,7 @@ function optionRows(options: Readonly<Record<string, CommandOption>>): Row[] {
   });
 }
 
-function table(rows: Row[]): string {
+function table(rows: readonly (readonly [string, string])[]): string {
   const width = Math.max(...rows.map(([left]) => left.length));
   return rows.map(([left, right]) => `  ${left.padEnd(width)}  ${right}\n`).join('');
 }

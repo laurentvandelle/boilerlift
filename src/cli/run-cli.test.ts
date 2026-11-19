@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { fakeContext } from '#src/cli/cli.fake';
-import { CommandContext, CommandDefinition } from '#src/cli/cli.model';
+import { fakeContext, fakeSingleTarget, fakeTwoTargets } from '#src/cli/cli.fake';
+import { CliResult, CommandContext, CommandDefinition } from '#src/cli/cli.model';
 import { helpCommand } from '#src/cli/commands/help/help.command';
 import { renderCommandHelp, renderGlobalHelp } from '#src/cli/commands/help/help.render';
 import { versionCommand } from '#src/cli/commands/version/version.command';
@@ -11,42 +11,64 @@ import { crashResult, runCli } from '#src/cli/run-cli';
 const echoCommand: CommandDefinition = defineCommand({
   name: 'echo',
   summary: 'Echo the parsed input',
-  usage: 'lift echo [options]',
+  help: { exitCodes: [[0, 'The input is echoed']] },
   allowPositionals: false,
-  targets: false,
   options: {
     name: { type: 'string', short: 'n', description: 'Name to echo' },
     loud: { type: 'boolean', description: 'Shout' },
   },
-  run: ({ options }) =>
-    Promise.resolve({ exitCode: 0, stdout: `${String(options.text('name'))}${options.flag('loud') ? '!' : ''}\n`, stderr: '' }),
+  needs: [],
+  modes: {},
+  default: (_prepared, _deps, { options }) => Promise.resolve(`${String(options.text('name'))}${options.flag('loud') ? '!' : ''}`),
+  render: (text) => ({ exitCode: 0, stdout: `${text}\n`, stderr: '' }),
+});
+
+/** A command with two mode options: each one runs its own handler. */
+const pickCommand: CommandDefinition = defineCommand({
+  name: 'pick',
+  summary: 'Pick one way',
+  help: { exitCodes: [[0, 'The way is picked']] },
+  allowPositionals: false,
+  options: {
+    left: { type: 'boolean', description: 'Go left', mode: true },
+    right: { type: 'boolean', description: 'Go right', mode: true },
+  },
+  needs: [],
+  modes: { left: () => Promise.resolve('left'), right: () => Promise.resolve('right') },
+  default: () => Promise.resolve('straight'),
+  render: (way) => ({ exitCode: 0, stdout: `${way}\n`, stderr: '' }),
 });
 
 /** A command with a bug: it throws instead of returning a CliResult. */
 const throwingCommand: CommandDefinition = defineCommand({
   name: 'boom',
   summary: 'Throw',
-  usage: 'lift boom',
+  help: { exitCodes: [[0, 'Never']] },
   allowPositionals: false,
-  targets: false,
   options: {},
-  run: () => Promise.reject(new Error('EACCES: permission denied, scandir workflows')),
+  needs: [],
+  modes: {},
+  default: () => Promise.reject(new Error('EACCES: permission denied, scandir workflows')),
+  render: (): CliResult => ({ exitCode: 0, stdout: '', stderr: '' }),
 });
 
-/** A command that runs on targets: it prints the selection runCli handed it. */
+/** A command that runs on targets: it prints the selection runCli handed it, then the names of the targets it runs on. */
 const targetCommand: CommandDefinition = defineCommand({
   name: 'aim',
   summary: 'Print the selected targets',
-  usage: 'lift aim',
+  help: { exitCodes: [[0, 'The targets are printed']] },
   allowPositionals: false,
-  targets: true,
   options: {},
-  run: ({ target }) => Promise.resolve({ exitCode: 0, stdout: `${JSON.stringify(target)}\n`, stderr: '' }),
+  needs: ['targets'],
+  modes: {},
+  default: (_prepared, { targets }) => Promise.resolve(targets.selected.map(({ name }) => name).join(',')),
+  render: (names, { target }) => ({ exitCode: 0, stdout: `${JSON.stringify(target)} ${names}\n`, stderr: '' }),
 });
 
 const ctx: CommandContext = fakeContext({
   version: '1.2.3',
-  registry: [helpCommand, versionCommand, echoCommand, throwingCommand, targetCommand],
+  loadProjectConfig: fakeTwoTargets(),
+  registry: [helpCommand, versionCommand, echoCommand, pickCommand, throwingCommand, targetCommand],
 });
 const GLOBAL_HELP = renderGlobalHelp(ctx.registry);
 
@@ -169,6 +191,24 @@ Run \`lift help <command>\` for the options of one command.
     expect(result.stderr).toContain(renderCommandHelp(versionCommand));
   });
 
+  test('Should run the handler of the mode option when it is the only one given', async () => {
+    const args = ['pick', '--right'];
+
+    const result = await runCli(args, ctx);
+
+    expect(result).toEqual({ exitCode: 0, stdout: 'right\n', stderr: '' });
+  });
+
+  test('Should print the command help and fail when two mode options are given together', async () => {
+    const args = ['pick', '--left', '--right'];
+
+    const result = await runCli(args, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(`--left and --right cannot be used together\n\n${renderCommandHelp(pickCommand)}`);
+  });
+
   test('Should let the error reach the caller, not report a usage error, when a command throws', async () => {
     const run = runCli(['boom'], ctx);
 
@@ -205,25 +245,27 @@ describe('crashResult', () => {
   test('Should pass the named target to the command when --target follows the command name', async () => {
     const result = await runCli(['aim', '-t', 'prod'], ctx);
 
-    expect(result.stdout).toBe('{"kind":"one","name":"prod"}\n');
+    expect(result.stdout).toBe('{"kind":"one","name":"prod"} prod\n');
   });
 
   test('Should pass the target options to the command when they come before the command name', async () => {
     const result = await runCli(['--target', 'prod', 'aim'], ctx);
 
-    expect(result.stdout).toBe('{"kind":"one","name":"prod"}\n');
+    expect(result.stdout).toBe('{"kind":"one","name":"prod"} prod\n');
   });
 
   test('Should select every target when --all is given', async () => {
     const result = await runCli(['--all', 'aim'], ctx);
 
-    expect(result.stdout).toBe('{"kind":"all"}\n');
+    expect(result.stdout).toBe('{"kind":"all"} dev,prod\n');
   });
 
   test('Should select the default target when neither --target nor --all is given', async () => {
-    const result = await runCli(['aim'], ctx);
+    const single = fakeContext({ registry: ctx.registry, loadProjectConfig: fakeSingleTarget() });
 
-    expect(result.stdout).toBe('{"kind":"default"}\n');
+    const result = await runCli(['aim'], single);
+
+    expect(result.stdout).toBe('{"kind":"default"} dev\n');
   });
 
   test('Should reject --target as an unknown option when the command runs on no target', async () => {

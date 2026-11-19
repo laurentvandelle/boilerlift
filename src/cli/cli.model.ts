@@ -1,7 +1,8 @@
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
-import { BoilerliftConfig, ProjectConfigFile, TargetSelection } from '#src/core/config/config.model';
 import { Result } from '#src/core/common/result';
+import { BoilerliftConfig, ProjectConfig, ProjectConfigFile, Target, TargetSelection } from '#src/core/config/config.model';
+import { N8nClient } from '#src/core/n8n/n8n.model';
 
 export type { BoilerliftConfig, ProjectConfigFile, TargetSelection, WorkflowFile };
 
@@ -11,13 +12,24 @@ export interface CliResult {
   stderr: string;
 }
 
-export interface CommandOption {
-  type: 'boolean' | 'string';
+interface OptionBase {
   short?: string;
   /** What the help shows as the value of a string option, `--target <name>`. Defaults to the option name. */
   valueName?: string;
   description: string;
 }
+
+/**
+ * One option of a command, by its role:
+ * - a plain value, read through `input.options` (`flag`, `text`);
+ * - `format: true`: it changes how the result prints, and reaches `render` in `format`;
+ * - `mode: true`: a boolean that picks the code to run, the handler of the same name in `modes`.
+ *
+ * An option is never both a mode and a format.
+ */
+export type CommandOption =
+  | (OptionBase & { type: 'boolean' | 'string'; format?: true; mode?: never })
+  | (OptionBase & { type: 'boolean'; mode: true; format?: never });
 
 /** What runCli hands to every command: the positionals, and the option values `parseArgs` read, by option name. */
 export interface CommandInput {
@@ -31,6 +43,21 @@ export type OptionNames<Options, Type extends CommandOption['type']> = {
 }[keyof Options] &
   string;
 
+/** The names of the mode options in `Options`: each one has its handler in `modes`. */
+export type ModeNames<Options> = {
+  [Name in keyof Options]: Options[Name] extends { mode: true } ? Name : never;
+}[keyof Options] &
+  string;
+
+/** The values of the `format: true` options, by name: a boolean is true when given, a string is its value. */
+export type FormatValues<Options> = {
+  [Name in keyof Options as Options[Name] extends { format: true } ? Name : never]: Options[Name] extends {
+    type: 'boolean';
+  }
+    ? boolean
+    : string | undefined;
+};
+
 /** The option values of a command, read by name: a name that `Options` does not declare with that type is a type error. */
 export interface OptionValues<Options> {
   /** A boolean option: true when it was given. */
@@ -39,26 +66,99 @@ export interface OptionValues<Options> {
   text(name: OptionNames<Options, 'string'>): string | undefined;
 }
 
-/**
- * What a command built with defineCommand receives: option values typed by its declared options, and the targets
- * that `--target` and `--all` select (`default` for a command that runs on no target).
- */
+/** What `prepare`, the handlers and `render` read from the command line. */
 export interface TypedCommandInput<Options> {
   positionals: string[];
   options: OptionValues<Options>;
+  format: FormatValues<Options>;
+  /** The mode option that was given, or `'default'`. */
+  mode: ModeNames<Options> | 'default';
+  /** The targets `--target` and `--all` select: `default` without them, and for a command that does not need targets. */
   target: TargetSelection;
 }
 
-/** What defineCommand takes: a command whose `run` reads options typed by its `options`. */
-export interface CommandSpec<Options extends Readonly<Record<string, CommandOption>>> {
+/** A selected target, with the client of its n8n instance built on `ctx.fetch`. */
+export interface ConnectedTarget extends Target {
+  client: N8nClient;
+}
+
+/** The `'targets'` need: the project config, and the targets the command runs on, in the order it runs them. */
+export interface SelectedTargets {
+  config: ProjectConfig;
+  selected: readonly ConnectedTarget[];
+}
+
+/**
+ * Everything a command may declare in `needs`: a field of `CommandContext`, or `'targets'`, the targets of
+ * `./boilerlift.config.ts` that `--target` and `--all` select, ready to connect to.
+ */
+export interface NeedSources extends CommandContext {
+  targets: SelectedTargets;
+}
+
+export type NeedName = keyof NeedSources;
+
+/** What a command receives: only the needs it declares. Reading another one is a type error. */
+export type Deps<Needs extends NeedName> = Pick<NeedSources, Needs>;
+
+/** The help of a command, beyond its summary. The usage line, the options and the targets section are generated. */
+export interface CommandHelp {
+  /** Written after the usage line, as in `lift help [command]`. */
+  positionals?: string;
+  /** What the command does, in prose. */
+  description?: string;
+  /** Every exit code the command returns, with what it means. */
+  exitCodes: readonly (readonly [ExitCode, string])[];
+}
+
+/** The code that runs for one mode option, or by default: it does the work and returns what `render` prints. */
+export type CommandHandler<Options, Needs extends NeedName, Prepared, Output> = (
+  prepared: Prepared,
+  deps: Deps<Needs>,
+  input: TypedCommandInput<Options>,
+) => Promise<Output>;
+
+/**
+ * What defineCommand takes. It reads top to bottom, in the order it runs:
+ * `help` → `options` → `needs` → `prepare` → `modes` / `default` → `render`.
+ */
+export interface CommandSpec<
+  Options extends Readonly<Record<string, CommandOption>>,
+  Needs extends NeedName,
+  Prepared,
+  Output,
+> {
   name: string;
   summary: string;
-  usage: string;
+  help: CommandHelp;
   allowPositionals: boolean;
-  /** True when the command runs on targets of the project config: it then takes `--target` and `--all`. */
-  targets: boolean;
+  /**
+   * The options of this command. Every command also takes `-h, --help`, which dispatch handles, and a command that
+   * needs `'targets'` takes `--target` and `--all`: never declare them.
+   */
   options: Options;
-  run(input: TypedCommandInput<Options>, ctx: CommandContext): Promise<CliResult>;
+  /**
+   * The context this command uses. `'targets'` resolves the targets `--target` and `--all` select, or exits 1 with the
+   * config error (as JSON too when a `json` format option is given).
+   */
+  needs: readonly Needs[];
+  /** The work every mode shares. An `err` is a render that ends the command early: no handler runs. */
+  prepare?: (input: TypedCommandInput<Options>, deps: Deps<Needs>) => Promise<Result<Prepared, CliResult>>;
+  /** One handler per mode option, by its name: it runs instead of `default` when its flag is given. `{}` without one. */
+  modes: { readonly [Name in ModeNames<Options>]: CommandHandler<Options, Needs, Prepared, Output> };
+  /** Runs when no mode option is given. */
+  default: CommandHandler<Options, Needs, Prepared, Output>;
+  /** Turns what the handler returned into the CliResult. Lives in `<name>.render.ts`. */
+  render: (output: Output, view: RenderView<Options, Needs, Prepared>) => CliResult;
+}
+
+/** What `render` sees besides the output: the command line, what `prepare` returned, and the needs. */
+export interface RenderView<Options, Needs extends NeedName, Prepared> {
+  format: FormatValues<Options>;
+  mode: ModeNames<Options> | 'default';
+  target: TargetSelection;
+  prepared: Prepared;
+  deps: Deps<Needs>;
 }
 
 export interface CommandContext {
@@ -89,14 +189,16 @@ export interface CommandContext {
   writeLockFile(path: string, text: string): Promise<Result<void, { reason: string }>>;
 }
 
-/** A command as the registry and runCli see it, its option types erased. Build one with defineCommand. */
+/** A command as the registry and runCli see it, its types erased. Build one with defineCommand. */
 export interface CommandDefinition {
   name: string;
   summary: string;
-  usage: string;
+  help: CommandHelp;
   allowPositionals: boolean;
-  /** True when the command takes `--target` and `--all`. */
+  /** True when the command needs `'targets'`: it then takes `--target` and `--all`. */
   targets: boolean;
   options: Readonly<Record<string, CommandOption>>;
+  /** The names of the mode options: dispatch rejects more than one at a time. */
+  modes: readonly string[];
   run(input: CommandInput, ctx: CommandContext): Promise<CliResult>;
 }
