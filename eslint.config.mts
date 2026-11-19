@@ -16,7 +16,7 @@ const noBarrelOrRelative = {
 };
 
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
-const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'common'];
+const CORE = ['compile', 'deliver', 'status', 'config', 'n8n', 'connection', 'common'];
 
 /** The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports them (src/services/AGENTS.md). */
 const SERVICES = ['services-http', 'services-n8n'];
@@ -174,6 +174,7 @@ export default tseslint.config(
         { type: 'cli', pattern: 'src/cli' },
         { type: 'compile', pattern: 'src/core/compile' },
         { type: 'deliver', pattern: 'src/core/deliver' },
+        { type: 'status', pattern: 'src/core/status' },
         { type: 'config', pattern: 'src/core/config' },
         { type: 'n8n', pattern: 'src/core/n8n' },
         { type: 'connection', pattern: 'src/core/connection' },
@@ -220,6 +221,11 @@ export default tseslint.config(
             {
               from: { element: { type: 'deliver' } },
               allow: { to: { element: { type: ['deliver', 'compile', 'config', 'n8n'] } } },
+            },
+            {
+              // status/ reads where each workflow stands: the lock file and the comparison of deliver/, never its writes.
+              from: { element: { type: 'status' } },
+              allow: { to: { element: { type: ['status', 'deliver', 'compile', 'config', 'n8n'] } } },
             },
             {
               from: { element: { type: 'config' } },
@@ -278,12 +284,12 @@ export default tseslint.config(
             // 5. The allowlist already blocks these edges. These policies only name the rule in the error.
             {
               from: { element: { type: 'compile' } },
-              disallow: { to: { element: { type: ['deliver', 'n8n', 'connection'] } } },
+              disallow: { to: { element: { type: ['deliver', 'status', 'n8n', 'connection'] } } },
               message: 'compile/ imports only compile/, config/ and common/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: ['config', 'n8n', 'common'] } },
-              disallow: { to: { element: { type: ['compile', 'deliver'] } } },
+              disallow: { to: { element: { type: ['compile', 'deliver', 'status'] } } },
               message: 'A shared core/ folder imports neither compile/ nor deliver/ (src/core/AGENTS.md).',
             },
             {

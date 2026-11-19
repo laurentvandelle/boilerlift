@@ -2,7 +2,7 @@
 // so past the client the types are trusted. A parser returns `undefined` when the body does not have the expected shape.
 import { isRecord } from '#src/core/common/is-record';
 import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
-import { N8nTag, N8nWorkflow, N8nWorkflowSummary } from '#src/core/n8n/n8n.model';
+import { N8nListedWorkflow, N8nTag, N8nWorkflow, N8nWorkflowSummary, N8nWorkflowVersions } from '#src/core/n8n/n8n.model';
 import { JsonParser } from '#src/services/http/http.model';
 
 export const workflowSummaryParser: JsonParser<N8nWorkflowSummary> = {
@@ -13,6 +13,17 @@ export const workflowSummaryParser: JsonParser<N8nWorkflowSummary> = {
 export const workflowParser: JsonParser<N8nWorkflow> = {
   expected: 'a workflow (id, name, nodes, connections)',
   parse: parseWorkflow,
+};
+
+/** One page of `GET /api/v1/workflows`: its workflows, and the cursor of the next page, null on the last one. */
+export interface WorkflowPage {
+  data: N8nListedWorkflow[];
+  nextCursor: string | null;
+}
+
+export const workflowPageParser: JsonParser<WorkflowPage> = {
+  expected: 'a page of workflows (data, nextCursor)',
+  parse: parseWorkflowPage,
 };
 
 export const tagParser: JsonParser<N8nTag> = {
@@ -71,9 +82,38 @@ function parseWorkflowSummary(value: unknown): N8nWorkflowSummary | undefined {
   return { id, name, tags, isArchived };
 }
 
-/** A summary, plus the draft content. Omitted `settings` default to `{}`. */
-function parseWorkflow(value: unknown): N8nWorkflow | undefined {
+/** Omitted version ids default to null: older instances leave them out. */
+function parseVersions(value: Record<string, unknown>): N8nWorkflowVersions | undefined {
+  const versionId = value.versionId ?? null;
+  const activeVersionId = value.activeVersionId ?? null;
+  if ((versionId !== null && typeof versionId !== 'string') || (activeVersionId !== null && typeof activeVersionId !== 'string')) {
+    return undefined;
+  }
+  return { versionId, activeVersionId };
+}
+
+/** A summary and its versions. */
+function parseListedWorkflow(value: unknown): N8nListedWorkflow | undefined {
   const summary = parseWorkflowSummary(value);
+  const versions = isRecord(value) ? parseVersions(value) : undefined;
+  return summary === undefined || versions === undefined ? undefined : { ...summary, ...versions };
+}
+
+function parseWorkflowPage(value: unknown): WorkflowPage | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const data = parseList(value.data, parseListedWorkflow);
+  const nextCursor = value.nextCursor ?? null;
+  if (data === undefined || (nextCursor !== null && typeof nextCursor !== 'string')) {
+    return undefined;
+  }
+  return { data, nextCursor: nextCursor === '' ? null : nextCursor };
+}
+
+/** A summary and its versions, plus the draft content. Omitted `settings` default to `{}`. */
+function parseWorkflow(value: unknown): N8nWorkflow | undefined {
+  const summary = parseListedWorkflow(value);
   if (summary === undefined || !isRecord(value)) {
     return undefined;
   }

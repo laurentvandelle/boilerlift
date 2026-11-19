@@ -1,10 +1,20 @@
 import { Result, err, ok } from '#src/core/common/result';
 import { API_PATH, DRAFT_PARAM } from '#src/core/n8n/n8n-api';
-import { ApiAnswer, ApiFailure, N8nClient, N8nTag, ProbeAnswer, ProbeFailure, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiAnswer, ApiFailure, N8nClient, N8nListedWorkflow, N8nTag, ProbeAnswer, ProbeFailure, WorkflowId } from '#src/core/n8n/n8n.model';
 import { createHttp, jsonBody, textBody } from '#src/services/http/http';
 import { HttpAnswer, HttpFailure } from '#src/services/http/http.model';
 import { N8nClientOptions } from '#src/services/n8n/n8n-client.model';
-import { tagListParser, tagPageParser, tagParser, workflowParser, workflowSummaryParser } from '#src/services/n8n/n8n-response';
+import {
+  tagListParser,
+  tagPageParser,
+  tagParser,
+  workflowPageParser,
+  workflowParser,
+  workflowSummaryParser,
+} from '#src/services/n8n/n8n-response';
+
+/** The largest page `GET /api/v1/workflows` serves. */
+export const LIST_PAGE_SIZE = 250;
 
 /** The largest page `GET /tags` returns. */
 const TAG_PAGE_LIMIT = 250;
@@ -37,6 +47,27 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
     }
   };
 
+  /** Every page of `GET /workflows`, following `nextCursor`. Pinned data is left out: status reads no content there. */
+  const listWorkflows = async (): Promise<Result<ApiAnswer<N8nListedWorkflow[]>, ApiFailure>> => {
+    const workflows: N8nListedWorkflow[] = [];
+    let cursor: string | null = null;
+    for (;;) {
+      const query = new URLSearchParams({ limit: String(LIST_PAGE_SIZE), excludePinnedData: 'true' });
+      if (cursor !== null) {
+        query.set('cursor', cursor);
+      }
+      const page = await http.getRequest(`${api}/workflows?${query.toString()}`, { headers: auth, response: jsonBody(workflowPageParser) });
+      if (!page.ok) {
+        return page;
+      }
+      workflows.push(...page.value.body.data);
+      cursor = page.value.body.nextCursor;
+      if (cursor === null) {
+        return ok({ call: page.value.call, status: page.value.status, body: workflows });
+      }
+    }
+  };
+
   const workflowUrl = (id: WorkflowId): string => `${api}/workflows/${encodeURIComponent(id)}`;
 
   /** Reads `GET /tags` page by page, following `nextCursor`. The first failure stops it. */
@@ -62,6 +93,7 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
     checkApiKey: () => probe(http.getRequest(`${api}/workflows?limit=1`, { headers: auth, response: textBody })),
     // The spec is YAML: it stays text.
     readApiSpec: () => http.getRequest(`${api}/openapi.yml`, { response: textBody }),
+    listWorkflows,
     getWorkflow: (id) => http.getRequest(workflowUrl(id), { headers: auth, response: jsonBody(workflowParser) }),
     createWorkflow: (body) =>
       http.postRequest(`${api}/workflows`, { headers: auth, body, response: jsonBody(workflowSummaryParser) }),

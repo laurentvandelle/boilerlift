@@ -89,6 +89,7 @@ Commands:
   help     Show help for Boilerlift or for one command
   version  Print the Boilerlift version
   ping     Check the connection to your n8n instance
+  status   Show where each workflow stands on your n8n instance
   deploy   Deliver your workflows to your n8n instance as drafts
 
 Options:

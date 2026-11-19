@@ -5,6 +5,7 @@ import {
   ApiAnswer,
   ApiFailure,
   N8nClient,
+  N8nListedWorkflow,
   N8nTag,
   N8nWorkflow,
   N8nWorkflowBody,
@@ -98,7 +99,8 @@ export function fakeTag({ id, name }: FakeTag): N8nTag {
 
 /**
  * The instance's copy of a delivered local workflow: the same content, with server-side node ids and a server
- * default setting. It carries no tag unless the test gives some.
+ * default setting. It carries no tag unless the test gives some, and its draft is the published version
+ * (`<stableName>-v1`) unless the test gives other version ids.
  */
 export function fakeN8nWorkflow(
   workflow: N8nWorkflowBody & { stableName: string },
@@ -112,6 +114,8 @@ export function fakeN8nWorkflow(
     settings: { ...workflow.settings, redactionPolicy: 'none' },
     tags: (tags ?? []).map(fakeTag),
     isArchived: false,
+    versionId: `${workflow.stableName}-v1`,
+    activeVersionId: `${workflow.stableName}-v1`,
     ...overrides,
   };
 }
@@ -127,7 +131,9 @@ export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT
   const calls: string[] = [];
   const requests: string[] = [];
   let lastId = 0;
+  let lastVersion = 0;
   const newId = (prefix: string): string => `${prefix}${(lastId += 1)}`;
+  const newVersion = (): string => `v${(lastVersion += 1)}`;
   const failureOf = (call: string): ApiFailure | undefined => failures.find((failure) => failure.call === call);
 
   /** Records the call, then answers it with its configured failure, or with what `perform` returns. */
@@ -160,15 +166,27 @@ export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT
     checkHealth: () => probe('GET /healthz'),
     checkApiKey: () => probe(`GET ${API_PATH}/workflows`),
     readApiSpec: () => answer(`GET ${API_PATH}/openapi.yml`, (call) => answered(call, spec)),
+    listWorkflows: () => answer(`GET ${API_PATH}/workflows`, (call) => answered(call, workflows.map(listed))),
     getWorkflow: (id) => onWorkflow(`GET ${API_PATH}/workflows/${id}`, id, (workflow) => structuredClone(workflow)),
     createWorkflow: (body) =>
       answer(`POST ${API_PATH}/workflows`, (call) => {
-        const workflow: N8nWorkflow = { ...structuredClone(body), id: fakeWorkflowId(newId('w')), tags: [], isArchived: false };
+        // A new workflow is never published.
+        const workflow: N8nWorkflow = {
+          ...structuredClone(body),
+          id: fakeWorkflowId(newId('w')),
+          tags: [],
+          isArchived: false,
+          versionId: newVersion(),
+          activeVersionId: null,
+        };
         workflows.push(workflow);
         return answered(call, structuredClone(workflow));
       }),
     updateWorkflow: (id, body) =>
-      onWorkflow(`PUT ${API_PATH}/workflows/${id}`, id, (workflow) => structuredClone(Object.assign(workflow, structuredClone(body)))),
+      // The change lands as a new draft version: the published version stays as it was.
+      onWorkflow(`PUT ${API_PATH}/workflows/${id}`, id, (workflow) =>
+        structuredClone(Object.assign(workflow, structuredClone(body), { versionId: newVersion() })),
+      ),
     unarchiveWorkflow: (id) =>
       onWorkflow(`POST ${API_PATH}/workflows/${id}/unarchive`, id, (workflow) => {
         workflow.isArchived = false;
@@ -240,8 +258,8 @@ export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT
       return spec.ok ? new Response(spec.value.body, { status: spec.value.status }) : respond(spec);
     }
     case 'GET workflows':
-      // Only the key check lists workflows: it reads the status, never the body.
-      return respondToProbe(await client.checkApiKey());
+      // The key check asks for one workflow and reads the status, never the body. Any other limit lists them.
+      return url.searchParams.get('limit') === '1' ? respondToProbe(await client.checkApiKey()) : respondPage(await client.listWorkflows(), url);
     case 'POST workflows':
       return isWorkflowBody(body) ? respond(await client.createWorkflow(body)) : invalidBody();
     case 'GET tags':
@@ -280,6 +298,23 @@ function respond<T>(result: Result<ApiAnswer<T>, ApiFailure>, shape: 'json' | 'p
     // A plain Error: the client reports its message as the reason, so `reason` comes back unchanged.
     throw new Error(failure.reason);
   }
+}
+
+/** One page of a list, as n8n pages it: `limit` workflows from the offset in `cursor`, then the cursor of the next page. */
+function respondPage(result: Result<ApiAnswer<N8nListedWorkflow[]>, ApiFailure>, url: URL): Response {
+  if (!result.ok) {
+    return respond(result);
+  }
+  const { body, status } = result.value;
+  const limit = Number(url.searchParams.get('limit') ?? '100');
+  const offset = Number(url.searchParams.get('cursor') ?? '0');
+  const next = offset + limit;
+  return new Response(JSON.stringify({ data: body.slice(offset, next), nextCursor: next < body.length ? String(next) : null }), { status });
+}
+
+/** A workflow as the list shows it: without its content. */
+function listed({ id, name, tags, isArchived, versionId, activeVersionId }: N8nWorkflow): N8nListedWorkflow {
+  return structuredClone({ id, name, tags, isArchived, versionId, activeVersionId });
 }
 
 function respondToProbe(result: Result<ProbeAnswer, ProbeFailure>): Response {

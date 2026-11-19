@@ -80,6 +80,7 @@ This installs the `lift` command (`boilerlift` is an alias). Requires Node.js 22
 - [Write a workflow](https://github.com/laurentvandelle/boilerlift/blob/main/docs/workflows.md)
 - [Configure your targets](https://github.com/laurentvandelle/boilerlift/blob/main/docs/configuration.md)
 - [`lift ping`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/ping.md): check the connection to your instance
+- [`lift status`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/status.md): see where each workflow stands on your instance, and the next step
 - [`lift deploy`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/deploy.md): deliver your workflows, or preview with `--dry-run`
 
 `lift help` lists every command and `lift help <command>` its options; `lift version` prints the installed version.

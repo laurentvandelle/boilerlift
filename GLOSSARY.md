@@ -28,6 +28,11 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Archived**: a workflow deleted in the n8n editor. It stays on the instance, with its id, until it is unarchived. A workflow that is not archived is unarchived. _Avoid_: deleted, live.
 - **Restored**: an archived workflow that `deploy` unarchived and brought back as an unpublished draft.
 
+### Status
+
+- **Status**: `lift status`, read-only: the state of each workflow of a target on its instance, and the next step.
+- **State**: where one workflow stands, the first that holds in this order: `missing` (no lock entry, or its recorded id answers 404), `archived`, `differs` (differs from n8n: the local file and the draft differ; status cannot tell which side changed), `draft-pending` (draft not yet published: the draft holds the local file but is not the published version), `up-to-date`. A workflow of the instance that the lock file does not record is `unmanaged` (not in my project). _Avoid_: drift, out of sync.
+
 ### Deploy
 
 - **Deploy**: delivering every local workflow of a target to its instance: create the new ones, update the changed ones as drafts, restore the archived ones, skip the unchanged ones, and record the id of each one it creates in the lock file.
