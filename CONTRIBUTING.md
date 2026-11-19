@@ -53,7 +53,7 @@ Do not edit `dist/`, bump the version in `package.json` or edit `CHANGELOG.md`. 
 
 ## Releases
 
-The maintainer runs the release skill (`.claude/skills/release/SKILL.md`). It proposes the next version from the commits since the last `v*` tag, writes the [CHANGELOG.md](CHANGELOG.md) entry, and opens a `chore(release): vX.Y.Z` pull request. Merging that pull request runs `.github/workflows/release.yml`: after lint, typecheck, tests and build pass, it publishes the version to npm with provenance, tags the merge commit `vX.Y.Z`, and creates the GitHub release from the CHANGELOG section.
+The maintainer runs the release skill (`.claude/skills/release/SKILL.md`). It proposes the next version from the commits since the last `v*` tag, writes the [CHANGELOG.md](CHANGELOG.md) entry, and opens a `chore(release): vX.Y.Z` pull request. Merging that pull request publishes nothing. When the maintainer then asks, the skill dispatches `.github/workflows/release.yml`: after lint, typecheck, tests and build pass, it publishes the version to npm with provenance, tags the commit `vX.Y.Z`, and creates the GitHub release from the CHANGELOG section.
 
 ## Code of conduct
 

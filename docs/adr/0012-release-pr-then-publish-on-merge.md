@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0013
 ---
 
 # A release is a local skill, then a release pull request, then a publish on merge

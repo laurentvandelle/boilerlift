@@ -24,7 +24,7 @@ Local setup: see `CONTRIBUTING.md`. Package manager: npm (`package-lock.json`).
 Run `npm run verify` before handing work back.
 Never hand back a failure: fix it, then run the command again.
 
-Releases go through a release pull request, and its merge publishes to npm (`.github/workflows/release.yml`). Never publish, tag or create a GitHub release by hand, and never open a release pull request unless the user asks.
+Releases go through a release pull request. After its merge, the release skill dispatches `.github/workflows/release.yml`, which publishes to npm. Never publish, tag or create a GitHub release by hand, never dispatch the release workflow outside the release skill's step 8, and never open a release pull request unless the user asks.
 
 `npm start` builds, then runs a real `lift deploy` (no `--dry-run`) of `debug/workflows` to the n8n instance in `debug/.env`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks.
 
