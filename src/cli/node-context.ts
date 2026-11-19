@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
+import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from 'node:util';
 import { CommandContext, ProjectConfigFile, WorkflowFile } from '#src/cli/cli.model';
@@ -25,7 +26,28 @@ export function nodeContext(cwd: string): CommandContext {
     loadWorkflowFiles: (dir) => loadWorkflowFiles(cwd, dir),
     readLockFile: (path) => readLockFile(resolve(cwd, path)),
     writeLockFile: (path, text) => writeLockFile(resolve(cwd, path), text),
+    ask,
   };
+}
+
+/** `CommandContext.ask`: the prompt on stderr, then the first line of stdin, or `undefined` when stdin closes first. */
+function ask(prompt: string): Promise<string | undefined> {
+  process.stderr.write(prompt);
+  return new Promise((resolveAnswer) => {
+    const lines = createInterface({ input: process.stdin, terminal: false });
+    let answer: string | undefined;
+    lines.once('line', (line) => {
+      answer = line;
+      lines.close();
+    });
+    lines.once('close', () => {
+      if (answer === undefined) {
+        // EOF: end the prompt line, so what follows starts on its own line.
+        process.stderr.write('\n');
+      }
+      resolveAnswer(answer);
+    });
+  });
 }
 
 /** The version in the boilerlift package.json, two folders above this file (`src/cli/` or `dist/cli/`). */
