@@ -8,9 +8,10 @@ import { LockFileError } from '#src/core/deliver/lock-file.model';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 
-/** How the report is worded: the --dry-run flag. */
+/** How the report is worded: the --dry-run flag, and whether the command line named targets (`-t` or `--all`). */
 export interface DeployFormat {
   dryRun: boolean;
+  named: boolean;
 }
 
 /** The target a deploy runs on: its name, and its url, the instance the lock file records under. */
@@ -47,8 +48,8 @@ interface Wording {
   command: string;
   /** What the result lines call each action. */
   labels: Record<DeployAction, string>;
-  /** The lines under the results. */
-  summary: (counts: Summary) => string[];
+  /** The lines under the results. `publish` is the command that publishes the drafts. */
+  summary: (counts: Summary, publish: string) => string[];
   /** How the stderr recap introduces the failed workflows. */
   failed: string;
   /** What each warning says deploy did, or would do. */
@@ -71,8 +72,9 @@ const DEPLOY_WORDING: Wording = {
     failed: 'failed',
     'not-processed': 'not-processed',
   },
-  summary: ({ created, recreated, updated, restored, skipped, failed }) => {
-    const drafts = created + recreated + updated + restored > 0 ? ' Drafts are not live until you publish them.' : '';
+  summary: (counts, publish) => {
+    const { created, recreated, updated, restored, skipped, failed } = counts;
+    const drafts = deliveredDrafts(counts) ? ` Run ${publish} to publish the drafts.` : '';
     const recreatedCount = recreated > 0 ? `${recreated} recreated, ` : '';
     return [`${created} created, ${recreatedCount}${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`];
   },
@@ -104,6 +106,16 @@ const DRY_RUN_WORDING: Wording = {
   lockFile: `${LOCK_FILE} would update — commit it after lift deploy`,
   tag: (name, added) => `Tag ${name} would be added to ${added} workflows`,
 };
+
+/** True when the deploy delivered at least one draft: created, recreated, updated or restored. */
+function deliveredDrafts({ created, recreated, updated, restored }: Summary): boolean {
+  return created + recreated + updated + restored > 0;
+}
+
+/** The command that publishes the drafts, with `--target <name>` when the command line named targets. */
+function publishCommand(target: DeployTarget, format: DeployFormat): string {
+  return format.named ? `lift publish --target ${target.name}` : 'lift publish';
+}
 
 const LABELS = [DEPLOY_WORDING, DRY_RUN_WORDING].flatMap(({ labels }) => Object.values(labels));
 const ACTION_WIDTH = 1 + Math.max(...LABELS.map((label) => label.length));
@@ -171,7 +183,7 @@ export function renderNothingToDeploy(target: DeployTarget, dir: string, format:
     target: target.name,
     url: target.instance,
     text: { exitCode: EXIT_OK, stdout: `${message}\n`, stderr: '' },
-    payload: jsonPayload(target.instance, report, wordingOf(format)),
+    payload: jsonPayload(target, report, wordingOf(format), format),
     outcome: message,
   };
 }
@@ -179,7 +191,7 @@ export function renderNothingToDeploy(target: DeployTarget, dir: string, format:
 /** The report of a deploy or a dry run on one target: its text, its JSON payload and its recap. */
 export function renderReport(target: DeployTarget, report: DeployReport, format: DeployFormat): TargetRun {
   const wording = wordingOf(format);
-  const [summary = ''] = wording.summary(summarize(report.results));
+  const [summary = ''] = wording.summary(summarize(report.results), publishCommand(target, format));
   const outcome =
     report.error !== undefined && report.results.length === 0
       ? `stopped: ${report.error.call} → ${report.error.detail}`
@@ -189,8 +201,8 @@ export function renderReport(target: DeployTarget, report: DeployReport, format:
   return {
     target: target.name,
     url: target.instance,
-    text: renderText(target, report, wording),
-    payload: jsonPayload(target.instance, report, wording),
+    text: renderText(target, report, wording, format),
+    payload: jsonPayload(target, report, wording, format),
     outcome,
   };
 }
@@ -243,7 +255,7 @@ function warningText(warning: DeployWarning, wording: Wording): string {
   }
 }
 
-function renderText(target: DeployTarget, report: DeployReport, wording: Wording): CliResult {
+function renderText(target: DeployTarget, report: DeployReport, wording: Wording, format: DeployFormat): CliResult {
   const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
   const stdout = [`${wording.command} → ${target.name} (${target.instance})`];
   for (const result of report.results) {
@@ -258,7 +270,7 @@ function renderText(target: DeployTarget, report: DeployReport, wording: Wording
     const stderr = [`✗ ${error.call} → ${error.detail}`, `  → ${error.hint}`, 'Nothing was written to n8n.'];
     return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: `${stderr.join('\n')}\n` };
   }
-  const [summary = '', ...notes] = wording.summary(summarize(report.results));
+  const [summary = '', ...notes] = wording.summary(summarize(report.results), publishCommand(target, format));
   stdout.push(summary);
   if (report.tag !== undefined && report.tag.added > 0) {
     stdout.push(wording.tag(report.tag.name, report.tag.added));
@@ -292,10 +304,12 @@ function recap(report: DeployReport, wording: Wording): string {
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
 }
 
-function jsonPayload(instance: string, report: DeployReport, wording: Wording): Record<string, unknown> {
+/** The --json report. `next` is the publish command when the deploy delivered drafts, or null. */
+function jsonPayload(target: DeployTarget, report: DeployReport, wording: Wording, format: DeployFormat): Record<string, unknown> {
   const { error } = report;
+  const summary = summarize(report.results);
   return {
-    instance,
+    instance: target.instance,
     dryRun: wording.dryRun,
     results: report.results.map((result) => ({
       stableName: result.stableName,
@@ -306,11 +320,12 @@ function jsonPayload(instance: string, report: DeployReport, wording: Wording): 
       name: result.name,
       ...(result.action === 'failed' ? { error: result.error } : {}),
     })),
-    summary: summarize(report.results),
+    summary,
     warnings: report.warnings.map((warning) => warningText(warning, wording)),
     lockFile: report.lockFile,
     tag: report.tag ?? null,
     error: error === undefined ? null : { call: error.call, detail: error.detail, hint: error.hint },
+    next: !wording.dryRun && deliveredDrafts(summary) ? publishCommand(target, format) : null,
     exitCode: report.exitCode,
   };
 }

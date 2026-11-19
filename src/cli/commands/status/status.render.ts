@@ -38,9 +38,6 @@ const LABELS: Record<WorkflowState, string> = {
   unmanaged: 'not in my project',
 };
 
-/** The next step of a draft not yet published: nothing to run, so `next` is null in JSON. */
-const PUBLISH_STEP = 'publish it in the n8n editor';
-
 /** `command`, with `--target <name>` when the command line named targets. */
 function withTarget(command: string, target: StatusTarget, format: StatusFormat): string {
   return format.named ? `${command} --target ${target.name}` : command;
@@ -54,6 +51,7 @@ function nextCommand(status: WorkflowStatus, target: StatusTarget, format: Statu
   case 'differs':
     return withTarget('lift deploy', target, format);
   case 'draft-pending':
+    return withTarget(`lift publish ${status.stableName}`, target, format);
   case 'up-to-date':
   case 'unmanaged':
     return null;
@@ -156,12 +154,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
   report.workflows.forEach((status, index) => {
     const line = `${MARKS[status.state]} ${(titles[index] ?? '').padEnd(width)}${detailOf(status)}`;
     const next = nextCommand(status, target, format);
-    if (status.state === 'draft-pending') {
-      // Nothing to run: the step to do by hand ends the state line.
-      stdout.push(`${line} → ${PUBLISH_STEP}`);
-    } else {
-      stdout.push(line, ...(next === null ? [] : [`  → ${next}`]));
-    }
+    stdout.push(line, ...(next === null ? [] : [`  → ${next}`]));
   });
   stdout.push(summaryLine(summarize(report.workflows)));
   return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: '' };

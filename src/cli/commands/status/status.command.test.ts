@@ -57,7 +57,8 @@ describe('statusCommand', () => {
         'lift status → dev (https://n8n.example.com)',
         '~ crm-import    differs from n8n — next deploy overwrites the n8n draft',
         '  → lift deploy',
-        '^ daily-report  draft not yet published → publish it in the n8n editor',
+        '^ daily-report  draft not yet published',
+        '  → lift publish daily-report',
         '+ invoice-sync  missing on the instance (workflows/invoice-sync.workflow.ts)',
         '  → lift deploy',
         '! weekly        archived in n8n — next deploy restores it',
@@ -81,7 +82,7 @@ describe('statusCommand', () => {
       message: null,
       workflows: [
         { state: 'differs', stableName: 'crm-import', path: 'workflows/crm-import.json', name: 'CRM import', id: 'crm1', next: 'lift deploy' },
-        { state: 'draft-pending', stableName: 'daily-report', id: 'rep1', next: null },
+        { state: 'draft-pending', stableName: 'daily-report', id: 'rep1', next: 'lift publish daily-report' },
         { state: 'missing', stableName: 'invoice-sync', id: null, next: 'lift deploy' },
         { state: 'archived', stableName: 'weekly', id: 'wk1', next: 'lift deploy' },
         { state: 'unmanaged', stableName: null, path: null, name: 'Hand made', id: 'h1', isArchived: false, next: null },
@@ -96,7 +97,15 @@ describe('statusCommand', () => {
 
     const result = await statusCommand.run({ positionals: [], values: { json: true, target: 'dev' } }, ctx);
 
-    expect(JSON.parse(result.stdout)).toMatchObject({ workflows: [{ stableName: 'crm-import', next: 'lift deploy --target dev' }, {}, {}, {}, {}] });
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      workflows: [
+        { stableName: 'crm-import', next: 'lift deploy --target dev' },
+        { stableName: 'daily-report', next: 'lift publish daily-report --target dev' },
+        {},
+        {},
+        {},
+      ],
+    });
   });
 
   test('Should show the up to date workflows with no next step when the published version holds the local file', async () => {
