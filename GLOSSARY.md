@@ -24,7 +24,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 ### Versions on the instance
 
 - **Draft**: the latest saved version of a workflow on the instance. `deploy` writes only drafts.
-- **Published**: the version of a workflow that runs on its triggers. It changes only when the user publishes. _Avoid_: live.
+- **Published**: the version of a workflow that runs on its triggers. It changes only when the user publishes, with `lift publish` or in the n8n editor. _Avoid_: live.
 - **Archived**: a workflow deleted in the n8n editor. It stays on the instance, with its id, until it is unarchived. A workflow that is not archived is unarchived. _Avoid_: deleted, live.
 - **Restored**: an archived workflow that `deploy` unarchived and brought back as an unpublished draft.
 
@@ -40,4 +40,5 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Action**: what deploy does with one local workflow: `created`, `recreated` (its recorded id answers 404, so it is created again from code), `updated`, `skipped`, `restored`, `failed` or `not-processed` (a blocker stopped the run first).
 - **Blocker**: a failure that stops the whole run: the instance cannot be reached, it rejects the API key, it cannot save drafts, or the lock file cannot be written after a create. A failure on one workflow is not a blocker. _Avoid_: fatal, stop.
 - **Dry run**: `deploy --dry-run` computes deploy's plan and writes nothing.
+- **Publish**: `lift publish`, making the draft of deployed workflows the published version, after a `[y/N]` confirmation (or `--yes` / `--force`). Without names, it publishes every `draft-pending` workflow; with names, only those, refusing a `differs` one and skipping an `up-to-date` one.
 - **Target tag**: The n8n tag named after the target, `boilerlift:<target>`, added on deploy, for display only.

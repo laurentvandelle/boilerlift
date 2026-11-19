@@ -10,7 +10,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen)](https://nodejs.org)
 [![n8n](https://img.shields.io/badge/n8n-%3E%3D2.35.0-orange)](https://docs.n8n.io)
 
-Build a workflow once, keep it in Git, and lift it to dev, staging, prod or every client's n8n instance with one command. Every change is checked before it leaves your machine, and lands as a draft: the live version keeps running until you publish.
+Build a workflow once, keep it in Git, and lift it to dev, staging, prod or every client's n8n instance with one command. Every change is checked before it leaves your machine, and lands as a draft: the published version keeps running until you publish.
 
 > Status: pre-release (0.x). It works, but expect changes between versions.
 
@@ -73,7 +73,7 @@ This installs the `lift` command (`boilerlift` is an alias). Requires Node.js 22
    lift deploy --dry-run
    ```
 
-   Then run `lift deploy` to deliver it as a draft.
+   Then run `lift deploy` to deliver it as a draft, and `lift publish` to publish it.
 
 ## Docs
 
@@ -82,6 +82,7 @@ This installs the `lift` command (`boilerlift` is an alias). Requires Node.js 22
 - [`lift ping`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/ping.md): check the connection to your instance
 - [`lift status`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/status.md): see where each workflow stands on your instance, and the next step
 - [`lift deploy`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/deploy.md): deliver your workflows, or preview with `--dry-run`
+- [`lift publish`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/publish.md): publish your deployed drafts, after a confirmation
 
 `lift help` lists every command and `lift help <command>` its options; `lift version` prints the installed version.
 

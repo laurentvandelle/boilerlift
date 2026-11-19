@@ -23,7 +23,7 @@ A workflow of the project (a workflow file of the target) gets the first state t
 | `missing` | missing on the instance: `boilerlift.lock.json` records no id for it, or n8n no longer has that id (404) | `lift deploy` |
 | `archived` | archived in n8n — next deploy restores it | `lift deploy` |
 | `differs` | differs from n8n — next deploy overwrites the n8n draft | `lift deploy` |
-| `draft-pending` | draft not yet published: the n8n draft holds the local file, but it is not the published version, or nothing is published | publish it in the n8n editor (`next` is `null`) |
+| `draft-pending` | draft not yet published: the n8n draft holds the local file, but it is not the published version, or nothing is published | `lift publish <name>` |
 | `up-to-date` | up to date: the published version holds the local file | none |
 
 `differs` compares the local file with the current n8n draft the way `deploy` does, so it covers both a change in the file and a change in the n8n editor: nothing records which side changed.
@@ -36,7 +36,8 @@ With a target named (`-t`) or `--all`, each next command carries `--target <name
 lift status → dev (https://n8n.example.com)
 ~ crm-import    differs from n8n — next deploy overwrites the n8n draft
   → lift deploy
-^ daily-report  draft not yet published → publish it in the n8n editor
+^ daily-report  draft not yet published
+  → lift publish daily-report
 + invoice-sync  missing on the instance (workflows/invoice-sync.workflow.ts)
   → lift deploy
 · Hand made     not in my project (h1)
