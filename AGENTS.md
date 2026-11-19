@@ -34,6 +34,7 @@ Releases go through a release pull request, and its merge publishes to npm (`.gi
 - Before editing `src/cli/**`, read `src/cli/AGENTS.md`.
 - Before editing `src/core/**`, read `src/core/AGENTS.md`.
 - Before editing `src/services/**`, read `src/services/AGENTS.md`.
+- Before editing `.github/scripts/**`, read `.github/scripts/AGENTS.md`.
 - Before adding a dependency or crossing a module boundary, read `ARCHITECTURE.md`.
 - Before naming a domain concept, read `GLOSSARY.md`.
 - Before writing or changing a test, read `docs/testing.md`.
