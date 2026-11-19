@@ -33,7 +33,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org
-          cache: npm
 
       # The npm of devEngines in package.json. Trusted publishing needs npm 11.5.1 or later.
       - name: Install the npm version of package.json devEngines
@@ -42,6 +41,16 @@ jobs:
       - name: Find what is left to release
         id: check
         run: python3 .github/scripts/release_check.py
+
+      # Not setup-node's `cache: npm`: it runs `npm config get cache` with the runner's npm,
+      # which devEngines in package.json refuses. Cached here, after the pinned npm is installed.
+      - name: Cache the npm download cache
+        if: steps.check.outputs.work == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Install dependencies from package-lock.json
         if: steps.check.outputs.work == 'true'

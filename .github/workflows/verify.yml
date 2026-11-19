@@ -29,16 +29,24 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js ${{ matrix.node-version }} with npm cache
+      - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version != '.nvmrc' && matrix.node-version || '' }}
           node-version-file: ${{ matrix.node-version == '.nvmrc' && '.nvmrc' || '' }}
-          cache: npm
 
       # The npm of devEngines in package.json: npm ci refuses any other version.
       - name: Install the npm version of package.json devEngines
         run: npm install -g npm@11.21.3
+
+      # Not setup-node's `cache: npm`: it runs `npm config get cache` with the runner's npm,
+      # which devEngines in package.json refuses. Cached here, after the pinned npm is installed.
+      - name: Cache the npm download cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Install dependencies from package-lock.json
         run: npm ci
