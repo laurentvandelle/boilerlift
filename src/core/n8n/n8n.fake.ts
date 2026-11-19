@@ -5,6 +5,7 @@ import {
   ApiAnswer,
   ApiFailure,
   N8nClient,
+  N8nCredential,
   N8nListedWorkflow,
   N8nTag,
   N8nWorkflow,
@@ -36,6 +37,8 @@ export interface FakeN8nOptions {
   workflows?: N8nWorkflow[];
   /** More tags of the instance, that `GET /tags` lists. The tags of the seed workflows are listed too. */
   tags?: FakeTag[];
+  /** The credentials of the instance, that `GET /credentials` lists (build them with fakeCredential). */
+  credentials?: N8nCredential[];
   /** The API spec the instance serves. The default one supports drafts. */
   spec?: string;
   /**
@@ -55,6 +58,8 @@ export interface FakeN8n {
   workflows: N8nWorkflow[];
   /** The tags the instance holds now. */
   tags: N8nTag[];
+  /** The credentials the instance holds now: a test may change them between two calls. */
+  credentials: N8nCredential[];
   /** Every call made through either door, named like `ApiFailure.call`: `PUT /api/v1/workflows/abc`. */
   calls: string[];
   /** Every request `fetch` received, as `METHOD URL` with the query string: `GET https://…/healthz`. */
@@ -92,6 +97,11 @@ export function fakeTagId(value: string): TagId {
   return value;
 }
 
+/** A credential of the instance: its type defaults to `httpHeaderAuth`, its id to `<name>-id`. */
+export function fakeCredential(name: string, overrides: Partial<N8nCredential> = {}): N8nCredential {
+  return { id: `${name}-id`, name, type: 'httpHeaderAuth', ...overrides };
+}
+
 /** A tag as the instance holds it. */
 export function fakeTag({ id, name }: FakeTag): N8nTag {
   return { id: fakeTagId(id), name };
@@ -120,8 +130,15 @@ export function fakeN8nWorkflow(
   };
 }
 
-export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT_SPEC, failures = [] }: FakeN8nOptions = {}): FakeN8n {
+export function fakeN8n({
+  workflows: seed = [],
+  tags: tagSeed = [],
+  credentials: credentialSeed = [],
+  spec = DRAFT_SPEC,
+  failures = [],
+}: FakeN8nOptions = {}): FakeN8n {
   const workflows = structuredClone(seed);
+  const credentials = structuredClone(credentialSeed);
   const tags: N8nTag[] = [];
   for (const tag of [...tagSeed.map(fakeTag), ...workflows.flatMap((workflow) => workflow.tags)]) {
     if (!tags.some(({ id }) => id === tag.id)) {
@@ -192,6 +209,7 @@ export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT
         workflow.isArchived = false;
         return structuredClone(workflow);
       }),
+    listCredentials: () => answer(`GET ${API_PATH}/credentials`, (call) => answered(call, structuredClone(credentials))),
     listTags: () => answer(`GET ${API_PATH}/tags`, (call) => answered(call, structuredClone(tags))),
     createTag: (name) =>
       answer(`POST ${API_PATH}/tags`, (call) => {
@@ -262,6 +280,8 @@ export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT
       return url.searchParams.get('limit') === '1' ? respondToProbe(await client.checkApiKey()) : respondPage(await client.listWorkflows(), url);
     case 'POST workflows':
       return isWorkflowBody(body) ? respond(await client.createWorkflow(body)) : invalidBody();
+    case 'GET credentials':
+      return respondPage(await client.listCredentials(), url);
     case 'GET tags':
       // One page holds every tag: nextCursor is null.
       return respond(await client.listTags(), 'page');
@@ -272,7 +292,7 @@ export function fakeN8n({ workflows: seed = [], tags: tagSeed = [], spec = DRAFT
     }
   };
 
-  return { client, fetch: answerHttp, workflows, tags, calls, requests };
+  return { client, fetch: answerHttp, workflows, tags, credentials, calls, requests };
 }
 
 function answered<T>(call: string, body: T): Result<ApiAnswer<T>, ApiFailure> {
@@ -300,8 +320,8 @@ function respond<T>(result: Result<ApiAnswer<T>, ApiFailure>, shape: 'json' | 'p
   }
 }
 
-/** One page of a list, as n8n pages it: `limit` workflows from the offset in `cursor`, then the cursor of the next page. */
-function respondPage(result: Result<ApiAnswer<N8nListedWorkflow[]>, ApiFailure>, url: URL): Response {
+/** One page of a list, as n8n pages it: `limit` items from the offset in `cursor`, then the cursor of the next page. */
+function respondPage<T>(result: Result<ApiAnswer<T[]>, ApiFailure>, url: URL): Response {
   if (!result.ok) {
     return respond(result);
   }

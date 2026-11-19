@@ -76,6 +76,16 @@ export interface N8nWorkflowBody {
   settings: Record<string, unknown>;
 }
 
+/**
+ * A credential as `GET /api/v1/credentials` lists it: its id, name and type. The client never reads its data, so no
+ * secret ever reaches Boilerlift.
+ */
+export interface N8nCredential {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface N8nClient {
   /** `GET /healthz`: is the instance up and reachable? */
   checkHealth(): Promise<Result<ProbeAnswer, ProbeFailure>>;
@@ -96,6 +106,11 @@ export interface N8nClient {
   updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
   unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
+  /**
+   * `GET /api/v1/credentials`, every page: the credentials of the instance the API key can see. Needs the
+   * `credential:list` scope: a key without it answers 403.
+   */
+  listCredentials(): Promise<Result<ApiAnswer<N8nCredential[]>, ApiFailure>>;
   /** `GET /api/v1/tags`, every page: the tags of the instance. */
   listTags(): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
   /** `POST /api/v1/tags`: a new tag. A name the instance already has answers 409. */
