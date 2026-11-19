@@ -12,7 +12,7 @@ const REPORT = fakeLocalWorkflow('daily-report');
 const ARCHIVED = fakeLocalWorkflow('lead-scoring');
 const NEW = fakeLocalWorkflow('invoice-sync');
 const HAND_ADDED = { id: 'h', name: 'hand-added' };
-const SALES_PROD = { id: 'sp', name: 'sales-prod' };
+const SALES_PROD = { id: 'sp', name: 'boilerlift:sales-prod' };
 
 /** CRM is changed and carries a hand-added tag, REPORT is unchanged, ARCHIVED is archived, NEW is not on the instance. */
 function mixedInstance(options: FakeN8nOptions = {}): FakeN8n {
@@ -36,12 +36,12 @@ interface RunOptions {
   lock?: FakeLockWriter;
 }
 
-/** Deploys to `n8n` as the target `sales-prod`: every workflow of the mixed instance plus NEW, unless the test says otherwise. */
+/** Deploys to `n8n` as the target `sales-prod`, tagged `boilerlift:sales-prod`: every workflow of the mixed instance plus NEW, unless the test says otherwise. */
 function run(
   n8n: FakeN8n,
   { workflows = [CRM, REPORT, ARCHIVED, NEW], managed = fakeManaged(MIXED_IDS), tagOff = false, lock = fakeLockWriter({ entries: MIXED_IDS }) }: RunOptions = {},
 ): Promise<DeployReport> {
-  return deploy({ workflows, client: n8n.client, managed, ...(tagOff ? {} : { targetTag: 'sales-prod' }) }, lock.writer);
+  return deploy({ workflows, client: n8n.client, managed, ...(tagOff ? {} : { targetTag: 'boilerlift:sales-prod' }) }, lock.writer);
 }
 
 function tagsOf(n8n: FakeN8n): Record<string, string[]> {
@@ -55,8 +55,8 @@ describe('target tag', () => {
     const report = await run(n8n);
 
     expect({ tags: tagsOf(n8n), tag: report.tag }).toEqual({
-      tags: { crm1: ['hand-added', 'sales-prod'], rep1: ['sales-prod'], lead1: ['sales-prod'], w1: ['sales-prod'] },
-      tag: { name: 'sales-prod', added: 4 },
+      tags: { crm1: ['hand-added', 'boilerlift:sales-prod'], rep1: ['boilerlift:sales-prod'], lead1: ['boilerlift:sales-prod'], w1: ['boilerlift:sales-prod'] },
+      tag: { name: 'boilerlift:sales-prod', added: 4 },
     });
   });
 
@@ -80,7 +80,7 @@ describe('target tag', () => {
 
     expect({ creates: n8n.calls.filter((call) => call === 'POST /api/v1/tags'), tags: n8n.tags.map(({ name }) => name) }).toEqual({
       creates: ['POST /api/v1/tags'],
-      tags: ['hand-added', 'sales-prod'],
+      tags: ['hand-added', 'boilerlift:sales-prod'],
     });
   });
 
@@ -102,7 +102,7 @@ describe('target tag', () => {
 
     expect({ writes: n8n.calls.filter((call) => call.startsWith('PUT ') && call.endsWith('/tags')), tag: report.tag }).toEqual({
       writes: ['PUT /api/v1/workflows/crm1/tags'],
-      tag: { name: 'sales-prod', added: 1 },
+      tag: { name: 'boilerlift:sales-prod', added: 1 },
     });
   });
 
@@ -113,7 +113,7 @@ describe('target tag', () => {
 
     expect({ calls: n8n.calls, tag: report.tag }).toEqual({
       calls: ['GET /api/v1/openapi.yml', 'GET /api/v1/workflows/rep1'],
-      tag: { name: 'sales-prod', added: 0 },
+      tag: { name: 'boilerlift:sales-prod', added: 0 },
     });
   });
 
@@ -147,10 +147,10 @@ describe('target tag', () => {
     const report = await run(n8n, { workflows: [CRM, REPORT] });
 
     expect({ warnings: report.warnings, exitCode: report.exitCode, report: report.results[1]?.action, tag: report.tag }).toEqual({
-      warnings: [{ kind: 'tag-failed', stableName: 'daily-report', tag: 'sales-prod', call: 'PUT /api/v1/workflows/rep1/tags', detail: 'HTTP 403: Forbidden' }],
+      warnings: [{ kind: 'tag-failed', stableName: 'daily-report', tag: 'boilerlift:sales-prod', call: 'PUT /api/v1/workflows/rep1/tags', detail: 'HTTP 403: Forbidden' }],
       exitCode: 0,
       report: 'skipped',
-      tag: { name: 'sales-prod', added: 1 },
+      tag: { name: 'boilerlift:sales-prod', added: 1 },
     });
   });
 
@@ -173,7 +173,7 @@ describe('target tag', () => {
     const report = await run(n8n, { workflows: [NEW], managed: fakeManaged() });
 
     expect({ warnings: report.warnings, exitCode: report.exitCode }).toEqual({
-      warnings: [{ kind: 'tag-failed', stableName: 'invoice-sync', tag: 'sales-prod', call: 'GET /api/v1/tags', detail: 'unreachable: connection reset' }],
+      warnings: [{ kind: 'tag-failed', stableName: 'invoice-sync', tag: 'boilerlift:sales-prod', call: 'GET /api/v1/tags', detail: 'unreachable: connection reset' }],
       exitCode: 0,
     });
   });
@@ -185,7 +185,7 @@ describe('target tag', () => {
 
     expect({ tagCalls: n8n.calls.filter((call) => call.includes('/tags')), tag: report.tag }).toEqual({
       tagCalls: [],
-      tag: { name: 'sales-prod', added: 0 },
+      tag: { name: 'boilerlift:sales-prod', added: 0 },
     });
   });
 });
@@ -194,10 +194,10 @@ describe('target tag in a dry run', () => {
   test('Should count the workflows that would receive the target tag and write nothing when it previews a deploy', async () => {
     const n8n = mixedInstance({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1', tags: [SALES_PROD] }), fakeN8nWorkflow(CRM, { id: 'crm1' })] });
 
-    const report = await previewDeploy({ workflows: [CRM, REPORT, NEW], client: n8n.client, managed: fakeManaged(MIXED_IDS), targetTag: 'sales-prod' });
+    const report = await previewDeploy({ workflows: [CRM, REPORT, NEW], client: n8n.client, managed: fakeManaged(MIXED_IDS), targetTag: 'boilerlift:sales-prod' });
 
     expect({ tag: report.tag, readOnly: n8n.calls.every((call) => call.startsWith('GET ')), tagCalls: n8n.calls.filter((call) => call.includes('/tags')) }).toEqual({
-      tag: { name: 'sales-prod', added: 2 },
+      tag: { name: 'boilerlift:sales-prod', added: 2 },
       readOnly: true,
       tagCalls: [],
     });

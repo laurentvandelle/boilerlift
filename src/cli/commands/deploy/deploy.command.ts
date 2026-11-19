@@ -22,7 +22,7 @@ import {
 } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { ProjectConfig } from '#src/core/config/config.model';
-import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
+import { CONFIG_FILE, checkWorkflowFolders, targetTagName } from '#src/core/config/project-config';
 import { deploy, previewDeploy } from '#src/core/deliver/deploy';
 import { DeployInput, DeployReport } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE, lockWriter, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
@@ -37,7 +37,7 @@ const DESCRIPTION = `Delivers every workflow in the workflows folder of a target
   unchanged workflows are skipped,
   workflows deleted (archived) in the n8n editor are restored as unpublished drafts.
 The stable name is the file name without .workflow.ts / .json: 1 to 64 of a-z, 0-9 and -.
-Each delivered workflow also gets a tag named after the target, for display in n8n only; set
+Each delivered workflow also gets the tag boilerlift:<target>, for display in n8n only; set
 tag: false on the target in ./${CONFIG_FILE} to turn it off. A tag failure is only a warning.
 
 ${LOCK_FILE} records, for each instance (the url of a target), the n8n id of each stable name. Deploy finds
@@ -156,7 +156,7 @@ async function deployTarget(
     workflows,
     client: target.client,
     managed: managedIds(lock.value, instance),
-    ...(target.tag ? { targetTag: target.name } : {}),
+    ...(target.tag ? { targetTag: targetTagName(target.name) } : {}),
   };
   return renderReport(where, await run(input, lockWriter(lock.value, instance, (text) => writeLockFile(LOCK_FILE, text))), format);
 }

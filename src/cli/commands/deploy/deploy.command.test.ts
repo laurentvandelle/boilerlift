@@ -100,7 +100,7 @@ describe('deployCommand', () => {
 = skipped        daily-report   unchanged
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
 1 created, 1 updated, 0 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
-Tag dev added to 3 workflows
+Tag boilerlift:dev added to 3 workflows
 boilerlift.lock.json updated — commit it
 `,
     });
@@ -131,7 +131,7 @@ boilerlift.lock.json updated — commit it
 
     await deployCommand.run(TEXT, ctx);
 
-    expect(n8n.workflows.find((workflow) => workflow.id === 'crm1')?.tags).toEqual([HAND_ADDED, { id: 't2', name: 'dev' }]);
+    expect(n8n.workflows.find((workflow) => workflow.id === 'crm1')?.tags).toEqual([HAND_ADDED, { id: 't2', name: 'boilerlift:dev' }]);
   });
 
   test('Should make no write when it deploys the same files again', async () => {
@@ -167,7 +167,7 @@ boilerlift.lock.json updated — commit it
       summary: { created: 1, recreated: 0, updated: 0, restored: 0, skipped: 1, failed: 0, notProcessed: 0 },
       warnings: [],
       lockFile: { path: 'boilerlift.lock.json', changed: true },
-      tag: { name: 'dev', added: 2 },
+      tag: { name: 'boilerlift:dev', added: 2 },
       error: null,
       exitCode: 0,
     });
@@ -186,7 +186,7 @@ boilerlift.lock.json updated — commit it
 + created        daily-report   workflows/daily-report.json
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
 2 created, 0 updated, 0 restored, 0 skipped, 1 failed. Drafts are not live until you publish them.
-Tag dev added to 2 workflows
+Tag boilerlift:dev added to 2 workflows
 boilerlift.lock.json updated — commit it
 `);
   });
@@ -307,7 +307,7 @@ Nothing was written to n8n.
       summary: { created: 0, recreated: 0, updated: 0, restored: 0, skipped: 0, failed: 0, notProcessed: 0 },
       warnings: [],
       lockFile: { path: 'boilerlift.lock.json', changed: false },
-      tag: { name: 'dev', added: 0 },
+      tag: { name: 'boilerlift:dev', added: 0 },
       error: {
         call: 'GET /api/v1/openapi.yml',
         detail: 'HTTP 404: n8n 2.35.0 or later is required',
@@ -330,7 +330,7 @@ Nothing was written to n8n.
 ! restored       daily-report   workflows/daily-report.json (unpublished draft)
 ⚠ daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
 0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
-Tag dev added to 1 workflows
+Tag boilerlift:dev added to 1 workflows
 `,
     });
   });
@@ -416,7 +416,7 @@ Tag dev added to 1 workflows
 = would skip     daily-report   unchanged
 + would create   invoice-sync   workflows/invoice-sync.workflow.ts
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
-Tag dev would be added to 3 workflows
+Tag boilerlift:dev would be added to 3 workflows
 Dry run: nothing was written. Run lift deploy to apply.
 n8n can still reject a write; this preview covers what reads can show.
 boilerlift.lock.json would update — commit it after lift deploy
@@ -463,7 +463,7 @@ boilerlift.lock.json would update — commit it after lift deploy
       summary: { created: 1, recreated: 0, updated: 0, restored: 1, skipped: 0, failed: 0, notProcessed: 0 },
       warnings: ['daily-report: workflow rep1 was archived in n8n; deploy would bring it back as an unpublished draft'],
       lockFile: { path: 'boilerlift.lock.json', changed: true },
-      tag: { name: 'dev', added: 2 },
+      tag: { name: 'boilerlift:dev', added: 2 },
       error: null,
       exitCode: 0,
     });
@@ -612,7 +612,7 @@ boilerlift.lock.json would update — commit it after lift deploy
       stdout: `lift deploy → dev (https://n8n.example.com)
 * recreated      crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
 0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
-Tag dev added to 1 workflows
+Tag boilerlift:dev added to 1 workflows
 boilerlift.lock.json updated — commit it
 `,
       lock: fakeLockText({ 'crm-import': 'w1' }),
@@ -641,7 +641,7 @@ boilerlift.lock.json updated — commit it
     expect(result.stdout).toBe(`lift deploy --dry-run → dev (https://n8n.example.com)
 * would recreate crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
 Would: 0 create, 1 recreate, 0 update, 0 restore, 0 skip, 0 fail.
-Tag dev would be added to 1 workflows
+Tag boilerlift:dev would be added to 1 workflows
 Dry run: nothing was written. Run lift deploy to apply.
 n8n can still reject a write; this preview covers what reads can show.
 boilerlift.lock.json would update — commit it after lift deploy
@@ -672,19 +672,19 @@ boilerlift.lock.json would update — commit it after lift deploy
       stderr: '',
       stdout: `lift deploy → dev (https://n8n.example.com)
 = skipped        daily-report   unchanged
-⚠ daily-report: tag dev not added (PUT /api/v1/workflows/rep1/tags → HTTP 403: Forbidden); the workflow is deployed without it
+⚠ daily-report: tag boilerlift:dev not added (PUT /api/v1/workflows/rep1/tags → HTTP 403: Forbidden); the workflow is deployed without it
 0 created, 0 updated, 0 restored, 1 skipped, 0 failed.
 `,
     });
   });
 
   test('Should print no tag line when every workflow already has the target tag', async () => {
-    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1', tags: [{ id: 't', name: 'dev' }] })] });
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1', tags: [{ id: 't', name: 'boilerlift:dev' }] })] });
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(REPORT)]) }, recorded({ 'daily-report': 'rep1' }));
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result.stdout).not.toContain('Tag dev');
+    expect(result.stdout).not.toContain('Tag boilerlift:dev');
   });
 
   test('Should report a null tag in JSON when the target turns the tag off', async () => {
@@ -696,9 +696,9 @@ boilerlift.lock.json would update — commit it after lift deploy
     expect(JSON.parse(result.stdout)).toMatchObject({ tag: null, exitCode: 0 });
   });
 
-  test('Should exit 1 and send nothing when a target name is longer than 24 characters', async () => {
+  test('Should exit 1 and send nothing when a target name is longer than 13 characters', async () => {
     const n8n = fakeN8n();
-    const config = fakeProjectConfig({ targets: { 'a-target-name-of-25-chars': { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './workflows' } } });
+    const config = fakeProjectConfig({ targets: { 'fourteen-chars': { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './workflows' } } });
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(NEW)]), loadProjectConfig: config });
 
     const result = await deployCommand.run(TEXT, ctx);
@@ -776,7 +776,7 @@ Next: Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boi
     ];
 
     expect(lines.filter((line) => !usage.includes(line))).toEqual([]);
-    expect(usage).not.toContain('boilerlift:');
+    expect(usage).not.toMatch(/boilerlift:(?!<target>)/);
   });
 });
 

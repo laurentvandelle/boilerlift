@@ -104,7 +104,7 @@ describe('targetsToRun', () => {
       error: {
         kind: 'invalid-config',
         problems: [
-          'target "Dev": a target name must be 1 to 24 lowercase letters, digits or dashes (24 is the longest tag name n8n takes)',
+          'target "Dev": a target name must be 1 to 13 lowercase letters, digits or dashes, so its tag boilerlift:<name> fits the 24 characters of an n8n tag name',
           'target "prod": "url" must be an http:// or https:// URL, found "ftp://prod.example.com"',
           'target "prod": "apiKey" must be a string, such as process.env.N8N_API_KEY',
           `target "prod": "workflows" must be the folder of its workflow files, such as './workflows'`,
@@ -138,8 +138,8 @@ describe('targetsToRun', () => {
     expect(result).toEqual({ ok: false, error: { kind: 'invalid-config', problems: ['target "dev": "tag" must be true or false'] } });
   });
 
-  test.each([true, false])('Should fail as an invalid config when the target name is longer than 24 characters and tag is %s', (tag) => {
-    const file = loaded({ targets: { 'a-target-name-of-25-chars': { ...DEV, tag } } });
+  test.each([true, false])('Should fail as an invalid config when the target name is longer than 13 characters and tag is %s', (tag) => {
+    const file = loaded({ targets: { 'fourteen-chars': { ...DEV, tag } } });
 
     const result = targetsToRun(file, { kind: 'default' });
 
@@ -147,13 +147,13 @@ describe('targetsToRun', () => {
       ok: false,
       error: {
         kind: 'invalid-config',
-        problems: ['target "a-target-name-of-25-chars": a target name must be 1 to 24 lowercase letters, digits or dashes (24 is the longest tag name n8n takes)'],
+        problems: ['target "fourteen-chars": a target name must be 1 to 13 lowercase letters, digits or dashes, so its tag boilerlift:<name> fits the 24 characters of an n8n tag name'],
       },
     });
   });
 
-  test('Should accept the target name when it is 24 characters long', () => {
-    const file = loaded({ targets: { 'a-target-name-of-24-char': DEV } });
+  test('Should accept the target name when it is 13 characters long', () => {
+    const file = loaded({ targets: { 'thirteen-char': DEV } });
 
     const result = targetsToRun(file, { kind: 'default' });
 
