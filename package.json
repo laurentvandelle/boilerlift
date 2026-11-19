@@ -70,5 +70,12 @@
   ],
   "engines": {
     "node": ">=22.18"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.21.3",
+      "onFail": "error"
+    }
   }
 }

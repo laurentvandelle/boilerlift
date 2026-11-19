@@ -14,9 +14,12 @@ Issues labelled [`good first issue`](https://github.com/laurentvandelle/boilerli
 
 Requires Node.js 22.18 or later. Development uses the version in `.nvmrc` (24).
 
+Requires npm 11.21.3, the version in `devEngines` of `package.json`: npm refuses to install with another one. Other versions write `package-lock.json` differently, and CI installs with `npm ci`, which fails on a lock file out of sync.
+
 ```sh
 git clone https://github.com/laurentvandelle/boilerlift.git
 cd boilerlift
+npm install -g npm@11.21.3
 npm install
 npm run verify   # lint, typecheck, tests
 ```

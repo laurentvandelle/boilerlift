@@ -35,9 +35,9 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      # npm trusted publishing needs npm 11.5.1 or later.
-      - name: Update npm for trusted publishing
-        run: npm install -g npm@^11.5.1
+      # The npm of devEngines in package.json. Trusted publishing needs npm 11.5.1 or later.
+      - name: Install the npm version of package.json devEngines
+        run: npm install -g npm@11.21.3
 
       - name: Find what is left to release
         id: check
