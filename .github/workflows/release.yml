@@ -1,0 +1,91 @@
+name: Release 🚀
+
+# Publishes the version in package.json once its release PR (`chore(release): vX.Y.Z`, opened by the
+# release skill in .claude/skills/release/SKILL.md) is merged into main. Every other push to main finds
+# nothing to do: its version is already fully released, or CHANGELOG.md has no section for it.
+# Every step checks before it acts, so a re-run (or a dispatch on the same commit) finishes a partial
+# release without duplicating anything. The logic lives in .github/scripts/release_*.py. Decision record: docs/adr/0012-release-pr-then-publish-on-merge.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the vX.Y.Z tag and the GitHub release
+  id-token: write # npm trusted publishing (OIDC) and provenance: no long-lived npm token
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish to npm, tag and create the GitHub release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # npm trusted publishing needs npm 11.5.1 or later.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Find what is left to release
+        id: check
+        run: python3 .github/scripts/release_check.py
+
+      - name: Install dependencies from package-lock.json
+        if: steps.check.outputs.work == 'true'
+        run: npm ci
+
+      # Nothing is published unless lint, typecheck, tests and build pass.
+      - name: Lint, typecheck and run tests
+        if: steps.check.outputs.work == 'true'
+        run: npm run verify
+
+      - name: Build into dist/
+        if: steps.check.outputs.work == 'true'
+        run: npm run build
+
+      - name: Publish to npm with provenance
+        id: npm
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.npm_needed == 'true'
+        run: npm publish --provenance --access public
+
+      - name: Create the tag on the merge commit
+        id: tag
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.tag_needed == 'true'
+        run: gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/${{ steps.check.outputs.tag }}" -f sha="$GITHUB_SHA"
+
+      - name: Create the GitHub release
+        id: release
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.release_needed == 'true'
+        run: >-
+          gh release create "${{ steps.check.outputs.tag }}"
+          --verify-tag
+          --title "${{ steps.check.outputs.tag }}"
+          --notes-file "${{ steps.check.outputs.notes_file }}"
+
+      - name: Write the job summary
+        if: always()
+        env:
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          REASON: ${{ steps.check.outputs.reason }}
+          TAG: ${{ steps.check.outputs.tag }}
+          WORK: ${{ steps.check.outputs.work }}
+          NPM_NEEDED: ${{ steps.check.outputs.npm_needed }}
+          TAG_NEEDED: ${{ steps.check.outputs.tag_needed }}
+          RELEASE_NEEDED: ${{ steps.check.outputs.release_needed }}
+          NPM_OUTCOME: ${{ steps.npm.outcome }}
+          TAG_OUTCOME: ${{ steps.tag.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+        run: python3 .github/scripts/release_summary.py

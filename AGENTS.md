@@ -20,12 +20,11 @@ Local setup: see `CONTRIBUTING.md`. Package manager: npm (`package-lock.json`).
 | Lint with autofix                             | `npm run lint`       |
 | Type-check, no emit                           | `npm run typecheck`  |
 | Lint check, type-check, tests                 | `npm run verify`     |
-| Bump patch version, verify, build, publish    | `npm run pub`        |
 
 Run `npm run verify` before handing work back.
 Never hand back a failure: fix it, then run the command again.
 
-`npm run pub` bumps the version and publishes to npm. Never run it unless the user asks.
+Releases go through a release pull request, and its merge publishes to npm (`.github/workflows/release.yml`). Never publish, tag or create a GitHub release by hand, and never open a release pull request unless the user asks.
 
 `npm start` builds, then runs a real `lift deploy` (no `--dry-run`) of `debug/workflows` to the n8n instance in `debug/.env`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks.
 
@@ -35,10 +34,12 @@ Never hand back a failure: fix it, then run the command again.
 - Before editing `src/cli/**`, read `src/cli/AGENTS.md`.
 - Before editing `src/core/**`, read `src/core/AGENTS.md`.
 - Before editing `src/services/**`, read `src/services/AGENTS.md`.
+- Before editing `.github/scripts/**`, read `.github/scripts/AGENTS.md`.
 - Before adding a dependency or crossing a module boundary, read `ARCHITECTURE.md`.
 - Before naming a domain concept, read `GLOSSARY.md`.
 - Before writing or changing a test, read `docs/testing.md`.
 - Before writing an architecture decision, read `docs/adr/README.md`.
+- Before preparing a release, read `.claude/skills/release/SKILL.md`.
 - Before changing these instruction files, read `docs/agents.md`.
 - Before treating a convention as enforced, read `docs/guardrails.md`.
 - Before adding a convention after review, read `docs/maintenance.md`.
