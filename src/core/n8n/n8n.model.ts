@@ -94,6 +94,11 @@ export interface N8nClient {
   createWorkflow(body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `PUT /api/v1/workflows/{id}?publishIfActive=false`: the change lands as a draft. */
   updateWorkflow(id: WorkflowId, body: N8nWorkflowBody): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
+  /**
+   * `POST /api/v1/workflows/{id}/activate`, without a body: the current draft becomes the published version
+   * (`activeVersionId` = `versionId`), and the workflow runs it on its triggers.
+   */
+  publishWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
   unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `GET /api/v1/tags`, every page: the tags of the instance. */
