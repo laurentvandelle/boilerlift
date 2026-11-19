@@ -14,6 +14,9 @@ const fakeCommand: CommandDefinition = {
   run: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
 };
 
+/** A command of two words, as `creds sync`. */
+const groupedCommand: CommandDefinition = { ...fakeCommand, name: 'pair up', summary: 'Pair things up' };
+
 const ctx: CommandContext = fakeContext({ version: '1.2.3', registry: [helpCommand, fakeCommand] });
 
 describe('helpCommand', () => {
@@ -87,5 +90,12 @@ With --all, the exit code is the highest of the targets.
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Unknown command: nope');
+  });
+  test('Should print the help of a command of two words when called with both words', async () => {
+    const input = { positionals: ['pair', 'up'], values: {} };
+
+    const result = await helpCommand.run(input, fakeContext({ registry: [helpCommand, groupedCommand] }));
+
+    expect(result.stdout).toContain('Usage: lift pair up');
   });
 });

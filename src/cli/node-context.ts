@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from 'node:util';
-import { CommandContext, ProjectConfigFile, WorkflowFile } from '#src/cli/cli.model';
+import { CommandContext, CredentialsFile, ProjectConfigFile, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
 import { isRecord } from '#src/core/common/is-record';
@@ -24,7 +24,9 @@ export function nodeContext(cwd: string): CommandContext {
     fetch: globalThis.fetch,
     loadWorkflowFiles: (dir) => loadWorkflowFiles(cwd, dir),
     readLockFile: (path) => readLockFile(resolve(cwd, path)),
-    writeLockFile: (path, text) => writeLockFile(resolve(cwd, path), text),
+    writeLockFile: (path, text) => writeTextFile(resolve(cwd, path), text),
+    loadCredentialsFiles: (dir) => loadCredentialsFiles(cwd, dir),
+    writeCredentialsFile: (path, text) => writeTextFileInFolder(resolve(cwd, path), text),
   };
 }
 
@@ -107,8 +109,8 @@ async function readLockFile(path: string): Promise<string | undefined> {
   }
 }
 
-/** Writes the whole lock file. A disk error (permissions, full disk, a folder in the way) is returned, not thrown. */
-async function writeLockFile(path: string, text: string): Promise<Result<void, { reason: string }>> {
+/** Writes the whole file. A disk error (permissions, full disk, a folder in the way) is returned, not thrown. */
+async function writeTextFile(path: string, text: string): Promise<Result<void, { reason: string }>> {
   try {
     await writeFile(path, text, 'utf8');
     return ok(undefined);
@@ -135,6 +137,42 @@ async function loadWorkflowFiles(cwd: string, dir: string): Promise<WorkflowFile
     .map((entry) => resolve(root, entry))
     .sort();
   return Promise.all(files.map((absolute) => readWorkflowFile(cwd, absolute)));
+}
+
+/** Writes the whole file, creating its folder first. A disk error is returned, not thrown. */
+async function writeTextFileInFolder(path: string, text: string): Promise<Result<void, { reason: string }>> {
+  try {
+    await mkdir(dirname(path), { recursive: true });
+  } catch (error) {
+    return err({ reason: error instanceof Error ? error.message : String(error) });
+  }
+  return writeTextFile(path, text);
+}
+
+/** `CommandContext.loadCredentialsFiles`, with `dir` resolved from `cwd`. */
+async function loadCredentialsFiles(cwd: string, dir: string): Promise<CredentialsFile[]> {
+  const root = resolve(cwd, dir);
+  let entries: string[];
+  try {
+    entries = await readdir(root);
+  } catch (error) {
+    if (isMissingFile(error) || (isRecord(error) && error.code === 'ENOTDIR')) {
+      return [];
+    }
+    throw error;
+  }
+  const files = entries.filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.d.ts')).map((entry) => resolve(root, entry)).sort();
+  const loaded: CredentialsFile[] = [];
+  for (const absolute of files) {
+    const path = relative(cwd, absolute).split(sep).join('/');
+    try {
+      const module: unknown = await import(pathToFileURL(absolute).href);
+      loaded.push({ path, content: isRecord(module) ? module.default : undefined });
+    } catch (error) {
+      loaded.push({ path, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return loaded;
 }
 
 async function readWorkflowFile(cwd: string, absolute: string): Promise<WorkflowFile> {

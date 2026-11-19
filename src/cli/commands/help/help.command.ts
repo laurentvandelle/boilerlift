@@ -22,8 +22,9 @@ export const helpCommand: CommandDefinition = defineCommand({
 });
 
 function help(positionals: string[], registry: readonly CommandDefinition[]): CliResult {
-  const [target] = positionals;
-  if (target === undefined) {
+  // A command of two words, such as `creds sync`, is named by two positionals.
+  const target = positionals.join(' ');
+  if (target === '') {
     return renderHelp(renderGlobalHelp(registry));
   }
   const command = registry.find((candidate) => candidate.name === target);

@@ -1,6 +1,7 @@
 import { ConnectedTarget, CommandDefinition, Deps } from '#src/cli/cli.model';
 import {
   DeployFormat,
+  renderCredentialMarkers,
   renderInvalidFiles,
   renderInvalidLockFile,
   renderNothingToDeploy,
@@ -9,6 +10,7 @@ import {
 } from '#src/cli/commands/deploy/deploy.render';
 import { defineCommand } from '#src/cli/define-command';
 import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
+import { findCredentialUses } from '#src/core/compile/credential';
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 import {
@@ -53,6 +55,9 @@ is written. Then a failed target does not stop the next ones. Two targets on the
 whose folders hold the same stable name would share one entry of ${LOCK_FILE}: deploy refuses
 them before writing.
 
+A workflow that picks a credential with credential() is refused before anything is sent: deploy
+does not resolve it yet.
+
 --dry-run reads the instance and shows what deploy would create, update, restore, skip or fail,
 and any blocker, without writing anything. It exits with the same codes as a real deploy.`;
 
@@ -90,7 +95,12 @@ export const deployCommand: CommandDefinition = defineCommand({
       selected.map(({ name }) => name),
       config.targets.map((target) => ({ target: target.name, instance: target.url, paths: (files.get(target.workflows) ?? []).map(({ path }) => path) })),
     );
-    return shared.length > 0 ? err(renderSharedEntries(shared, format)) : ok(files);
+    if (shared.length > 0) {
+      return err(renderSharedEntries(shared, format));
+    }
+    const selectedFolders = [...new Set(selected.map(({ workflows }) => workflows))];
+    const uses = findCredentialUses(selectedFolders.flatMap((folder) => files.get(folder) ?? []));
+    return uses.length > 0 ? err(renderCredentialMarkers(uses, format)) : ok(files);
   },
   modes: {
     'dry-run': (files, deps) =>

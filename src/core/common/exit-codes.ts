@@ -31,6 +31,15 @@ export const EXIT_DRAFTS_UNSUPPORTED = 6;
 /** Deploy created a workflow but could not record its id in boilerlift.lock.json: the run stopped there. */
 export const EXIT_LOCK_WRITE_FAILED = 7;
 
+/** creds sync wrote the list of a target, but workflows of that target use credentials the list does not have. */
+export const EXIT_CREDENTIALS_MISSING = 8;
+
+/** The API key cannot list the credentials: it lacks the `credential:list` scope. The list was left as it was. */
+export const EXIT_CREDENTIAL_SCOPE_MISSING = 9;
+
+/** creds sync could not write the credentials file of a target. */
+export const EXIT_CREDENTIALS_WRITE_FAILED = 10;
+
 /** Every exit code a command can return. EXIT_UNEXPECTED is EXIT_USAGE's code, so the union lists it once. */
 export type ExitCode =
   | typeof EXIT_OK
@@ -40,7 +49,10 @@ export type ExitCode =
   | typeof EXIT_API_KEY_REJECTED
   | typeof EXIT_PARTIAL_FAILURE
   | typeof EXIT_DRAFTS_UNSUPPORTED
-  | typeof EXIT_LOCK_WRITE_FAILED;
+  | typeof EXIT_LOCK_WRITE_FAILED
+  | typeof EXIT_CREDENTIALS_MISSING
+  | typeof EXIT_CREDENTIAL_SCOPE_MISSING
+  | typeof EXIT_CREDENTIALS_WRITE_FAILED;
 
 /** The exit code of a failure: any code but EXIT_OK. */
 export type FailureExitCode = Exclude<ExitCode, typeof EXIT_OK>;
