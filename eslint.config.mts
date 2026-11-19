@@ -18,7 +18,7 @@ const noBarrelOrRelative = {
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
 const CORE = ['compile', 'deliver', 'config', 'n8n', 'connection', 'common'];
 
-/** The src/services/ folders: adapters to the outside world. Only the commands import them (src/services/AGENTS.md). */
+/** The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports them (src/services/AGENTS.md). */
 const SERVICES = ['services-http', 'services-n8n'];
 
 const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (docs/testing.md).'];
@@ -78,6 +78,9 @@ export default tseslint.config(
       'no-warning-comments': 'off',
       'no-else-return': 'error',
       '@typescript-eslint/explicit-function-return-type': 'warn',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
@@ -183,6 +186,7 @@ export default tseslint.config(
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
         { category: 'define-command', pattern: 'src/cli/define-command.ts' },
         { category: 'targets-render', pattern: 'src/cli/targets.render.ts' },
+        { category: 'targets-need', pattern: 'src/cli/targets-need.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'n8n-client', pattern: 'src/services/n8n/n8n-client.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },
@@ -245,11 +249,6 @@ export default tseslint.config(
               allow: { to: { element: { type: CORE } } },
             },
             {
-              // A command builds the n8n client from ctx.fetch: commands are the only importers of services/.
-              from: { element: { type: 'cli-command' } },
-              allow: { to: { element: { type: 'services-n8n' } } },
-            },
-            {
               // defineCommand builds each command's CommandDefinition, with option values typed by its options.
               // targets.render.ts lays out the output of a command that runs on targets (--target, --all).
               from: { element: { type: 'cli-command' } },
@@ -292,14 +291,14 @@ export default tseslint.config(
               disallow: { to: { element: { type: 'connection' } } },
               message: 'deliver/ does not import connection/, the checks behind ping: exit codes come from core/common/.',
             },
-            // 6. n8n-client.ts is the fetch adapter. Only services/n8n/ and the commands, which build the client from
-            // ctx.fetch, import it. Every other folder uses the N8nClient port.
+            // 6. n8n-client.ts is the fetch adapter. Only services/n8n/ and cli/targets-need.ts, which builds the client of each
+            // target from ctx.fetch, import it. Every other folder uses the N8nClient port.
             {
               disallow: { to: { file: { categories: 'n8n-client' } } },
-              message: 'Import the N8nClient port from #src/core/n8n/n8n.model: only services/n8n/ and the commands import n8n-client.ts.',
+              message: 'Import the N8nClient port from #src/core/n8n/n8n.model: only services/n8n/ and cli/targets-need.ts import n8n-client.ts.',
             },
             {
-              from: { element: { type: ['services-n8n', 'cli-command'] } },
+              from: { element: { type: 'services-n8n' } },
               allow: { to: { file: { categories: 'n8n-client' } } },
             },
             // 7. Test runner: nobody, then tests.
@@ -339,7 +338,13 @@ export default tseslint.config(
             {
               from: { element: { type: 'cli' } },
               disallow: { to: { element: { type: SERVICES } } },
-              message: 'Only the commands import services/: they build the n8n client from ctx.fetch (src/cli/AGENTS.md).',
+              message: "Only cli/targets-need.ts imports services/: it builds the n8n client of each target from ctx.fetch for the commands that need 'targets' (src/cli/AGENTS.md).",
+            },
+            {
+              // The 'targets' need builds the client of each target from ctx.fetch: the one importer of services/. After
+              // the disallow above.
+              from: { file: { categories: 'targets-need' } },
+              allow: { to: [{ element: { type: 'services-n8n' } }, { file: { categories: 'n8n-client' } }] },
             },
           ],
         },
