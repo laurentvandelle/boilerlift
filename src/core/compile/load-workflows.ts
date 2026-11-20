@@ -24,6 +24,14 @@ export function baseNameOf(path: string): string {
 }
 
 /**
+ * The stable names of `paths`, the workflow files of a folder, without loading them: a file that does not load still
+ * holds its name. A path whose base name breaks the stable-name rule is left out.
+ */
+export function stableNamesOf(paths: readonly string[]): Set<StableName> {
+  return new Set(paths.map(baseNameOf).filter(isStableName));
+}
+
+/**
  * Turns the files found under `./workflows` into local workflows. Pure, no I/O.
  * Any problem (invalid or duplicate stable name, unreadable file, missing field, invalid node, duplicate node
  * name, connection to a node that does not exist) fails the whole load,

@@ -3,7 +3,7 @@ import { StableName } from '#src/core/compile/workflow.model';
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
 import { DeployError } from '#src/core/deliver/deploy.model';
-import { LockEntry, LockFile, LockFileError, LockWriter } from '#src/core/deliver/lock-file.model';
+import { LockEntry, LockFile, LockFileError, LockRemover, LockWriter } from '#src/core/deliver/lock-file.model';
 import { isWorkflowId } from '#src/core/n8n/n8n-ids';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
@@ -79,6 +79,29 @@ export function withEntry(lock: LockFile, instance: string, stableName: StableNa
   return { version: lock.version, instances };
 }
 
+/**
+ * The entries of `instance` that no workflow file points to any more: `present` holds the stable names of the files of
+ * every target on that instance, in all their folders. These are the removed workflows, by stable name.
+ */
+export function removedEntries(lock: LockFile, instance: string, present: ReadonlySet<string>): Map<StableName, WorkflowId> {
+  return new Map([...managedIds(lock, instance)].filter(([name]) => !present.has(name)));
+}
+
+/**
+ * `lock` without `stableName` on `instance`; an instance left with no entry is dropped. `lock` itself is left unchanged.
+ */
+export function withoutEntry(lock: LockFile, instance: string, stableName: StableName): LockFile {
+  const instances = new Map(lock.instances);
+  const entries = new Map(instances.get(instance));
+  entries.delete(stableName);
+  if (entries.size === 0) {
+    instances.delete(instance);
+  } else {
+    instances.set(instance, entries);
+  }
+  return { version: lock.version, instances };
+}
+
 /** The text of the lock file: keys sorted, 2-space JSON and a trailing newline, so the same record gives the same text. */
 export function serializeLockFile(lock: LockFile): string {
   const instances = Object.fromEntries(
@@ -111,6 +134,25 @@ export function lockWriter(
           detail: `workflow ${id} was created for ${stableName}, but ${LOCK_FILE} could not be written: ${saved.error.reason}`,
           hint: `Add "${stableName}": { "n8nId": "${id}" } under "${instance}" in ${LOCK_FILE} by hand and commit it, then run deploy again`,
         });
+      }
+      current = next;
+      return ok(undefined);
+    },
+  };
+}
+
+/**
+ * A `LockRemover` over `lock`, for every instance: each call drops one entry and saves the whole file with `save`. A
+ * save that fails leaves the entry in the record it holds, so the next call does not save it either.
+ */
+export function lockRemover(lock: LockFile, save: (text: string) => Promise<Result<void, { reason: string }>>): LockRemover {
+  let current = lock;
+  return {
+    remove: async (instance, stableName): Promise<Result<void, { reason: string }>> => {
+      const next = withoutEntry(current, instance, stableName);
+      const saved = await save(serializeLockFile(next));
+      if (!saved.ok) {
+        return saved;
       }
       current = next;
       return ok(undefined);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
+import { err, ok } from '#src/core/common/result';
 import { fakeStableName } from '#src/core/compile/workflow.fake';
-import { emptyLockFile, managedIds, parseLockFile, serializeLockFile, withEntry } from '#src/core/deliver/lock-file';
+import { emptyLockFile, lockRemover, managedIds, parseLockFile, removedEntries, serializeLockFile, withEntry } from '#src/core/deliver/lock-file';
 import { LockFile } from '#src/core/deliver/lock-file.model';
 import { FAKE_INSTANCE, fakeLockText, fakeManaged } from '#src/core/deliver/lock-file.fake';
 import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
@@ -115,5 +116,69 @@ describe('withEntry', () => {
     const next = withEntry(lock, FAKE_INSTANCE, fakeStableName('crm-import'), fakeWorkflowId('new'));
 
     expect(managedIds(next, FAKE_INSTANCE)).toEqual(fakeManaged({ 'crm-import': 'new' }));
+  });
+});
+
+describe('removedEntries', () => {
+  test('Should give the entries no workflow file points to when the files of the instance are given', () => {
+    const lock = parsed(fakeLockText({ 'crm-import': 'abc', 'old-report': 'old' }));
+
+    const removed = removedEntries(lock, FAKE_INSTANCE, new Set(['crm-import', 'invoice-sync']));
+
+    expect(removed).toEqual(fakeManaged({ 'old-report': 'old' }));
+  });
+
+  test('Should give no entry when the lock file records nothing for the instance', () => {
+    const lock = parsed(fakeLockText({ 'old-report': 'old' }, 'https://other.example.com'));
+
+    const removed = removedEntries(lock, FAKE_INSTANCE, new Set());
+
+    expect(removed).toEqual(new Map());
+  });
+});
+
+describe('lockRemover', () => {
+  test('Should save the file without the entry when it removes one', async () => {
+    const saved: string[] = [];
+    const remover = lockRemover(parsed(fakeLockText({ 'crm-import': 'abc', 'old-report': 'old' })), (text) => {
+      saved.push(text);
+      return Promise.resolve(ok(undefined));
+    });
+
+    await remover.remove(FAKE_INSTANCE, fakeStableName('old-report'));
+
+    expect(saved).toEqual([fakeLockText({ 'crm-import': 'abc' })]);
+  });
+
+  test('Should drop the instance when its last entry is removed', async () => {
+    const saved: string[] = [];
+    const remover = lockRemover(parsed(fakeLockText({ 'old-report': 'old' })), (text) => {
+      saved.push(text);
+      return Promise.resolve(ok(undefined));
+    });
+
+    await remover.remove(FAKE_INSTANCE, fakeStableName('old-report'));
+
+    expect(saved.map((text) => managedIds(parsed(text), FAKE_INSTANCE))).toEqual([new Map()]);
+    expect(saved[0]).toBe('{\n  "version": 1,\n  "instances": {}\n}\n');
+  });
+
+  test('Should keep the entry in the next save when a save fails', async () => {
+    const saved: string[] = [];
+    let fail = true;
+    const remover = lockRemover(parsed(fakeLockText({ a: '1', b: '2' })), (text) => {
+      if (fail) {
+        fail = false;
+        return Promise.resolve(err({ reason: 'disk full' }));
+      }
+      saved.push(text);
+      return Promise.resolve(ok(undefined));
+    });
+
+    const first = await remover.remove(FAKE_INSTANCE, fakeStableName('a'));
+    await remover.remove(FAKE_INSTANCE, fakeStableName('b'));
+
+    expect(first).toEqual({ ok: false, error: { reason: 'disk full' } });
+    expect(saved).toEqual([fakeLockText({ a: '1' })]);
   });
 });
