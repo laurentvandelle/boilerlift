@@ -1,0 +1,69 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(**)",
+      "Edit(*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch --show-current *)",
+      "Bash(git push *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr comment *)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(npm ci *)",
+      "Bash(npm install *)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm verify *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm run *)",
+      "Bash(yarn install *)",
+      "Bash(yarn test *)",
+      "Bash(yarn lint *)",
+      "Bash(yarn build *)",
+      "Bash(yarn verify *)",
+      "Bash(yarn typecheck *)",
+      "Bash(yarn run *)",
+      "Bash(node -p *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env*)",
+      "Edit(.env)",
+      "Edit(.env*)",
+      "Bash(git push --force *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git push -f *)",
+      "Bash(git push --delete *)",
+      "Bash(git push --no-verify *)",
+      "Bash(git commit --no-verify *)",
+      "Bash(git commit -n *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean --force *)",
+      "Bash(git clean -f *)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+      "Bash(rm -r *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-dangerous.py"
+          }
+        ]
+      }
+    ]
+  }
+}

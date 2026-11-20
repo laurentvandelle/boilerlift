@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-// Runs the built CLI as a user would, with this script's arguments: `node main.ts ping`, `node main.ts deploy --json`.
+// Runs the built CLI as a user would, with this script's arguments. From the root, `npm start -- <cmd> [args]`
+// builds dist/, then runs this script in debug/: `npm start -- ping`, `npm start -- deploy --json`.
 // With no argument it runs deploy on the target of ./boilerlift.config.ts, whose workflows are ./workflows
 // (demo.workflow.ts and sub/other.json): a second run skips both.
 const bin = join(import.meta.dirname, '..', 'dist', 'bin.js');
