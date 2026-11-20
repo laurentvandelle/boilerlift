@@ -1,4 +1,4 @@
-import { BoilerliftConfig, CommandContext, ProjectConfigFile } from '#src/cli/cli.model';
+import { BoilerliftConfig, CommandContext, CredentialsFile, ProjectConfigFile } from '#src/cli/cli.model';
 import { Result, err, ok } from '#src/core/common/result';
 
 /**
@@ -17,6 +17,9 @@ export function fakeContext(overrides: Partial<CommandContext> = {}): CommandCon
     readLockFile: () => Promise.resolve(undefined),
     writeLockFile: () => Promise.reject(new Error('writeLockFile was called, but this test does not expect a lock file write')),
     ask: () => Promise.reject(new Error('ask was called, but this test does not expect a question')),
+    loadCredentialsFiles: () => Promise.resolve([]),
+    writeCredentialsFile: () =>
+      Promise.reject(new Error('writeCredentialsFile was called, but this test does not expect a credentials file write')),
     ...overrides,
   };
 }
@@ -54,6 +57,43 @@ export function fakeLockFile({ text: seed, writeFailure }: FakeLockFileOptions =
       },
     },
     text: () => text,
+    writes,
+  };
+}
+
+export interface FakeCredentialsFolderOptions {
+  /** The files of `credentials/` before the command runs, by path: their default export, or an import error. */
+  files?: CredentialsFile[];
+  /** When set, every write fails with this reason and leaves the files as they were. */
+  writeFailure?: string;
+}
+
+/** An in-memory `credentials/` folder for `fakeContext`: seed it, read back what the command wrote, or make its writes fail. */
+export interface FakeCredentialsFolder {
+  /** Its `loadCredentialsFiles` and `writeCredentialsFile`, to spread into `fakeContext`. */
+  context: Pick<CommandContext, 'loadCredentialsFiles' | 'writeCredentialsFile'>;
+  /** The text written at `path`, or `undefined` when the command wrote nothing there. */
+  text(path: string): string | undefined;
+  /** The paths of every write, in order. */
+  writes: string[];
+}
+
+export function fakeCredentialsFolder({ files = [], writeFailure }: FakeCredentialsFolderOptions = {}): FakeCredentialsFolder {
+  const texts = new Map<string, string>();
+  const writes: string[] = [];
+  return {
+    context: {
+      loadCredentialsFiles: () => Promise.resolve(structuredClone(files)),
+      writeCredentialsFile: (path, text): Promise<Result<void, { reason: string }>> => {
+        writes.push(path);
+        if (writeFailure !== undefined) {
+          return Promise.resolve(err({ reason: writeFailure }));
+        }
+        texts.set(path, text);
+        return Promise.resolve(ok(undefined));
+      },
+    },
+    text: (path) => texts.get(path),
     writes,
   };
 }

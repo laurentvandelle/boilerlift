@@ -20,11 +20,21 @@ export async function runCli(args: string[], ctx: CommandContext): Promise<CliRe
   if (name.startsWith('-')) {
     return usageError(`Unknown option: ${name}`, renderGlobalHelp(ctx.registry));
   }
+  const [subcommand = ''] = afterName;
+  const grouped = ctx.registry.find((candidate) => candidate.name === `${name} ${subcommand}`);
+  if (grouped !== undefined) {
+    return runCommand(grouped, [...afterName.slice(1), ...leading], ctx);
+  }
   const command = ctx.registry.find((candidate) => candidate.name === name);
   if (command === undefined) {
-    return unknownCommand(name, ctx.registry);
+    return unknownCommand(isGroup(name, ctx.registry) ? `${name} ${subcommand}`.trimEnd() : name, ctx.registry);
   }
   return runCommand(command, rest, ctx);
+}
+
+/** True when `name` is the first word of a command of two words, such as `creds` of `creds sync`. */
+function isGroup(name: string, registry: readonly CommandDefinition[]): boolean {
+  return registry.some((candidate) => candidate.name.startsWith(`${name} `));
 }
 
 /**

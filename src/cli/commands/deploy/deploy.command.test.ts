@@ -11,6 +11,7 @@ import {
   fakeTwoTargets,
 } from '#src/cli/cli.fake';
 import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
+import { fakeWorkflowFileUsing } from '#src/core/compile/credential.fake';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
 import { fakeLockText } from '#src/core/deliver/lock-file.fake';
 import { FakeN8n, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, invalidResponse, unreachable } from '#src/core/n8n/n8n.fake';
@@ -988,5 +989,31 @@ describe('deployCommand targets', () => {
 
     expect(result.exitCode).toBe(0);
     expect([dev, prod].map((n8n) => n8n.workflows.map(({ name }) => name))).toEqual([['Workflow invoice-sync'], ['Workflow invoice-sync']]);
+  });
+  test('Should refuse, send nothing and name each node when a workflow uses credential()', async () => {
+    const n8n = fakeN8n();
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFileUsing('workflows/invoice-sync.workflow.ts', ['gmail-sales'])]) });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: '',
+      stderr:
+        'Workflows pick credentials with credential(), which deploy cannot resolve yet. Nothing was sent to n8n.\n' +
+        '✗ workflows/invoice-sync.workflow.ts  node "Node 1" uses credential(\'gmail-sales\')\n' +
+        '  → Until deploy resolves it, set the credentials of these nodes as n8n exports them: { "<type>": { "id": "…", "name": "…" } }.\n',
+    });
+    expect(n8n.requests).toEqual([]);
+  });
+
+  test('Should refuse and send nothing when a dry run finds a workflow that uses credential()', async () => {
+    const n8n = fakeN8n();
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFileUsing('workflows/a.json', ['slack'])]) });
+
+    const result = await deployCommand.run(DRY_RUN, ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(n8n.requests).toEqual([]);
   });
 });

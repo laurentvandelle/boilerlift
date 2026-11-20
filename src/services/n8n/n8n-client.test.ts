@@ -360,6 +360,52 @@ describe('createN8nClient public API calls', () => {
     expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
   });
 
+  test('Should follow nextCursor and keep only the id, name and type when it lists the credentials', async () => {
+    const pages = [
+      { data: [{ id: 'c1', name: 'Gmail', type: 'gmailOAuth2', data: { token: 'secret' }, createdAt: '2026-01-01' }], nextCursor: 'next page' },
+      { data: [{ id: 'c2', name: 'Slack', type: 'slackApi' }], nextCursor: null },
+    ];
+    let page = 0;
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json(pages[page++])));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listCredentials();
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        call: 'GET /api/v1/credentials',
+        status: 200,
+        body: [
+          { id: 'c1', name: 'Gmail', type: 'gmailOAuth2' },
+          { id: 'c2', name: 'Slack', type: 'slackApi' },
+        ],
+      },
+    });
+    expect(calls.map(({ url }) => url)).toEqual([
+      'https://n8n.example.com/api/v1/credentials?limit=250',
+      'https://n8n.example.com/api/v1/credentials?limit=250&cursor=next%20page',
+    ]);
+  });
+
+  test('Should send the API key when it lists the credentials', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ data: [], nextCursor: null })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    await client.listCredentials();
+
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+  });
+
+  test('Should fail as an invalid response when a credential has no type', async () => {
+    const { fetch } = fakeFetch(() => Promise.resolve(json({ data: [{ id: 'c1', name: 'Gmail' }], nextCursor: null })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.listCredentials();
+
+    expect(result).toMatchObject({ ok: false, error: { kind: 'invalid-response', call: 'GET /api/v1/credentials' } });
+  });
+
   test('Should fail as an invalid response when a tag page has no data list', async () => {
     const { fetch } = fakeFetch(() => Promise.resolve(json({ nextCursor: null })));
     const client = createN8nClient({ config: CONFIG, fetch });

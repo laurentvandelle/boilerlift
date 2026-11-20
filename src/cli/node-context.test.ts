@@ -216,3 +216,56 @@ describe('nodeContext project config', () => {
     expect(isDirectory).toBe(expected);
   });
 });
+
+describe('nodeContext loadCredentialsFiles', () => {
+  test('Should import the default export of each .ts file of the folder, sorted, when the folder has lists', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'credentials/prod.ts', 'export default [{ key: "b" }];\n');
+    await write(cwd, 'credentials/dev.ts', 'export default [{ key: "a" }];\n');
+    await write(cwd, 'credentials/notes.md', 'not a list');
+
+    const files = await nodeContext(cwd).loadCredentialsFiles('credentials');
+
+    expect(files).toEqual([
+      { path: 'credentials/dev.ts', content: [{ key: 'a' }] },
+      { path: 'credentials/prod.ts', content: [{ key: 'b' }] },
+    ]);
+  });
+
+  test('Should resolve [] when the folder does not exist', async () => {
+    const cwd = await tempFolder();
+
+    const files = await nodeContext(cwd).loadCredentialsFiles('credentials');
+
+    expect(files).toEqual([]);
+  });
+
+  test('Should return the error of that file when a list throws on import', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'credentials/dev.ts', 'throw new Error("broken list");\n');
+
+    const files = await nodeContext(cwd).loadCredentialsFiles('credentials');
+
+    expect(files).toEqual([{ path: 'credentials/dev.ts', error: 'broken list' }]);
+  });
+});
+
+describe('nodeContext writeCredentialsFile', () => {
+  test('Should create the folder and write the whole file when the folder does not exist', async () => {
+    const cwd = await tempFolder();
+
+    const result = await nodeContext(cwd).writeCredentialsFile('credentials/dev.ts', 'export default [];\n');
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(await readFile(join(cwd, 'credentials/dev.ts'), 'utf8')).toBe('export default [];\n');
+  });
+
+  test('Should return the reason when a file stands where the folder goes', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'credentials', 'a file, not a folder');
+
+    const result = await nodeContext(cwd).writeCredentialsFile('credentials/dev.ts', 'export default [];\n');
+
+    expect(result.ok).toBe(false);
+  });
+});

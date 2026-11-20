@@ -1,5 +1,6 @@
 import { CliResult } from '#src/cli/cli.model';
 import { TargetRun } from '#src/cli/targets.render';
+import { CredentialUse } from '#src/core/compile/credential.model';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { CONFIG_FILE } from '#src/core/config/project-config';
 import { DeployAction, DeployReport, DeployResult, DeployWarning } from '#src/core/deliver/deploy.model';
@@ -139,6 +140,24 @@ export function renderSharedEntries(shared: SharedEntry[], format: { json: boole
     return { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n` };
   }
   const payload = { error: { kind: 'shared-lock-entry', message }, exitCode: EXIT_USAGE };
+  return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: `${message}\n` };
+}
+
+/** Nodes that pick a credential with credential(), which deploy cannot resolve yet: exit 1, nothing sent. */
+export function renderCredentialMarkers(uses: CredentialUse[], format: { json: boolean }): CliResult {
+  const lines = uses.map(({ path, node, key }) => `✗ ${path}  node "${node}" uses credential('${key}')`);
+  const message = [
+    "Workflows pick credentials with credential(), which deploy cannot resolve yet. Nothing was sent to n8n.",
+    ...lines,
+    '  → Until deploy resolves it, set the credentials of these nodes as n8n exports them: { "<type>": { "id": "…", "name": "…" } }.',
+  ].join('\n');
+  if (!format.json) {
+    return { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n` };
+  }
+  const payload = {
+    error: { kind: 'credential-not-deployable', message, uses: uses.map(({ path, node, key }) => ({ path, node, key })) },
+    exitCode: EXIT_USAGE,
+  };
   return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: `${message}\n` };
 }
 

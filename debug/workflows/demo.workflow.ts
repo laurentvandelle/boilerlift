@@ -1,7 +1,7 @@
 // A workflow pasted from an n8n export (editor → ⋯ → Download) into defineWorkflow, as the default export.
 // Its stable name is the file name: `demo`. Edit a parameter, then deploy again to get a draft.
 // Break a connection target (for example 'Set mesage') and the editor flags it.
-import { defineWorkflow } from 'boilerlift';
+import { credential, defineWorkflow } from 'boilerlift';
 
 export default defineWorkflow({
   name: 'Boilerlift demo',
@@ -13,6 +13,21 @@ export default defineWorkflow({
       type: 'n8n-nodes-base.manualTrigger',
       typeVersion: 1,
       position: [0, 0],
+    },
+    {
+      parameters: {
+        httpMethod: 'POST',
+        path: 'boilerlift-demo',
+        authentication: 'headerAuth',
+        options: {},
+      },
+      id: '8f2c1a52-1d7e-4b0e-9a8a-0d6f3c2b1a03',
+      name: 'Webhook',
+      type: 'n8n-nodes-base.webhook',
+      typeVersion: 2,
+      position: [0, 200],
+      webhookId: '8f2c1a52-1d7e-4b0e-9a8a-0d6f3c2b1a04',
+      // credentials: credential('global-apikey-for-webhook-node'),
     },
     {
       parameters: {
@@ -32,6 +47,9 @@ export default defineWorkflow({
   ],
   connections: {
     'When clicking ‘Execute workflow’': {
+      main: [[{ node: 'Set message', type: 'main', index: 0 }]],
+    },
+    Webhook: {
       main: [[{ node: 'Set message', type: 'main', index: 0 }]],
     },
   },
