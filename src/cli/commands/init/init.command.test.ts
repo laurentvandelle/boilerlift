@@ -20,6 +20,8 @@ describe('initCommand', () => {
         '✓ .gitignore',
         '✓ package.json',
         '✓ README.md',
+        '',
+        'The project is not ready yet. Run these commands, in order, to finish the setup:',
         '→ npm install',
         '→ cp .env.example .env, then fill in N8N_URL and N8N_API_KEY',
         '→ npx lift ping',
@@ -50,7 +52,7 @@ describe('initCommand', () => {
 
     const result = await initCommand.run({ positionals: ['my-app/'], values: {} }, fakeContext(folder.context));
 
-    expect([folder.text('my-app/README.md'), result.stdout.split('\n')[3]]).toEqual(['# Project\n', '→ cd my-app/']);
+    expect([folder.text('my-app/README.md'), result.stdout.split('\n')[5]]).toEqual(['# Project\n', '→ cd my-app/']);
   });
 
   test('Should leave an existing file untouched and report it as skipped when the folder holds part of a project', async () => {

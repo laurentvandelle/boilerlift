@@ -38,13 +38,15 @@ init never writes `.env`, so no secret is ever written, and never runs `npm inst
 ✓ AGENTS.md
 ✓ boilerlift.config.ts
 …
+
+The project is not ready yet. Run these commands, in order, to finish the setup:
 → cd my-app
 → npm install
 → cp .env.example .env, then fill in N8N_URL and N8N_API_KEY
 → npx lift ping
 ```
 
-`✓` created, `–` skipped, `✗` could not be written, with the reason.
+`✓` created, `–` skipped, `✗` could not be written, with the reason. The project is not usable until the commands after the `→` are run: init prints them every time, even when every file was skipped.
 
 ## When a write fails
 

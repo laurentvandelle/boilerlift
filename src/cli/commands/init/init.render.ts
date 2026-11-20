@@ -2,6 +2,9 @@ import { CliResult } from '#src/cli/cli.model';
 import { InitFile } from '#src/cli/commands/init/init.model';
 import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
 
+/** Printed before the next steps: the project is not usable until they are run. */
+export const NEXT_STEPS_HEADING = 'The project is not ready yet. Run these commands, in order, to finish the setup:';
+
 /**
  * The files of the project, one line each (`✓` created, `–` skipped, `✗` failed), then the next steps. A failed write
  * exits EXIT_INIT_WRITE_FAILED, with the count on stderr. The --json payload holds the folder, the files, the next
@@ -22,7 +25,7 @@ export function renderInit(files: InitFile[], folder: string, format: { json: bo
     };
     return { exitCode, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr };
   }
-  const lines = [...files.map(fileLine), ...next.map((step) => `→ ${step}`)];
+  const lines = [...files.map(fileLine), '', NEXT_STEPS_HEADING, ...next.map((step) => `→ ${step}`)];
   return { exitCode, stdout: `${lines.join('\n')}\n`, stderr };
 }
 
