@@ -1,6 +1,6 @@
 # `lift deploy`
 
-Delivers every workflow in the workflows folder of the target to its n8n instance, as drafts: the published version keeps running until you publish in n8n.
+Delivers every workflow in the workflows folder of the target to its n8n instance, as drafts: the published version keeps running until you publish with [`lift publish`](publish.md).
 
 ```sh
 lift deploy            # the only target, or the one named with -t
@@ -35,13 +35,13 @@ lift deploy → prod (https://your-n8n.example.com)
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
 ! restored       lead-scoring   workflows/lead-scoring.json (unpublished draft)
 ⚠ lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
-1 created, 1 updated, 1 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
+1 created, 1 updated, 1 restored, 1 skipped, 0 failed. Run lift publish to publish the drafts.
 Tag boilerlift:prod added to 4 workflows
 boilerlift.lock.json updated — commit it
 ```
 
 - New workflows are created and never published, and their ids recorded in `boilerlift.lock.json`.
-- Changed workflows are updated as drafts: the published version keeps running until you publish in n8n.
+- Changed workflows are updated as drafts: the published version keeps running until you run `lift publish`.
 - Workflows whose current draft already matches the file are skipped, so a rerun changes nothing.
 - A workflow deleted in the n8n editor is only archived. `deploy` unarchives it and updates it as a draft (`restored`), with a warning: it stays unpublished until you publish it. This needs the `workflow:delete` scope on the API key.
 - A recorded workflow that n8n no longer has (deleted for good, so its id answers 404) is created again (`* recreated`), and its new id replaces the old one in the lock file.

@@ -16,6 +16,7 @@ export function fakeContext(overrides: Partial<CommandContext> = {}): CommandCon
     loadWorkflowFiles: () => Promise.resolve([]),
     readLockFile: () => Promise.resolve(undefined),
     writeLockFile: () => Promise.reject(new Error('writeLockFile was called, but this test does not expect a lock file write')),
+    ask: () => Promise.reject(new Error('ask was called, but this test does not expect a question')),
     loadCredentialsFiles: () => Promise.resolve([]),
     writeCredentialsFile: () =>
       Promise.reject(new Error('writeCredentialsFile was called, but this test does not expect a credentials file write')),
@@ -119,4 +120,22 @@ export function fakeTwoTargets(): () => Promise<ProjectConfigFile> {
 /** A config with the single target `dev` at `url`, with `apiKey` and its files in ./workflows. */
 export function fakeSingleTarget(url = 'https://n8n.example.com', apiKey = 'secret'): () => Promise<ProjectConfigFile> {
   return fakeProjectConfig({ targets: { dev: { url, apiKey, workflows: './workflows' } } });
+}
+
+/** A stdin for `fakeContext({ ask })`: each question gets `answer` (`undefined`: stdin is closed), and is recorded. */
+export interface FakeAnswer {
+  ask: (prompt: string) => Promise<string | undefined>;
+  /** Every prompt written, in order. */
+  prompts: string[];
+}
+
+export function fakeAnswer(answer: string | undefined): FakeAnswer {
+  const prompts: string[] = [];
+  return {
+    ask: (prompt): Promise<string | undefined> => {
+      prompts.push(prompt);
+      return Promise.resolve(answer);
+    },
+    prompts,
+  };
 }

@@ -16,7 +16,7 @@ const noBarrelOrRelative = {
 };
 
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
-const CORE = ['compile', 'deliver', 'status', 'credentials', 'config', 'n8n', 'connection', 'common'];
+const CORE = ['compile', 'deliver', 'status', 'publish', 'credentials', 'config', 'n8n', 'connection', 'common'];
 
 /** The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports them (src/services/AGENTS.md). */
 const SERVICES = ['services-http', 'services-n8n'];
@@ -175,6 +175,7 @@ export default tseslint.config(
         { type: 'compile', pattern: 'src/core/compile' },
         { type: 'deliver', pattern: 'src/core/deliver' },
         { type: 'status', pattern: 'src/core/status' },
+        { type: 'publish', pattern: 'src/core/publish' },
         { type: 'credentials', pattern: 'src/core/credentials' },
         { type: 'config', pattern: 'src/core/config' },
         { type: 'n8n', pattern: 'src/core/n8n' },
@@ -227,6 +228,11 @@ export default tseslint.config(
               // status/ reads where each workflow stands: the lock file and the comparison of deliver/, never its writes.
               from: { element: { type: 'status' } },
               allow: { to: { element: { type: ['status', 'deliver', 'compile', 'config', 'n8n'] } } },
+            },
+            {
+              // publish/ plans from what status/ reads, then publishes the drafts through the n8n/ port.
+              from: { element: { type: 'publish' } },
+              allow: { to: { element: { type: ['publish', 'status', 'compile', 'config', 'n8n'] } } },
             },
             {
               // credentials/ is creds sync: it lists the credentials of an instance, writes them through a port, and
@@ -291,13 +297,13 @@ export default tseslint.config(
             // 5. The allowlist already blocks these edges. These policies only name the rule in the error.
             {
               from: { element: { type: 'compile' } },
-              disallow: { to: { element: { type: ['deliver', 'status', 'credentials', 'n8n', 'connection'] } } },
+              disallow: { to: { element: { type: ['deliver', 'status', 'publish', 'credentials', 'n8n', 'connection'] } } },
               message: 'compile/ imports only compile/, config/ and common/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: ['config', 'n8n', 'common'] } },
-              disallow: { to: { element: { type: ['compile', 'deliver', 'status', 'credentials'] } } },
-              message: 'A shared core/ folder imports neither compile/, deliver/, status/ nor credentials/ (src/core/AGENTS.md).',
+              disallow: { to: { element: { type: ['compile', 'deliver', 'status', 'publish', 'credentials'] } } },
+              message: 'A shared core/ folder imports neither compile/, deliver/, status/, publish/ nor credentials/ (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: 'deliver' } },

@@ -14,7 +14,8 @@ const DESCRIPTION = `Shows where each workflow of a target stands on its n8n ins
   missing on the instance: ./${LOCK_FILE} records no id for it, or n8n no longer has that id,
   archived in n8n: it was deleted in the n8n editor; the next deploy restores it,
   differs from n8n: the local file and the n8n draft differ; the next deploy overwrites the draft,
-  draft not yet published: the n8n draft holds the local file, but it is not the published version,
+  draft not yet published: the n8n draft holds the local file, but it is not the published version;
+    lift publish <name> publishes it,
   up to date: the published version holds the local file,
   not in my project: a workflow of the instance that ./${LOCK_FILE} does not record.
 A workflow of the project gets the first of these states that holds, in this order. Status cannot

@@ -129,6 +129,19 @@ describe('createN8nClient public API calls', () => {
     expect(calls[0]?.init?.body).toBeUndefined();
   });
 
+  test('Should POST with the API key and no body to activate when it publishes a workflow', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', isArchived: false })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.publishWorkflow(ABC);
+
+    expect(result).toMatchObject({ ok: true, value: { call: 'POST /api/v1/workflows/abc/activate', body: { id: 'abc', name: 'A' } } });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/activate');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
   test('Should send the update as a draft with publishIfActive=false when it updates a workflow', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A' })));
     const client = createN8nClient({ config: CONFIG, fetch });

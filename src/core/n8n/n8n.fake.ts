@@ -204,6 +204,12 @@ export function fakeN8n({
       onWorkflow(`PUT ${API_PATH}/workflows/${id}`, id, (workflow) =>
         structuredClone(Object.assign(workflow, structuredClone(body), { versionId: newVersion() })),
       ),
+    publishWorkflow: (id) =>
+      // The current draft becomes the published version.
+      onWorkflow(`POST ${API_PATH}/workflows/${id}/activate`, id, (workflow) => {
+        workflow.activeVersionId = workflow.versionId;
+        return structuredClone(workflow);
+      }),
     unarchiveWorkflow: (id) =>
       onWorkflow(`POST ${API_PATH}/workflows/${id}/unarchive`, id, (workflow) => {
         workflow.isArchived = false;
@@ -259,6 +265,8 @@ export function fakeN8n({
       return respond(await client.getWorkflow(id));
     case 'PUT workflows/{id}':
       return isWorkflowBody(body) ? respond(await client.updateWorkflow(id, body)) : invalidBody();
+    case 'POST workflows/{id}/activate':
+      return respond(await client.publishWorkflow(id));
     case 'POST workflows/{id}/unarchive':
       return respond(await client.unarchiveWorkflow(id));
     case 'PUT workflows/{id}/tags':

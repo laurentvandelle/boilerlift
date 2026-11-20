@@ -35,7 +35,8 @@ import { MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 const DESCRIPTION = `Delivers every workflow in the workflows folder of a target of ./${CONFIG_FILE}
 (*.workflow.ts with a default export, or *.json), pasted from an n8n export, to its n8n instance:
   new workflows are created (never published) and their n8n ids recorded in ./${LOCK_FILE},
-  changed workflows are updated as drafts: the published version keeps running,
+  changed workflows are updated as drafts: the published version keeps running until
+  lift publish publishes them,
   unchanged workflows are skipped,
   workflows deleted (archived) in the n8n editor are restored as unpublished drafts.
 The stable name is the file name without .workflow.ts / .json: 1 to 64 of a-z, 0-9 and -.
@@ -103,10 +104,10 @@ export const deployCommand: CommandDefinition = defineCommand({
     return uses.length > 0 ? err(renderCredentialMarkers(uses, format)) : ok(files);
   },
   modes: {
-    'dry-run': (files, deps) =>
-      eachTarget(files, deps, { dryRun: true }, previewDeploy),
+    'dry-run': (files, deps, { target }) =>
+      eachTarget(files, deps, { dryRun: true, named: target.kind !== 'default' }, previewDeploy),
   },
-  default: (files, deps) => eachTarget(files, deps, { dryRun: false }, deploy),
+  default: (files, deps, { target }) => eachTarget(files, deps, { dryRun: false, named: target.kind !== 'default' }, deploy),
   render: (runs, { format, target }) => renderTargets(runs, { json: format.json, all: target.kind === 'all' }),
 });
 

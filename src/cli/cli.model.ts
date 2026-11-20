@@ -199,6 +199,11 @@ export interface CommandContext {
    * error comes back as a failure with its `reason`, never a throw.
    */
   writeCredentialsFile(path: string, text: string): Promise<Result<void, { reason: string }>>;
+  /**
+   * Writes `prompt` to stderr, as is, then reads one line of stdin, TTY or not, so a person and an agent answer the
+   * same way. Resolves the line without its line break, or `undefined` when stdin closes first (EOF).
+   */
+  ask(prompt: string): Promise<string | undefined>;
 }
 
 /** A command as the registry and runCli see it, its types erased. Build one with defineCommand. */

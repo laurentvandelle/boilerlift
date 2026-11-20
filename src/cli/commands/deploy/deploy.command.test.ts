@@ -100,7 +100,7 @@ describe('deployCommand', () => {
 ~ updated        crm-import     workflows/crm/crm-import.json (draft; published version still running)
 = skipped        daily-report   unchanged
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
-1 created, 1 updated, 0 restored, 1 skipped, 0 failed. Drafts are not live until you publish them.
+1 created, 1 updated, 0 restored, 1 skipped, 0 failed. Run lift publish to publish the drafts.
 Tag boilerlift:dev added to 3 workflows
 boilerlift.lock.json updated — commit it
 `,
@@ -147,6 +147,27 @@ boilerlift.lock.json updated — commit it
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
 
+  test('Should name the target in the publish command when -t picks the target', async () => {
+    const n8n = fakeN8n();
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([NEW].map(fakeWorkflowFile)) });
+
+    const result = await deployCommand.run({ positionals: [], values: { target: 'dev', json: true } }, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({ next: 'lift publish --target dev', exitCode: 0 });
+  });
+
+  test('Should give no publish command in the JSON when nothing was delivered as a draft', async () => {
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1' })] });
+    const ctx = context(
+      { fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([REPORT].map(fakeWorkflowFile)) },
+      recorded({ 'daily-report': 'rep1' }),
+    );
+
+    const result = await deployCommand.run(JSON_INPUT, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({ next: null, exitCode: 0 });
+  });
+
   test('Should print a stable JSON report when --json is set', async () => {
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1' })] });
     const ctx = context(
@@ -170,6 +191,7 @@ boilerlift.lock.json updated — commit it
       lockFile: { path: 'boilerlift.lock.json', changed: true },
       tag: { name: 'boilerlift:dev', added: 2 },
       error: null,
+      next: 'lift publish',
       exitCode: 0,
     });
   });
@@ -186,7 +208,7 @@ boilerlift.lock.json updated — commit it
                  → ${RETRY_HINT}
 + created        daily-report   workflows/daily-report.json
 + created        invoice-sync   workflows/invoice-sync.workflow.ts
-2 created, 0 updated, 0 restored, 0 skipped, 1 failed. Drafts are not live until you publish them.
+2 created, 0 updated, 0 restored, 0 skipped, 1 failed. Run lift publish to publish the drafts.
 Tag boilerlift:dev added to 2 workflows
 boilerlift.lock.json updated — commit it
 `);
@@ -314,6 +336,7 @@ Nothing was written to n8n.
         detail: 'HTTP 404: n8n 2.35.0 or later is required',
         hint: 'Upgrade the instance to n8n 2.35.0 or later, then run deploy again',
       },
+      next: null,
       exitCode: 6,
     });
   });
@@ -330,7 +353,7 @@ Nothing was written to n8n.
       stdout: `lift deploy → dev (https://n8n.example.com)
 ! restored       daily-report   workflows/daily-report.json (unpublished draft)
 ⚠ daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
-0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
+0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Run lift publish to publish the drafts.
 Tag boilerlift:dev added to 1 workflows
 `,
     });
@@ -466,6 +489,7 @@ boilerlift.lock.json would update — commit it after lift deploy
       lockFile: { path: 'boilerlift.lock.json', changed: true },
       tag: { name: 'boilerlift:dev', added: 2 },
       error: null,
+      next: null,
       exitCode: 0,
     });
   });
@@ -612,7 +636,7 @@ boilerlift.lock.json would update — commit it after lift deploy
     expect({ stdout: result.stdout, lock: lock.text() }).toEqual({
       stdout: `lift deploy → dev (https://n8n.example.com)
 * recreated      crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
-0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.
+0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed. Run lift publish to publish the drafts.
 Tag boilerlift:dev added to 1 workflows
 boilerlift.lock.json updated — commit it
 `,
@@ -885,8 +909,8 @@ describe('deployCommand targets', () => {
     expect(result.stdout).toContain('── prod (https://prod.example.com)\nlift deploy → prod (https://prod.example.com)\n+ created');
     expect(result.stdout).toContain(
       'Targets:\n' +
-        '  ✓ dev   https://dev.example.com   1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.\n' +
-        '  ✓ prod  https://prod.example.com  1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Drafts are not live until you publish them.\n',
+        '  ✓ dev   https://dev.example.com   1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Run lift publish --target dev to publish the drafts.\n' +
+        '  ✓ prod  https://prod.example.com  1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Run lift publish --target prod to publish the drafts.\n',
     );
   });
 
