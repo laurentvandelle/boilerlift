@@ -1,4 +1,4 @@
-import { BoilerliftConfig, CommandContext, CredentialsFile, ProjectConfigFile } from '#src/cli/cli.model';
+import { BoilerliftConfig, CommandContext, CredentialsFile, FileCreation, ProjectConfigFile, TemplateFile } from '#src/cli/cli.model';
 import { Result, err, ok } from '#src/core/common/result';
 
 /**
@@ -21,6 +21,9 @@ export function fakeContext(overrides: Partial<CommandContext> = {}): CommandCon
     loadCredentialsFiles: () => Promise.resolve([]),
     writeCredentialsFile: () =>
       Promise.reject(new Error('writeCredentialsFile was called, but this test does not expect a credentials file write')),
+    isFile: () => Promise.resolve(false),
+    loadProjectTemplate: () => Promise.reject(new Error('loadProjectTemplate was called, but this test does not expect a template')),
+    createFile: () => Promise.reject(new Error('createFile was called, but this test does not expect a file write')),
     ...overrides,
   };
 }
@@ -138,5 +141,43 @@ export function fakeAnswer(answer: string | undefined): FakeAnswer {
       return Promise.resolve(answer);
     },
     prompts,
+  };
+}
+
+export interface FakeProjectFolderOptions {
+  /** The files of the template `loadProjectTemplate` returns. */
+  template?: TemplateFile[];
+  /** The paths, relative to the current folder, that already hold a file. */
+  existing?: string[];
+  /** The paths whose write fails, with this reason. */
+  failures?: Record<string, string>;
+}
+
+/** An in-memory project folder for `fakeContext`: the template, the files already there, and the writes that fail. */
+export interface FakeProjectFolder {
+  /** Its `loadProjectTemplate` and `createFile`, to spread into `fakeContext`. */
+  context: Pick<CommandContext, 'loadProjectTemplate' | 'createFile'>;
+  /** The text written at `path`, or `undefined` when the command created nothing there. */
+  text(path: string): string | undefined;
+}
+
+export function fakeProjectFolder({ template = [], existing = [], failures = {} }: FakeProjectFolderOptions = {}): FakeProjectFolder {
+  const texts = new Map<string, string>();
+  return {
+    context: {
+      loadProjectTemplate: () => Promise.resolve(structuredClone(template)),
+      createFile: (path, text): Promise<FileCreation> => {
+        const reason = failures[path];
+        if (reason !== undefined) {
+          return Promise.resolve({ status: 'failed', reason });
+        }
+        if (existing.includes(path) || texts.has(path)) {
+          return Promise.resolve({ status: 'exists' });
+        }
+        texts.set(path, text);
+        return Promise.resolve({ status: 'created' });
+      },
+    },
+    text: (path) => texts.get(path),
   };
 }
