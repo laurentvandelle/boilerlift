@@ -26,6 +26,8 @@ A workflow of the project (a workflow file of the target) gets the first state t
 | `draft-pending` | draft not yet published: the n8n draft holds the local file, but it is not the published version, or nothing is published | `lift publish <name>` |
 | `up-to-date` | up to date: the published version holds the local file | none |
 
+An entry of `boilerlift.lock.json` whose workflow file is gone, from the folder of every target on the instance, is `removed` (removed from the project — lift clean archives it), with `lift clean` as its next step. Status does not read it on n8n. A workflow that another target on the same instance still has a file for is not removed. Every folder on the instance must exist, or status exits 1 with the missing folder.
+
 `differs` compares the local file with the current n8n draft the way `deploy` does, so it covers both a change in the file and a change in the n8n editor: nothing records which side changed.
 
 Every other workflow of the instance, one that `boilerlift.lock.json` does not record for this target, is `unmanaged` (not in my project). Status never changes it. Archived ones are listed only with `--archived`. Your workflows are found by the ids of `boilerlift.lock.json` only, never by name or tag.
@@ -41,7 +43,7 @@ lift status → dev (https://n8n.example.com)
 + invoice-sync  missing on the instance (workflows/invoice-sync.workflow.ts)
   → lift deploy
 · Hand made     not in my project (h1)
-1 missing, 0 archived, 1 differ, 1 draft not yet published, 0 up to date, 1 not in my project.
+1 missing, 0 archived, 1 differ, 1 draft not yet published, 0 up to date, 0 removed, 1 not in my project.
 ```
 
 A target with no workflow file shows `No workflow yet in <folder>. Add a workflow file there, then run lift deploy.`, still lists the workflows of the instance, and exits 0.

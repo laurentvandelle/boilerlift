@@ -31,7 +31,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 ### Status
 
 - **Status**: `lift status`, read-only: the state of each workflow of a target on its instance, and the next step.
-- **State**: where one workflow stands, the first that holds in this order: `missing` (no lock entry, or its recorded id answers 404), `archived`, `differs` (differs from n8n: the local file and the draft differ; status cannot tell which side changed), `draft-pending` (draft not yet published: the draft holds the local file but is not the published version), `up-to-date`. A workflow of the instance that the lock file does not record is `unmanaged` (not in my project). _Avoid_: drift, out of sync.
+- **State**: where one workflow stands, the first that holds in this order: `missing` (no lock entry, or its recorded id answers 404), `archived`, `differs` (differs from n8n: the local file and the draft differ; status cannot tell which side changed), `draft-pending` (draft not yet published: the draft holds the local file but is not the published version), `up-to-date`. A lock entry with no workflow file left is `removed`. A workflow of the instance that the lock file does not record is `unmanaged` (not in my project). _Avoid_: drift, out of sync.
 
 ### Deploy
 
@@ -40,6 +40,8 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Action**: what deploy does with one local workflow: `created`, `recreated` (its recorded id answers 404, so it is created again from code), `updated`, `skipped`, `restored`, `failed` or `not-processed` (a blocker stopped the run first).
 - **Blocker**: a failure that stops the whole run: the instance cannot be reached, it rejects the API key, it cannot save drafts, or the lock file cannot be written after a create. A failure on one workflow is not a blocker. _Avoid_: fatal, stop.
 - **Dry run**: `deploy --dry-run` computes deploy's plan and writes nothing.
+- **Removed**: a workflow removed from the project: the lock file records it for an instance, but no workflow file in the folder of any target on that instance has its stable name any more. `lift status` shows it as `removed`, with `lift clean` next. A workflow another target on the same instance still has a file for is not removed. _Avoid_: deleted, orphan.
+- **Clean**: `lift clean`, archiving the removed workflows of a target after a `[y/N]` confirmation (or `--yes` / `--force`), and dropping their entries from the lock file. It never touches a workflow the lock file does not record, and never deletes one for good. _Avoid_: prune, delete.
 - **Publish**: `lift publish`, making the draft of deployed workflows the published version, after a `[Y/n]` confirmation (or `--yes` / `--force`). Without names, it publishes every `draft-pending` workflow and reports the `differs` ones without publishing them; with names, only those, refusing a `differs` one and skipping an `up-to-date` one.
 - **Target tag**: The n8n tag named after the target, `boilerlift:<target>`, added on deploy, for display only.
 
