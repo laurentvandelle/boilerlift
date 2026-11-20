@@ -49,7 +49,7 @@ describe('publishCommand', () => {
     const result = await publishCommand.run(TEXT, context(n8n, { ask: stdin.ask }));
 
     expect(stdin.prompts).toEqual([
-      'lift publish → dev (https://n8n.example.com)\n  ^ daily-report  draft not yet published → will be published\nPublish 1 workflow? [y/N] ',
+      'lift publish → dev (https://n8n.example.com)\n  ^ daily-report  draft not yet published → will be published\nPublish 1 workflow? [Y/n] ',
     ]);
     expect(result).toEqual({
       exitCode: 0,
@@ -64,10 +64,19 @@ describe('publishCommand', () => {
     expect(n8n.workflows.find(({ id }) => id === 'rep1')).toMatchObject({ activeVersionId: 'v2' });
   });
 
-  test('Should publish nothing and exit 1 with "Nothing published." when the answer is not yes', async () => {
+  test('Should publish when the answer is empty (Enter)', async () => {
     const n8n = instance();
 
     const result = await publishCommand.run(TEXT, context(n8n, { ask: fakeAnswer('').ask }));
+
+    expect(result.exitCode).toBe(0);
+    expect(published(n8n)).toEqual(['POST /api/v1/workflows/rep1/activate']);
+  });
+
+  test('Should publish nothing and exit 1 with "Nothing published." when the answer is not yes', async () => {
+    const n8n = instance();
+
+    const result = await publishCommand.run(TEXT, context(n8n, { ask: fakeAnswer('n').ask }));
 
     expect(result).toEqual({ exitCode: 1, stdout: '', stderr: 'Nothing published.\n' });
     expect(published(n8n)).toEqual([]);
@@ -246,7 +255,7 @@ describe('publishCommand targets', () => {
         '  ^ daily-report  draft not yet published → will be published',
         `lift publish → prod (${FAKE_PROD_URL})`,
         '  ^ daily-report  draft not yet published → will be published',
-        'Publish 2 workflows on 2 targets? [y/N] ',
+        'Publish 2 workflows on 2 targets? [Y/n] ',
       ].join('\n'),
     ]);
     expect(result.exitCode).toBe(0);

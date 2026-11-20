@@ -26,8 +26,8 @@ version, and the workflow runs it on its triggers.
   With names, publishes only those workflows. Without names, publishes every workflow whose
   draft is waiting to be published (the "draft not yet published" state of lift status).
 Before publishing, publish lists the workflows of every selected target, then asks once, on
-stderr, and reads the answer from stdin, TTY or not. Only y or yes publishes; any other answer,
-an empty one, or a closed stdin publishes nothing. -y or -f skips the question.
+stderr, and reads the answer from stdin, TTY or not. Enter, y or yes publishes; any other answer,
+or a closed stdin, publishes nothing. -y or -f skips the question.
 
 A name that matches no workflow file, no id in ./${LOCK_FILE}, or an archived workflow is unknown:
 nothing is published, on any target. A named workflow whose local file differs from the n8n draft
@@ -117,8 +117,8 @@ async function planTarget(
   return { kind: 'ready', target: where, client: target.client, workflows: plan.workflows };
 }
 
-/** Only an explicit yes publishes: `y` or `yes`, in any case. An empty answer or a closed stdin is a no. */
+/** Enter (an empty answer), `y` or `yes`, in any case, publishes. Any other answer, or a closed stdin, is a no. */
 function isYes(answer: string | undefined): boolean {
   const word = answer?.trim().toLowerCase();
-  return word === 'y' || word === 'yes';
+  return word === '' || word === 'y' || word === 'yes';
 }

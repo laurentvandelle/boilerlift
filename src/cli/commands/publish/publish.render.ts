@@ -166,7 +166,7 @@ export function renderHeldBack(target: PublishTarget): TargetRun {
   };
 }
 
-/** The listing and the `[y/N]` question, written to stderr before anything is published. */
+/** The listing and the `[Y/n]` question, written to stderr before anything is published. */
 export function renderConfirmation(ready: ReadyTarget[], format: PublishFormat): string {
   const lines: string[] = [];
   for (const { target, workflows } of ready.filter(({ workflows }) => workflows.length > 0)) {
@@ -179,7 +179,7 @@ export function renderConfirmation(ready: ReadyTarget[], format: PublishFormat):
   const count = ready.reduce((total, { workflows }) => total + workflows.filter(({ action }) => action === 'to-publish').length, 0);
   const targets = ready.filter(({ workflows }) => workflows.some(({ action }) => action === 'to-publish')).length;
   const where = targets > 1 ? ` on ${targets} targets` : '';
-  lines.push(`Publish ${count} ${count === 1 ? 'workflow' : 'workflows'}${where}? [y/N] `);
+  lines.push(`Publish ${count} ${count === 1 ? 'workflow' : 'workflows'}${where}? [Y/n] `);
   return lines.join('\n');
 }
 

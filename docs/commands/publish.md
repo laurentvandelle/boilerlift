@@ -3,7 +3,7 @@
 Publishes the drafts that `lift deploy` delivered: on the n8n instance of the target, each draft becomes the published version, and the workflow runs it on its triggers. Nothing is published until you confirm.
 
 ```sh
-lift publish                       # every draft waiting to be published, after a [y/N] question
+lift publish                       # every draft waiting to be published, after a [Y/n] question
 lift publish daily-report          # only the named workflows (stable names)
 lift publish daily-report -t prod  # on the target named prod
 lift publish --all                 # on every target: one listing, one question
@@ -21,10 +21,10 @@ Before publishing, `publish` lists the workflows of every selected target on std
 lift publish → dev (https://n8n.example.com)
   ^ daily-report  draft not yet published → will be published
   ✗ crm-import    differs from n8n → not published: run lift deploy first
-Publish 1 workflow? [y/N]
+Publish 1 workflow? [Y/n]
 ```
 
-It reads the answer from stdin, TTY or not, so a person and an agent answer the same way. Only `y` or `yes` publishes. Any other answer, an empty one, or a closed stdin prints `Nothing published.` and exits 1. `-y`, `--yes`, `-f` and `--force` skip the question. When nothing is waiting, `publish` asks nothing.
+It reads the answer from stdin, TTY or not, so a person and an agent answer the same way. Enter, `y` or `yes` publishes. Any other answer, or a closed stdin, prints `Nothing published.` and exits 1. `-y`, `--yes`, `-f` and `--force` skip the question. When nothing is waiting, `publish` asks nothing.
 
 With `--json`, the question still goes to stderr, so stdout holds only the JSON result. A declined run prints `{ "published": false, "message": "Nothing published.", "next": "lift publish … --yes" }`.
 
