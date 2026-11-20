@@ -123,6 +123,8 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
       http.putRequest(`${workflowUrl(id)}?${DRAFT_PARAM}=false`, { headers: auth, body, response: jsonBody(workflowSummaryParser) }),
     publishWorkflow: (id) =>
       http.postRequest(`${workflowUrl(id)}/activate`, { headers: auth, response: jsonBody(workflowSummaryParser) }),
+    archiveWorkflow: (id) =>
+      http.postRequest(`${workflowUrl(id)}/archive`, { headers: auth, response: jsonBody(workflowSummaryParser) }),
     unarchiveWorkflow: (id) =>
       http.postRequest(`${workflowUrl(id)}/unarchive`, { headers: auth, response: jsonBody(workflowSummaryParser) }),
     listCredentials,

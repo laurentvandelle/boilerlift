@@ -109,6 +109,11 @@ export interface N8nClient {
    * (`activeVersionId` = `versionId`), and the workflow runs it on its triggers.
    */
   publishWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
+  /**
+   * `POST /api/v1/workflows/{id}/archive`: archives the workflow, as a delete in the n8n editor does. It stays on the
+   * instance with its id, and can be unarchived. Needs the `workflow:delete` scope.
+   */
+  archiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
   unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /**

@@ -116,6 +116,19 @@ describe('createN8nClient public API calls', () => {
     expect(result).toEqual({ ok: false, error: { kind: 'http-error', call: 'GET /api/v1/openapi.yml', status: 404 } });
   });
 
+  test('Should POST with the API key and no body when it archives a workflow', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', isArchived: true })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.archiveWorkflow(ABC);
+
+    expect(result).toMatchObject({ ok: true, value: { body: { id: 'abc', name: 'A', tags: [], isArchived: true } } });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc/archive');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
   test('Should POST with the API key and no body when it unarchives a workflow', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', isArchived: false })));
     const client = createN8nClient({ config: CONFIG, fetch });
