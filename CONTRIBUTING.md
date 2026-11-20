@@ -24,16 +24,19 @@ npm install
 npm run verify   # lint, typecheck, tests
 ```
 
-| Task                                                                 | Command              |
-| -------------------------------------------------------------------- | -------------------- |
-| Build into `dist/`                                                   | `npm run build`      |
-| Build, then deploy `debug/workflows` to the instance in `debug/.env` | `npm start`          |
-| Tests                                                                | `npm run test`       |
-| Tests in watch mode                                                  | `npm run test:watch` |
-| Lint with autofix                                                    | `npm run lint`       |
-| Type-check                                                           | `npm run typecheck`  |
+| Task                                                                          | Command               |
+| ----------------------------------------------------------------------------- | --------------------- |
+| Build into `dist/`                                                            | `npm run build`       |
+| Build, then run `lift <cmd>` in `debug/` against the instance in `debug/.env` | `npm start -- <cmd>`  |
+| Install, build and link `debug/` in a new worktree                            | `npm run debug:setup` |
+| Tests                                                                         | `npm run test`        |
+| Tests in watch mode                                                           | `npm run test:watch`  |
+| Lint with autofix                                                             | `npm run lint`        |
+| Type-check                                                                    | `npm run typecheck`   |
 
-`npm start` builds, then runs `debug/main.ts` against `dist/` as an external consumer would. With no argument it runs a real `lift deploy` of `debug/workflows` to the target in `debug/boilerlift.config.ts`, whose url and API key come from `debug/.env`: point it at a test instance.
+`npm start -- <cmd> [args]` builds `dist/`, then runs `debug/main.ts` in `debug/`, which runs `dist/bin.js <cmd> [args]` as an external consumer would: `npm start -- status`, `npm start -- deploy --json`. Every run builds first, so it always uses the current code, a fix included. With no argument it runs a real `lift deploy` of `debug/workflows` to the target in `debug/boilerlift.config.ts`, whose url and API key come from `debug/.env`: point it at a test instance.
+
+`npm run debug:setup` gets a checkout ready for `npm start`: it installs the root dependencies, builds, installs `debug/` dependencies, and in a git worktree links `debug/boilerlift.lock.json` to the main checkout's copy (creating an empty one there first when it is missing), so every worktree shares one record of the instance and a first deploy from a new worktree does not duplicate workflows. It is safe to run again and never runs lift. `boilerlift.lock.json` and `.env*` files (except `.env.example`) stay gitignored. `/boilerlift:ship` (`.claude/skills/boilerlift:ship/`) runs it in each new worktree.
 
 ## Project layout
 

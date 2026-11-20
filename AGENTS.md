@@ -10,23 +10,24 @@ This repository is `boilerlift`, a TypeScript CLI published to npm that validate
 
 Local setup: see `CONTRIBUTING.md`. Package manager: npm (`package-lock.json`).
 
-| Task                                          | Command              |
-| --------------------------------------------- | -------------------- |
-| Build (`tsc` into `dist/`)                    | `npm run build`      |
-| Build, then deploy `debug/workflows` for real | `npm start`          |
-| Run tests (Vitest)                            | `npm run test`       |
-| Tests in watch mode                           | `npm run test:watch` |
-| Lint, check only                              | `npm run lint:check` |
-| Lint with autofix                             | `npm run lint`       |
-| Type-check, no emit                           | `npm run typecheck`  |
-| Lint check, type-check, tests                 | `npm run verify`     |
+| Task                                          | Command                 |
+| --------------------------------------------- | ----------------------- |
+| Build (`tsc` into `dist/`)                    | `npm run build`         |
+| Build, then run lift `<cmd>` in `debug/`      | `npm start -- <cmd>`    |
+| Install, build and link `debug/`              | `npm run debug:setup`   |
+| Run tests (Vitest)                            | `npm run test`          |
+| Tests in watch mode                           | `npm run test:watch`    |
+| Lint, check only                              | `npm run lint:check`    |
+| Lint with autofix                             | `npm run lint`          |
+| Type-check, no emit                           | `npm run typecheck`     |
+| Lint check, type-check, tests                 | `npm run verify`        |
 
 Run `npm run verify` before handing work back.
 Never hand back a failure: fix it, then run the command again.
 
 Releases go through a release pull request. After its merge, the release skill dispatches `.github/workflows/release.yml`, which publishes to npm. Never publish, tag or create a GitHub release by hand, never dispatch the release workflow outside the release skill's step 8, and never open a release pull request unless the user asks.
 
-`npm start` builds, then runs a real `lift deploy` (no `--dry-run`) of `debug/workflows` to the n8n instance in `debug/.env`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks.
+`npm start -- <cmd>` builds, then runs `lift <cmd>` in `debug/` against the n8n instance in `debug/.env`. With no argument it runs a real `lift deploy` (no `--dry-run`) of `debug/workflows`: it writes drafts and tags to the user's instance. Never run it, or the built CLI from `debug/`, unless the user asks. `npm run debug:setup` does not run lift.
 
 ## Routing
 
@@ -40,6 +41,7 @@ Releases go through a release pull request. After its merge, the release skill d
 - Before writing or changing a test, read `docs/testing.md`.
 - Before writing an architecture decision, read `docs/adr/README.md`.
 - Before preparing a release, read `.claude/skills/release/SKILL.md`.
+- Before shipping a Notion card to a pull request, read `.claude/skills/boilerlift:ship/SKILL.md`.
 - Before changing these instruction files, read `docs/agents.md`.
 - Before treating a convention as enforced, read `docs/guardrails.md`.
 - Before adding a convention after review, read `docs/maintenance.md`.
