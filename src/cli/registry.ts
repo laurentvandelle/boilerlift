@@ -1,4 +1,5 @@
 import { CommandDefinition } from '#src/cli/cli.model';
+import { cleanCommand } from '#src/cli/commands/clean/clean.command';
 import { credsSyncCommand } from '#src/cli/commands/creds-sync/creds-sync.command';
 import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
 import { helpCommand } from '#src/cli/commands/help/help.command';
@@ -14,5 +15,6 @@ export const COMMANDS: readonly CommandDefinition[] = [
   statusCommand,
   deployCommand,
   publishCommand,
+  cleanCommand,
   credsSyncCommand,
 ];

@@ -29,6 +29,7 @@ export function nodeContext(cwd: string): CommandContext {
     loadCredentialsFiles: (dir) => loadCredentialsFiles(cwd, dir),
     writeCredentialsFile: (path, text) => writeTextFileInFolder(resolve(cwd, path), text),
     ask,
+    isInteractive: process.stdin.isTTY === true,
   };
 }
 
