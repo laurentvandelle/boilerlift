@@ -56,7 +56,7 @@ describe('publishCommand', () => {
       stdout: [
         'lift publish → dev (https://n8n.example.com)',
         '^ published         daily-report   workflows/daily-report.json (the workflow now runs this version)',
-        '1 published, 0 already published, 0 to deploy first, 0 failed.',
+        '1 published, 0 failed.',
         '',
       ].join('\n'),
       stderr: '',

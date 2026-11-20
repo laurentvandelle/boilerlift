@@ -48,6 +48,8 @@ lift publish → dev (https://n8n.example.com)
 1 published, 0 already published, 1 to deploy first, 0 failed.
 ```
 
+Without names, the last line counts only `published` and `failed`: workflows already published or to deploy first are not part of the run.
+
 ## Exit codes
 
 0 when every workflow was published or already published, or nothing was waiting. 1 on a usage error, an invalid `boilerlift.config.ts`, `boilerlift.lock.json` or workflow file, an unknown name, or a confirmation that was not yes. 3 when the instance cannot be reached or a read fails, 4 when the API key is rejected: nothing was published. 5 when at least one workflow was not published (it differs from n8n, or n8n refused it); the others were.

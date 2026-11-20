@@ -221,8 +221,14 @@ function summarize(results: PublishResult[]): Summary {
   return { published: count('published'), alreadyPublished: count('already-published'), refused: count('refused'), failed: count('failed') };
 }
 
-function summaryLine({ published, alreadyPublished, refused, failed }: Summary): string {
-  return `${published} published, ${alreadyPublished} already published, ${refused} to deploy first, ${failed} failed.`;
+/**
+ * The last line of a target. Without names, the run holds only the drafts waiting to be published, so the counts of
+ * `already published` and `to deploy first` would always read 0: they show only when the command line named workflows.
+ */
+function summaryLine({ published, alreadyPublished, refused, failed }: Summary, named: boolean): string {
+  return named
+    ? `${published} published, ${alreadyPublished} already published, ${refused} to deploy first, ${failed} failed.`
+    : `${published} published, ${failed} failed.`;
 }
 
 /** The command to run next for one result, or null when there is nothing to run. */
@@ -288,7 +294,7 @@ export function renderReport(target: PublishTarget, report: PublishReport, forma
   return {
     target: target.name,
     url: target.instance,
-    text: renderText(target, report, format, message),
+    text: renderText(target, report, format, message, named),
     payload: {
       instance: target.instance,
       message: message ?? null,
@@ -304,11 +310,11 @@ export function renderReport(target: PublishTarget, report: PublishReport, forma
       summary,
       exitCode: report.exitCode,
     },
-    outcome: message ?? summaryLine(summary),
+    outcome: message ?? summaryLine(summary, named),
   };
 }
 
-function renderText(target: PublishTarget, report: PublishReport, format: PublishFormat, message: string | undefined): CliResult {
+function renderText(target: PublishTarget, report: PublishReport, format: PublishFormat, message: string | undefined, named: boolean): CliResult {
   const stdout = [`lift publish → ${target.name} (${target.instance})`];
   if (message !== undefined) {
     stdout.push(message);
@@ -325,7 +331,7 @@ function renderText(target: PublishTarget, report: PublishReport, format: Publis
       stdout.push(`${INDENT}→ ${hint}`);
     }
   }
-  stdout.push(summaryLine(summarize(report.results)));
+  stdout.push(summaryLine(summarize(report.results), named));
   const notPublished = report.results.filter((result) => result.action === 'refused' || result.action === 'failed').map((result) => result.stableName);
   const stderr =
     notPublished.length === 0 ? '' : `Not published: ${notPublished.join(', ')}.\nNext: follow the step under each line, then run publish again.\n`;
