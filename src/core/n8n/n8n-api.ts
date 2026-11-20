@@ -10,6 +10,9 @@ export const DRAFT_PARAM = 'publishIfActive';
 /** The first n8n version whose public API takes DRAFT_PARAM. */
 export const MIN_N8N_VERSION = '2.35.0';
 
+/** The scope an n8n API key needs to list the credentials (`GET /api/v1/credentials`); a key without it answers 403. */
+export const CREDENTIAL_LIST_SCOPE = 'credential:list';
+
 /** The next step when the instance rejects the API key. */
 export const API_KEY_HINT = 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads';
 
