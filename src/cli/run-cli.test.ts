@@ -65,10 +65,23 @@ const targetCommand: CommandDefinition = defineCommand({
   render: (names, { target }) => ({ exitCode: 0, stdout: `${JSON.stringify(target)} ${names}\n`, stderr: '' }),
 });
 
+/** A command of two words, as `creds sync`, that runs on targets and prints its selection. */
+const groupedCommand: CommandDefinition = defineCommand({
+  name: 'pair up',
+  summary: 'Pair the targets up',
+  help: { exitCodes: [[0, 'Paired']] },
+  allowPositionals: false,
+  options: { loud: { type: 'boolean', description: 'Shout' } },
+  needs: ['targets'],
+  modes: {},
+  default: (_prepared, { targets }, { options }) => Promise.resolve(`${targets.selected.map(({ name }) => name).join(',')}${options.flag('loud') ? '!' : ''}`),
+  render: (names) => ({ exitCode: 0, stdout: `${names}\n`, stderr: '' }),
+});
+
 const ctx: CommandContext = fakeContext({
   version: '1.2.3',
   loadProjectConfig: fakeTwoTargets(),
-  registry: [helpCommand, versionCommand, echoCommand, pickCommand, throwingCommand, targetCommand],
+  registry: [helpCommand, versionCommand, echoCommand, pickCommand, throwingCommand, targetCommand, groupedCommand],
 });
 const GLOBAL_HELP = renderGlobalHelp(ctx.registry);
 
@@ -86,11 +99,12 @@ describe('runCli', () => {
 Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
 
 Commands:
-  help     Show help for Boilerlift or for one command
-  version  Print the Boilerlift version
-  ping     Check the connection to your n8n instance
-  status   Show where each workflow stands on your n8n instance
-  deploy   Deliver your workflows to your n8n instance as drafts
+  help        Show help for Boilerlift or for one command
+  version     Print the Boilerlift version
+  ping        Check the connection to your n8n instance
+  status      Show where each workflow stands on your n8n instance
+  deploy      Deliver your workflows to your n8n instance as drafts
+  creds sync  Write the credentials of your n8n instance to your project
 
 Options:
   -h, --help           Show this help
@@ -280,5 +294,24 @@ describe('crashResult', () => {
     const result = await runCli(['aim', '--help'], ctx);
 
     expect(result.stdout).toContain('-t, --target <name>  Run on this target of boilerlift.config.ts');
+  });
+
+  test('Should run a command of two words with its options when both words are given', async () => {
+    const result = await runCli(['pair', 'up', '--target', 'prod', '--loud'], ctx);
+
+    expect(result.stdout).toBe('prod!\n');
+  });
+
+  test('Should take the target options before a command of two words when they lead', async () => {
+    const result = await runCli(['--target', 'dev', 'pair', 'up'], ctx);
+
+    expect(result.stdout).toBe('dev\n');
+  });
+
+  test('Should name both words as an unknown command when the second word is not a command of the group', async () => {
+    const result = await runCli(['pair', 'down'], ctx);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Unknown command: pair down');
   });
 });

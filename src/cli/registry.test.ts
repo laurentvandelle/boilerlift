@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { COMMANDS } from '#src/cli/registry';
 
 describe('COMMANDS', () => {
-  test.each(COMMANDS.map(({ name }) => name))(
+  test.each(COMMANDS.map(({ name }) => name.replaceAll(' ', '-')))(
     'Should keep the command and its render file in commands/%s when it is registered',
     (name) => {
       const folder = join(__dirname, 'commands', name);

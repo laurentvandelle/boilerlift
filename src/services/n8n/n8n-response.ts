@@ -2,7 +2,7 @@
 // so past the client the types are trusted. A parser returns `undefined` when the body does not have the expected shape.
 import { isRecord } from '#src/core/common/is-record';
 import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
-import { N8nListedWorkflow, N8nTag, N8nWorkflow, N8nWorkflowSummary, N8nWorkflowVersions } from '#src/core/n8n/n8n.model';
+import { N8nCredential, N8nListedWorkflow, N8nTag, N8nWorkflow, N8nWorkflowSummary, N8nWorkflowVersions } from '#src/core/n8n/n8n.model';
 import { JsonParser } from '#src/services/http/http.model';
 
 export const workflowSummaryParser: JsonParser<N8nWorkflowSummary> = {
@@ -46,6 +46,41 @@ export const tagPageParser: JsonParser<TagPage> = {
   expected: 'a page of tags (data, nextCursor)',
   parse: parseTagPage,
 };
+
+/** One page of `GET /credentials`: its credentials, and the cursor of the next page (`null` on the last one). */
+export interface CredentialPage {
+  data: N8nCredential[];
+  nextCursor: string | null;
+}
+
+export const credentialPageParser: JsonParser<CredentialPage> = {
+  expected: 'a page of credentials (data, nextCursor)',
+  parse: (value) => parsePage(value, parseCredential),
+};
+
+/** Only the id, name and type are read: any other field, data included, is dropped here. */
+function parseCredential(value: unknown): N8nCredential | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const { id, name, type } = value;
+  return typeof id === 'string' && id !== '' && typeof name === 'string' && typeof type === 'string' && type !== ''
+    ? { id, name, type }
+    : undefined;
+}
+
+/** A `{ data, nextCursor }` page of `parse` items. An omitted or empty `nextCursor` reads as the last page. */
+function parsePage<T>(value: unknown, parse: (item: unknown) => T | undefined): { data: T[]; nextCursor: string | null } | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const data = parseList(value.data, parse);
+  const nextCursor = value.nextCursor ?? null;
+  if (data === undefined || (nextCursor !== null && typeof nextCursor !== 'string')) {
+    return undefined;
+  }
+  return { data, nextCursor: nextCursor === '' ? null : nextCursor };
+}
 
 /** An omitted `nextCursor` reads as the last page. */
 function parseTagPage(value: unknown): TagPage | undefined {

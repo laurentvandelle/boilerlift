@@ -1,10 +1,11 @@
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
 import { Result } from '#src/core/common/result';
+import { CredentialsFile } from '#src/core/credentials/credentials.model';
 import { BoilerliftConfig, ProjectConfig, ProjectConfigFile, Target, TargetSelection } from '#src/core/config/config.model';
 import { N8nClient } from '#src/core/n8n/n8n.model';
 
-export type { BoilerliftConfig, ProjectConfigFile, TargetSelection, WorkflowFile };
+export type { BoilerliftConfig, CredentialsFile, ProjectConfigFile, TargetSelection, WorkflowFile };
 
 export interface CliResult {
   exitCode: ExitCode;
@@ -187,6 +188,17 @@ export interface CommandContext {
    * failure with its `reason`, never a throw.
    */
   writeLockFile(path: string, text: string): Promise<Result<void, { reason: string }>>;
+  /**
+   * Imports every `.ts` file of `dir` (not its subfolders), relative to the current folder, sorted by path, and returns
+   * its default export. Resolves `[]` when `dir` does not exist. A file that cannot be imported comes back with an
+   * `error` instead of `content`. Call it before `loadWorkflowFiles`: the lists it imports give `credential()` its types.
+   */
+  loadCredentialsFiles(dir: string): Promise<CredentialsFile[]>;
+  /**
+   * Writes `text` as the whole file at `path`, relative to the current folder, creating its folder when needed. A disk
+   * error comes back as a failure with its `reason`, never a throw.
+   */
+  writeCredentialsFile(path: string, text: string): Promise<Result<void, { reason: string }>>;
 }
 
 /** A command as the registry and runCli see it, its types erased. Build one with defineCommand. */
