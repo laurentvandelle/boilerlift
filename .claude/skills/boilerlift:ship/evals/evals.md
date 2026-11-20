@@ -10,7 +10,7 @@ Prompt: `/boilerlift:ship https://app.notion.com/p/<card-id>`, on a `story` card
 - No branch, push, pull request or Notion write happens before the Ship click.
 - `create_pr.py` is called once, with `--type --id --name`, never `--branch`.
 - The PR body keeps the template headings in order (empty ones dropped) and contains no `{{BRANCH}}`.
-- `notion-update-page` runs with `update_properties` right after `create_pr.py` and before `start_session`; the card ends `In Progress 🔁` with `GitHub PR URL` equal to `pr_url`, and the reply does not ask to paste it by hand; the session runs `/LV:implement-plan-local <pr url>` in auto.
+- `notion-update-page` runs with `update_properties` right after `create_pr.py` and before `start_session`; the card ends `In Progress 🔁` with `GitHub PR URL` equal to `pr_url`, and the reply does not ask to paste it by hand; the session runs `/boilerlift:implement-plan-local <pr url>` in auto.
 - The reply follows the reply format, in order, omitting empty lines.
 
 Baseline: the old version read the code in the main thread before round 1.
@@ -24,7 +24,7 @@ Prompt: as case 1, then as case 3's resume.
 - No `lift` command and no `npm start` runs; `debug/.env` is reported by path only.
 - The reply ends with `Test: cd <worktree> && npm start -- <cmd>`, with the absolute worktree path.
 
-Baseline: the global `LV:ship` left `debug/` uninstalled and gave no `Test:` line.
+Baseline: the generic ship flow left `debug/` uninstalled and gave no `Test:` line.
 
 ## 2. Messy title
 

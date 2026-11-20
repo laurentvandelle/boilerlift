@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create the local-implementation worktree and its GitHub pull request.
 
-Same branch and pull request rules as LV:to-pr-remote:
+Branch and pull request rules:
 - base is the default branch from origin/HEAD (never update git config)
 - worktree is the sibling ../{RepoName}-{lastSegment}
 - stop if the local branch, origin branch, sibling directory, or worktree exists,
@@ -16,7 +16,7 @@ Same branch and pull request rules as LV:to-pr-remote:
 - gh pr create --title --base --body-file
 
 Local-only additions: trust the worktree in ~/.claude.json and symlink untracked
-.env* files. LV:ship updates the Notion card itself through the Notion MCP.
+.env* files. boilerlift:ship updates the Notion card itself through the Notion MCP.
 
 stdout: one JSON object (no secrets)
 stderr: warnings and a single "error:" line on failure

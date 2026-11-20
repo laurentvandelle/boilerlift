@@ -1,10 +1,10 @@
 # boilerlift:ship
 
-The global `LV:ship`, vendored into the boilerlift repository with its scripts. The flow is in `SKILL.md`. It adds one step to the global skill: right after `scripts/create_pr.py`, it runs `npm run debug:setup` in the worktree, so any lift command runs on the latest code of the branch with `npm start -- <cmd>`.
+The ship flow for the boilerlift repository. The flow is in `SKILL.md`. Every skill and script it uses lives in `.claude/skills/` (`boilerlift:interviewing`, `boilerlift:plan`, `boilerlift:implement-plan-local`, `boilerlift:commit-push`, `boilerlift:commit`, `boilerlift:qa`), so nothing depends on skills installed outside the repository. It adds one step to the generic ship flow: right after `scripts/create_pr.py`, it runs `npm run debug:setup` in the worktree, so any lift command runs on the latest code of the branch with `npm start -- <cmd>`.
 
 ## What is already set up in this repository
 
-- `.claude/settings.json`: the allowlist the coding session (`/LV:implement-plan-local`) runs without a prompt, and the deny rules. Project allow rules apply only after you accept the workspace trust dialog for that folder; `create_pr.py` trusts each new worktree in `~/.claude.json`.
+- `.claude/settings.json`: the allowlist the coding session (`/boilerlift:implement-plan-local`) runs without a prompt, and the deny rules. Project allow rules apply only after you accept the workspace trust dialog for that folder; `create_pr.py` trusts each new worktree in `~/.claude.json`.
 - `.claude/hooks/block-dangerous.py`: the `PreToolUse` hook those deny rules cannot express. It exits 2, which blocks the command even when an allow rule matches: force-push and remote delete with flags in any order, recursive `rm`, `git reset --hard`, `git clean --force`, `--no-verify`, `git add` of a `.env*` path, and `node -p` / `node -e` that reads an env file or spawns a process. It does not print the command.
 - `.gitignore` ignores `.env*` except `.env.example`.
 
@@ -21,7 +21,7 @@ New worktrees do not contain ignored files. `create_pr.py` symlinks the main che
 ## What you do by hand
 
 - Start `/boilerlift:ship` from a session in auto mode (see `SKILL.md`).
-- Answer the interview, click Ship, run `cd <worktree> && npm start -- <cmd>` and the QA, then click Merge or I need to fix. On Merge, `LV:implement-plan-local` removes the worktree and fast-forwards `main` in the main checkout, so the next session starts up to date.
+- Answer the interview, click Ship, run `cd <worktree> && npm start -- <cmd>` and the QA, then click Merge or I need to fix. On Merge, `boilerlift:implement-plan-local` removes the worktree and fast-forwards `main` in the main checkout, so the next session starts up to date.
 
 ## Check
 

@@ -1,11 +1,11 @@
 ---
 name: "boilerlift:ship"
-description: "One command from a Notion card to a pull request that a separate session codes. Interviews the user on the card until shared understanding. On a single Ship click it runs scripts/create_pr.py to create the sibling worktree and the GitHub pull request, whose body is the decision summary, or resumes them when an open pull request already exists for the card. It runs npm run debug:setup in the worktree so any lift command runs on the latest code with npm start -- <cmd>, sets the card to In Progress with its PR URL, then starts a fresh auto-mode Claude session in the worktree on /LV:implement-plan-local. Use only when the user invokes /boilerlift:ship [notion-url] in the boilerlift repository to ship, start or work on a Notion card. For an interview without a pull request, use /LV:interviewing or /LV:interview-me. For the GitHub runner flow, use /LV:to-pr-remote."
+description: "One command from a Notion card to a pull request that a separate session codes. Interviews the user on the card until shared understanding. On a single Ship click it runs scripts/create_pr.py to create the sibling worktree and the GitHub pull request, whose body is the decision summary, or resumes them when an open pull request already exists for the card. It runs npm run debug:setup in the worktree so any lift command runs on the latest code with npm start -- <cmd>, sets the card to In Progress with its PR URL, then starts a fresh auto-mode Claude session in the worktree on /boilerlift:implement-plan-local. Use only when the user invokes /boilerlift:ship [notion-url] in the boilerlift repository to ship, start or work on a Notion card. For an interview without a pull request, use /boilerlift:interviewing."
 disable-model-invocation: true
 allowed-tools: "Bash(${CLAUDE_SKILL_DIR}/scripts/create_pr.py *)"
 ---
 
-Take one Notion card from interview to a pull request being coded in its own session, in the boilerlift repository. This is the global `LV:ship` vendored with its scripts, plus one step: the worktree's `debug/` project is set up so the user can run any lift command on the latest code of the branch. The user does three things: answer the interview, click **Ship**, and later do the QA in the coding session. Do every other step without asking, because the Ship click already approved them.
+Take one Notion card from interview to a pull request being coded in its own session, in the boilerlift repository. Every skill it uses is in this repository's `.claude/skills/`, and it adds one step to the generic ship flow: the worktree's `debug/` project is set up so the user can run any lift command on the latest code of the branch. The user does three things: answer the interview, click **Ship**, and later do the QA in the coding session. Do every other step without asking, because the Ship click already approved them.
 
 Rules that hold for the whole run:
 
@@ -40,9 +40,9 @@ Without subagents, read the code yourself and keep only those notes.
 
 ## 3. Interview
 
-Read `~/.claude/skills/LV:interviewing/SKILL.md` and follow its rounds, with the card and the summary as the subject. Ask only about the decisions the code does not settle.
+Read `.claude/skills/boilerlift:interviewing/SKILL.md` and follow its rounds, with the card and the summary as the subject. Ask only about the decisions the code does not settle.
 
-Replace its ending: `LV:interviewing` replies with the `LV:plan` summary and waits for approval, which would add a second go-ahead before Ship. Here the Ship click is the approval, and step 4 writes that summary as the pull request body instead of the reply. When no questions are left, end the turn with `wrap_up` (`mcp__ccd_turn__wrap_up`): `ask` is `Ship?` and `actions` are two replies:
+Replace its ending: `boilerlift:interviewing` replies with the `boilerlift:plan` summary and waits for approval, which would add a second go-ahead before Ship. Here the Ship click is the approval, and step 4 writes that summary as the pull request body instead of the reply. When no questions are left, end the turn with `wrap_up` (`mcp__ccd_turn__wrap_up`): `ask` is `Ship?` and `actions` are two replies:
 
 - `Ship`: shared understanding reached; create the pull request and start coding.
 - `One more round`: the user names what is missing; continue the interview.
@@ -55,14 +55,14 @@ On `Ship`, run steps 4–8 in that turn without asking anything else.
 
 The title is one Conventional Commits subject, in English and in the imperative, lowercase after the colon, no period. Omit the scope when the area is obvious.
 
-The body is two header lines, then the decision summary that the coding session builds from. Read `~/.claude/skills/LV:plan/SKILL.md` and write the summary as it says: its template is strict, because `LV:implement-plan-local` reads those headings.
+The body is two header lines, then the decision summary that the coding session builds from. Read `.claude/skills/boilerlift:plan/SKILL.md` and write the summary as it says: its template is strict, because `boilerlift:implement-plan-local` reads those headings.
 
 ```markdown
 Spec: <notion url>
 
 Branch name : {{BRANCH}}
 
-<LV:plan decision summary, starting at ## Decisions>
+<boilerlift:plan decision summary, starting at ## Decisions>
 ```
 
 Keep `{{BRANCH}}` as written: the script doesn't know the branch until it builds it, so it replaces this token.
@@ -152,8 +152,8 @@ Start it with `start_session` (`mcp__ccd_session__start_session`; load it with T
 | `background` | repository name, branch, pull request URL, Notion URL, and that the PR body holds the decisions taken in the interview |
 
 ```text
-/LV:implement-plan-local <pull request url>
-If that skill did not load, read ~/.claude/skills/LV:implement-plan-local/SKILL.md and follow it for this pull request.
+/boilerlift:implement-plan-local <pull request url>
+If that skill did not load, read .claude/skills/boilerlift:implement-plan-local/SKILL.md and follow it for this pull request.
 ```
 
 If the start is refused because this turn was not started by the user, end the turn with `wrap_up`, `ask` `Start the coding session?` and one reply `Start it`, then call `start_session` on that reply. Reaching this means the Ship step above was not asked through `wrap_up`.
