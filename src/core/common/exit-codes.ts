@@ -40,6 +40,12 @@ export const EXIT_CREDENTIAL_SCOPE_MISSING = 9;
 /** creds sync could not write the credentials file of a target. */
 export const EXIT_CREDENTIALS_WRITE_FAILED = 10;
 
+/**
+ * clean found workflows to archive, but could not ask: no terminal, or --json, and neither --yes nor --force. Nothing
+ * was archived; run it again with --yes.
+ */
+export const EXIT_CONFIRMATION_NEEDED = 11;
+
 /** Every exit code a command can return. EXIT_UNEXPECTED is EXIT_USAGE's code, so the union lists it once. */
 export type ExitCode =
   | typeof EXIT_OK
@@ -52,7 +58,8 @@ export type ExitCode =
   | typeof EXIT_LOCK_WRITE_FAILED
   | typeof EXIT_CREDENTIALS_MISSING
   | typeof EXIT_CREDENTIAL_SCOPE_MISSING
-  | typeof EXIT_CREDENTIALS_WRITE_FAILED;
+  | typeof EXIT_CREDENTIALS_WRITE_FAILED
+  | typeof EXIT_CONFIRMATION_NEEDED;
 
 /** The exit code of a failure: any code but EXIT_OK. */
 export type FailureExitCode = Exclude<ExitCode, typeof EXIT_OK>;

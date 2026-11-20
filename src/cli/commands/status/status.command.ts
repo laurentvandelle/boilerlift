@@ -2,11 +2,11 @@ import { CommandDefinition } from '#src/cli/cli.model';
 import { StatusFormat, renderInvalidFiles, renderInvalidLockFile, renderInvalidManaged, renderStatus } from '#src/cli/commands/status/status.render';
 import { defineCommand } from '#src/cli/define-command';
 import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { loadWorkflows } from '#src/core/compile/load-workflows';
+import { loadWorkflows, stableNamesOf } from '#src/core/compile/load-workflows';
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
-import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
-import { LOCK_FILE, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
+import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
+import { LOCK_FILE, managedIds, parseLockFile, removedEntries } from '#src/core/deliver/lock-file';
 import { readStatus } from '#src/core/status/status';
 import { StatusFilter } from '#src/core/status/status.model';
 
@@ -17,6 +17,8 @@ const DESCRIPTION = `Shows where each workflow of a target stands on its n8n ins
   draft not yet published: the n8n draft holds the local file, but it is not the published version;
     lift publish <name> publishes it,
   up to date: the published version holds the local file,
+  removed from the project: ./${LOCK_FILE} records it, but no workflow file of any target on
+    the instance has its name any more; lift clean archives it,
   not in my project: a workflow of the instance that ./${LOCK_FILE} does not record.
 A workflow of the project gets the first of these states that holds, in this order. Status cannot
 tell whether the local file or the n8n draft changed: both show as "differs from n8n".
@@ -58,7 +60,9 @@ export const statusCommand: CommandDefinition = defineCommand({
     if (managed !== undefined && managed !== 'true' && managed !== 'false') {
       return err(renderInvalidManaged(managed, format));
     }
-    const folders = await checkWorkflowFolders(config, [...selected], isDirectory);
+    // Every folder on the instance of a selected target: a missing one would show its workflows as removed.
+    const onInstances = selected.flatMap((target) => targetsOnInstance(config, target.connection.url.value));
+    const folders = await checkWorkflowFolders(config, [...selected, ...onInstances], isDirectory);
     if (!folders.ok) {
       return err(renderConfigError(folders.error, format));
     }
@@ -83,7 +87,17 @@ export const statusCommand: CommandDefinition = defineCommand({
         continue;
       }
       const workflows = loaded.value;
-      const report = await readStatus({ workflows, client: target.client, managed: managedIds(lock.value, instance), filter });
+      const present = new Set<string>();
+      for (const { workflows: folder } of targetsOnInstance(targets.config, instance)) {
+        stableNamesOf((await loadWorkflowFiles(folder)).map(({ path }) => path)).forEach((name) => present.add(name));
+      }
+      const report = await readStatus({
+        workflows,
+        client: target.client,
+        managed: managedIds(lock.value, instance),
+        removed: removedEntries(lock.value, instance, present),
+        filter,
+      });
       runs.push(renderStatus(where, report, format, workflows.length === 0));
     }
     return runs;

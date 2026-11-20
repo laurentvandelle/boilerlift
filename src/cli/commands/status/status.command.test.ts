@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'vitest';
 import { CommandContext } from '#src/cli/cli.model';
-import { FAKE_DEV_URL as DEV_URL, FakeLockFile, fakeContext, fakeLockFile, fakeSingleTarget, fakeTwoTargets } from '#src/cli/cli.fake';
+import {
+  FAKE_DEV_URL as DEV_URL,
+  FakeLockFile,
+  fakeContext,
+  fakeLockFile,
+  fakeProjectConfig,
+  fakeSingleTarget,
+  fakeTwoTargets,
+} from '#src/cli/cli.fake';
 import { statusCommand } from '#src/cli/commands/status/status.command';
 import { fakeLocalWorkflow, fakeNode, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
 import { fakeLockText } from '#src/core/deliver/lock-file.fake';
@@ -64,11 +72,46 @@ describe('statusCommand', () => {
         '! weekly        archived in n8n — next deploy restores it',
         '  → lift deploy',
         '· Hand made     not in my project (h1)',
-        '1 missing, 1 archived, 1 differ, 1 draft not yet published, 0 up to date, 1 not in my project.',
+        '1 missing, 1 archived, 1 differ, 1 draft not yet published, 0 up to date, 0 removed, 1 not in my project.',
         '',
       ].join('\n'),
       stderr: '',
     });
+  });
+
+  test('Should show a lock entry with no workflow file as removed, with lift clean next, when its file was deleted', async () => {
+    const lock = fakeLockFile({ text: fakeLockText({ weekly: 'wk1', 'old-report': 'old1' }) });
+    const ctx = context(fakeN8n({ workflows: [fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] }), { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(WEEKLY)]) }, lock);
+
+    const result = await statusCommand.run({ positionals: [], values: { managed: 'true' } }, ctx);
+
+    expect(result.stdout).toBe(
+      [
+        'lift status → dev (https://n8n.example.com)',
+        '= weekly      up to date',
+        '- old-report  removed from the project — lift clean archives it (old1)',
+        '  → lift clean',
+        '0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 1 removed, 0 not in my project.',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  test('Should not show a workflow as removed when another target on the same instance still has its file', async () => {
+    const lock = fakeLockFile({ text: fakeLockText({ weekly: 'wk1' }) });
+    const ctx = context(fakeN8n({ workflows: [fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] }), {
+      loadProjectConfig: fakeProjectConfig({
+        targets: {
+          dev: { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './dev' },
+          staging: { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './staging' },
+        },
+      }),
+      loadWorkflowFiles: (dir) => Promise.resolve(dir === './staging' ? [fakeWorkflowFile(WEEKLY)] : []),
+    }, lock);
+
+    const result = await statusCommand.run({ positionals: [], values: { json: true, target: 'dev' } }, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({ summary: { removed: 0 } });
   });
 
   test('Should give each workflow its state and the command to run next when --json is given', async () => {
@@ -115,7 +158,7 @@ describe('statusCommand', () => {
     const result = await statusCommand.run(TEXT, ctx);
 
     expect(result.stdout).toBe(
-      'lift status → dev (https://n8n.example.com)\n= crm-import  up to date\n0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 0 not in my project.\n',
+      'lift status → dev (https://n8n.example.com)\n= crm-import  up to date\n0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 0 removed, 0 not in my project.\n',
     );
   });
 
@@ -165,7 +208,7 @@ describe('statusCommand', () => {
         'lift status → dev (https://n8n.example.com)',
         'No workflow yet in ./workflows. Add a workflow file there, then run lift deploy.',
         '· Hand made  not in my project (h1)',
-        '0 missing, 0 archived, 0 differ, 0 draft not yet published, 0 up to date, 1 not in my project.',
+        '0 missing, 0 archived, 0 differ, 0 draft not yet published, 0 up to date, 0 removed, 1 not in my project.',
         '',
       ].join('\n'),
       stderr: '',

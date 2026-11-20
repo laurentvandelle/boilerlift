@@ -105,6 +105,7 @@ Commands:
   status      Show where each workflow stands on your n8n instance
   deploy      Deliver your workflows to your n8n instance as drafts
   publish     Publish your deployed drafts on your n8n instance
+  clean       Archive the workflows you removed from the project
   creds sync  Write the credentials of your n8n instance to your project
 
 Options:

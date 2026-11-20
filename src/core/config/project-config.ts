@@ -187,7 +187,7 @@ export function targetsToRun(
  */
 export async function checkWorkflowFolders(
   config: ProjectConfig,
-  targets: Target[],
+  targets: readonly Pick<Target, 'name' | 'workflows'>[],
   isDirectory: (path: string) => Promise<boolean>,
 ): Promise<Result<void, ConfigError>> {
   for (const target of targets) {
@@ -196,6 +196,14 @@ export async function checkWorkflowFolders(
     }
   }
   return ok(undefined);
+}
+
+/**
+ * Every declared target on `instance` (the cleaned-up url of a target), in declaration order. Their folders together
+ * hold the workflow files the project still has on that instance.
+ */
+export function targetsOnInstance(config: ProjectConfig, instance: string): DeclaredTarget[] {
+  return config.targets.filter(({ url }) => url === instance);
 }
 
 function targetNames(config: ProjectConfig): string[] {

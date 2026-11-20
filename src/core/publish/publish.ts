@@ -20,11 +20,11 @@ import { ManagedStatus } from '#src/core/status/status.model';
  * file, no recorded id, or an archived workflow is unknown, and the plan publishes nothing.
  */
 export async function planPublish({ workflows, client, managed, names }: PlanPublishInput): Promise<PublishPlan> {
-  const report = await readStatus({ workflows, client, managed, filter: { managed: true, unmanaged: false, archived: false } });
+  const report = await readStatus({ workflows, client, managed, removed: new Map(), filter: { managed: true, unmanaged: false, archived: false } });
   if (report.error !== undefined) {
     return { kind: 'stopped', error: report.error, exitCode: report.exitCode };
   }
-  const statuses = report.workflows.flatMap((status) => (status.state === 'unmanaged' ? [] : [status]));
+  const statuses = report.workflows.flatMap((status) => (status.state === 'unmanaged' || status.state === 'removed' ? [] : [status]));
   if (names.length === 0) {
     return { kind: 'ready', workflows: statuses.flatMap((status) => planned(status, true)) };
   }

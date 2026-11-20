@@ -204,6 +204,11 @@ export interface CommandContext {
    * same way. Resolves the line without its line break, or `undefined` when stdin closes first (EOF).
    */
   ask(prompt: string): Promise<string | undefined>;
+  /**
+   * True when stdin is a terminal, so a person can answer a question. A command that must not ask a script or an agent
+   * (clean, before it archives) checks it before `ask`.
+   */
+  isInteractive: boolean;
 }
 
 /** A command as the registry and runCli see it, its types erased. Build one with defineCommand. */

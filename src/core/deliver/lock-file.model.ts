@@ -39,3 +39,11 @@ export type LockFileError =
 export interface LockWriter {
   record(stableName: StableName, id: WorkflowId): Promise<Result<void, DeployError>>;
 }
+
+/**
+ * Drops the entry of a workflow that clean archived, or found already archived or gone, from the record of `instance`.
+ * Each call saves the whole file. A disk error comes back with its `reason`; the entry then stays.
+ */
+export interface LockRemover {
+  remove(instance: string, stableName: StableName): Promise<Result<void, { reason: string }>>;
+}

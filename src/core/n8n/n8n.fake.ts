@@ -210,6 +210,11 @@ export function fakeN8n({
         workflow.activeVersionId = workflow.versionId;
         return structuredClone(workflow);
       }),
+    archiveWorkflow: (id) =>
+      onWorkflow(`POST ${API_PATH}/workflows/${id}/archive`, id, (workflow) => {
+        workflow.isArchived = true;
+        return structuredClone(workflow);
+      }),
     unarchiveWorkflow: (id) =>
       onWorkflow(`POST ${API_PATH}/workflows/${id}/unarchive`, id, (workflow) => {
         workflow.isArchived = false;
@@ -267,6 +272,8 @@ export function fakeN8n({
       return isWorkflowBody(body) ? respond(await client.updateWorkflow(id, body)) : invalidBody();
     case 'POST workflows/{id}/activate':
       return respond(await client.publishWorkflow(id));
+    case 'POST workflows/{id}/archive':
+      return respond(await client.archiveWorkflow(id));
     case 'POST workflows/{id}/unarchive':
       return respond(await client.unarchiveWorkflow(id));
     case 'PUT workflows/{id}/tags':

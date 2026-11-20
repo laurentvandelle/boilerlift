@@ -3,7 +3,7 @@ import { Result, err, ok } from '#src/core/common/result';
 
 /**
  * A `CommandContext` for tests: no config file, a recent Node, a `fetch` that fails if called, no
- * workflow files. Every folder exists.
+ * workflow files, no terminal. Every folder exists.
  */
 export function fakeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
@@ -17,6 +17,7 @@ export function fakeContext(overrides: Partial<CommandContext> = {}): CommandCon
     readLockFile: () => Promise.resolve(undefined),
     writeLockFile: () => Promise.reject(new Error('writeLockFile was called, but this test does not expect a lock file write')),
     ask: () => Promise.reject(new Error('ask was called, but this test does not expect a question')),
+    isInteractive: false,
     loadCredentialsFiles: () => Promise.resolve([]),
     writeCredentialsFile: () =>
       Promise.reject(new Error('writeCredentialsFile was called, but this test does not expect a credentials file write')),

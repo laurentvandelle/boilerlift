@@ -1,5 +1,5 @@
 ---
-status: accepted, supersedes the identity part of ADR-0002
+status: accepted, supersedes the identity part of ADR-0002, amended by ADR-0016
 ---
 
 # Identify deployed workflows by their n8n id, recorded in `boilerlift.lock.json`
@@ -16,7 +16,7 @@ status: accepted, supersedes the identity part of ADR-0002
 
 - The record can be out of date: a lock file that was not committed, or an older checkout, does not know a workflow that another deploy created, so the next deploy creates a duplicate. This risk is accepted; the text report says `boilerlift.lock.json updated — commit it` each time it changes.
 - A recorded id that n8n no longer knows (404) is created again from code and its new id recorded. An archived one is restored, as before (ADR 0003), and the record is untouched.
-- A workflow on the instance that the record does not list is never read or changed. A workflow removed from the project keeps its entry and is left alone.
+- A workflow on the instance that the record does not list is never read or changed. A workflow removed from the project keeps its entry and is left alone. Amended by [ADR 0016](0016-clean-archives-removed-workflows.md): `lift clean` archives it and drops its entry.
 - A lock file that cannot be read or is invalid stops deploy before any call (exit 1). A record that cannot be written after a create stops the run (exit 7) and names the created id, so the user can record it by hand.
 - Deploy no longer reads or writes tags. The tags earlier versions set stay on the workflows, and those workflows are not taken over: with no record, deploy creates them again. Delete or archive the old copies in the n8n editor.
 - Later, deploy writes a display-only target tag again, which recognition never reads: [ADR 0014](0014-display-only-target-tag.md).
