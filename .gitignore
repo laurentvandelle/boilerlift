@@ -3,4 +3,5 @@ __pycache__
 dist
 junit.xml
 .DS_Store
-.env
+.env*
+!.env.example
