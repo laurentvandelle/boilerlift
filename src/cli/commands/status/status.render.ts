@@ -26,6 +26,7 @@ const MARKS: Record<WorkflowState, string> = {
   differs: '~',
   'draft-pending': '^',
   'up-to-date': '=',
+  removed: '-',
   unmanaged: '·',
 };
 
@@ -35,6 +36,7 @@ const LABELS: Record<WorkflowState, string> = {
   differs: 'differs from n8n — next deploy overwrites the n8n draft',
   'draft-pending': 'draft not yet published',
   'up-to-date': 'up to date',
+  removed: 'removed from the project — lift clean archives it',
   unmanaged: 'not in my project',
 };
 
@@ -52,6 +54,8 @@ function nextCommand(status: WorkflowStatus, target: StatusTarget, format: Statu
     return withTarget('lift deploy', target, format);
   case 'draft-pending':
     return withTarget(`lift publish ${status.stableName}`, target, format);
+  case 'removed':
+    return withTarget('lift clean', target, format);
   case 'up-to-date':
   case 'unmanaged':
     return null;
@@ -128,6 +132,9 @@ function workflowPayload(status: WorkflowStatus, target: StatusTarget, format: S
   if (status.state === 'unmanaged') {
     return { state: status.state, stableName: null, path: null, name: status.name, id: status.id, isArchived: status.isArchived, next };
   }
+  if (status.state === 'removed') {
+    return { state: status.state, stableName: status.stableName, path: null, name: null, id: status.id, next };
+  }
   return {
     state: status.state,
     stableName: status.stableName,
@@ -173,6 +180,8 @@ function detailOf(status: WorkflowStatus): string {
     return status.previousId === undefined
       ? `${LABELS.missing} (${status.path})`
       : `${LABELS.missing} (${status.path}; n8n no longer has the recorded workflow ${status.previousId})`;
+  case 'removed':
+    return `${LABELS.removed} (${status.id})`;
   case 'archived':
   case 'differs':
   case 'draft-pending':
@@ -191,6 +200,7 @@ function summarize(workflows: WorkflowStatus[]): Summary {
     differs: count('differs'),
     'draft-pending': count('draft-pending'),
     'up-to-date': count('up-to-date'),
+    removed: count('removed'),
     unmanaged: count('unmanaged'),
   };
 }
@@ -202,6 +212,7 @@ function summaryLine(summary: Summary): string {
     `${summary.differs} differ`,
     `${summary['draft-pending']} draft not yet published`,
     `${summary['up-to-date']} up to date`,
+    `${summary.removed} removed`,
     `${summary.unmanaged} not in my project`,
   ].join(', ') + '.';
 }

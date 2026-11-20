@@ -4,15 +4,23 @@ import { Result, err, ok } from '#src/core/common/result';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nClient, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';
-import { ManagedStatus, StatusError, StatusInput, StatusReport, UnmanagedStatus, WorkflowStatus } from '#src/core/status/status.model';
+import {
+  ManagedStatus,
+  RemovedStatus,
+  StatusError,
+  StatusInput,
+  StatusReport,
+  UnmanagedStatus,
+  WorkflowStatus,
+} from '#src/core/status/status.model';
 
 /**
  * Reads where each workflow stands on the instance, with GET calls only: one per workflow the lock file records
  * (ADR 0009), then every page of the workflow list for the ones it does not record. It never writes, to the instance or
- * to the lock file. Workflows of the project come first, in stable-name order, then the others in the order n8n lists
- * them. The first failed call stops status.
+ * to the lock file. Workflows of the project come first, in stable-name order, then the removed ones, then the others
+ * in the order n8n lists them. The first failed call stops status.
  */
-export async function readStatus({ workflows, client, managed, filter }: StatusInput): Promise<StatusReport> {
+export async function readStatus({ workflows, client, managed, removed, filter }: StatusInput): Promise<StatusReport> {
   const statuses: WorkflowStatus[] = [];
   if (filter.managed) {
     for (const workflow of [...workflows].sort((a, b) => a.stableName.localeCompare(b.stableName))) {
@@ -22,6 +30,8 @@ export async function readStatus({ workflows, client, managed, filter }: StatusI
       }
       statuses.push(status.value);
     }
+    const gone = [...removed].sort(([a], [b]) => a.localeCompare(b));
+    statuses.push(...gone.map(([stableName, id]): RemovedStatus => ({ state: 'removed', stableName, id })));
   }
   if (filter.unmanaged) {
     const listed = await client.listWorkflows();

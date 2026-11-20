@@ -11,9 +11,11 @@ import { N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
  * - `draft-pending`: the n8n draft holds the local content, but it is not the published version, or nothing is.
  * - `up-to-date`: the published version holds the local content.
  *
- * A workflow of the instance that the lock file does not record is `unmanaged`: status never changes it.
+ * An entry of the lock file that no workflow file points to any more, in the folder of any target on the instance, is
+ * `removed`: `lift clean` archives it. A workflow of the instance that the lock file does not record is `unmanaged`:
+ * status never changes it.
  */
-export type WorkflowState = 'missing' | 'archived' | 'differs' | 'draft-pending' | 'up-to-date' | 'unmanaged';
+export type WorkflowState = 'missing' | 'archived' | 'differs' | 'draft-pending' | 'up-to-date' | 'removed' | 'unmanaged';
 
 /** A workflow of the project, by its local file. `missing` carries the recorded id that answered 404, if any. */
 export type ManagedStatus = { stableName: StableName; path: string; name: string } & (
@@ -24,6 +26,13 @@ export type ManagedStatus = { stableName: StableName; path: string; name: string
   | { state: 'up-to-date'; id: WorkflowId }
 );
 
+/** An entry of the lock file with no workflow file left: removed from the project. Status does not read it on n8n. */
+export interface RemovedStatus {
+  state: 'removed';
+  stableName: StableName;
+  id: WorkflowId;
+}
+
 /** A workflow of the instance that the lock file does not record. */
 export interface UnmanagedStatus {
   state: 'unmanaged';
@@ -32,7 +41,7 @@ export interface UnmanagedStatus {
   isArchived: boolean;
 }
 
-export type WorkflowStatus = ManagedStatus | UnmanagedStatus;
+export type WorkflowStatus = ManagedStatus | RemovedStatus | UnmanagedStatus;
 
 /** Which workflows status reads and shows: the `--managed` and `--archived` options. */
 export interface StatusFilter {
@@ -68,5 +77,7 @@ export interface StatusInput {
   client: N8nClient;
   /** The ids the lock file records for this instance, by stable name (`managedIds`). The only managed workflows. */
   managed: Map<StableName, WorkflowId>;
+  /** The entries no workflow file points to any more (`removedEntries`): shown as `removed` with the managed ones. */
+  removed: Map<StableName, WorkflowId>;
   filter: StatusFilter;
 }
