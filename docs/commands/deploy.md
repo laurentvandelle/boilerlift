@@ -24,6 +24,34 @@ workflows/
 
 Then it reads the instance's API spec (`GET /api/v1/openapi.yml`). If the instance cannot save drafts (older than the `MIN_N8N_VERSION` of [`src/core/n8n/n8n-api.ts`](../../src/core/n8n/n8n-api.ts)), it stops, changes nothing and exits 6.
 
+## Credentials
+
+A node that picks a credential with `credential('key')` (see [`lift creds sync`](creds.md)) is sent with the n8n `{ id, name }` of that key in `credentials/<target>.ts`, the list of the target being deployed, under the type that list gives it. The same workflow file therefore deploys to `dev` with the dev credential and to `prod` with the prod one.
+
+Before writing anything to a target, `deploy` lists the credentials of its instance once (`GET /api/v1/credentials`, every page) and checks each key its workflows use. A credential is **missing** on the target when:
+
+- its key is not in `credentials/<target>.ts`,
+- or the instance no longer has its id,
+- or the instance has its id under another type.
+
+A credential renamed in n8n keeps its id, so it still resolves, under its current name. A missing credential stops that target before any write, and exits 8:
+
+```text
+lift deploy → prod (https://your-n8n.example.com)
+✗ GET /api/v1/credentials → 2 credentials missing on target prod: gmail-sales, slack
+✗ gmail-sales (gmailOAuth2)  not in credentials/prod.ts; used by crm-import, invoice-sync
+✗ slack (slackApi)  id 7Fk2 in credentials/prod.ts, gone from the instance; used by daily-report
+  → Run lift creds sync --target prod to update credentials/prod.ts, or create the missing credentials in n8n first, then run deploy again
+Nothing was written to n8n.
+```
+
+With `--json`, the `error` carries `"kind": "credentials-missing"` and a `missing` array: each `key`, its `type` (`null` when no list ever held it), its `reason` (`not-listed`, `gone` or `type-changed`), the `id` the list gives it (`null` when not listed) and the `workflows` that use it. A dry run reports the same.
+
+- With `--all`, a missing credential stops only the target that lacks it; the other targets still deploy.
+- When workflows use `credential()` and the API key lacks the `credential:list` scope (n8n answers 403), the target stops before any write and exits 9. Give the key that scope in n8n → Settings → n8n API. Workflows that use no `credential()` deploy without this call.
+- A credential recreated in n8n under the same name gets a new id: after `lift creds sync`, `deploy` updates the workflows that use it.
+- Only the key, name, type and id of a credential are read, never a secret.
+
 ## What each workflow becomes
 
 An example report:
@@ -92,7 +120,7 @@ Why ids and not names: [ADR 0009](../adr/0009-lock-file-identity.md).
 
 ## Dry run
 
-`lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would recreate`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n too old) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
+`lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would recreate`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n too old, missing credentials) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
 
 ```text
 lift deploy --dry-run → prod (https://your-n8n.example.com)
