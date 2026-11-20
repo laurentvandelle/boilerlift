@@ -5,6 +5,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '#src': fileURLToPath(new URL('./src', import.meta.url)),
+      // What the project template imports, so a test can load its workflow from the sources.
+      boilerlift: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
     },
   },
   test: {

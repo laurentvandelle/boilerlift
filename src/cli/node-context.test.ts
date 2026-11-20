@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, onTestFinished, test } from 'vitest';
 import { nodeContext } from '#src/cli/node-context';
+import { loadWorkflows } from '#src/core/compile/load-workflows';
 
 const WORKFLOW = { name: 'Invoice sync', nodes: [], connections: {} };
 
@@ -267,5 +268,77 @@ describe('nodeContext writeCredentialsFile', () => {
     const result = await nodeContext(cwd).writeCredentialsFile('credentials/dev.ts', 'export default [];\n');
 
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('nodeContext createFile', () => {
+  test('Should create the file and its folders when nothing is at the path', async () => {
+    const cwd = await tempFolder();
+
+    const creation = await nodeContext(cwd).createFile('my-app/workflows/hello.workflow.ts', 'export default {};\n');
+
+    expect([creation, await readFile(join(cwd, 'my-app/workflows/hello.workflow.ts'), 'utf8')]).toEqual([
+      { status: 'created' },
+      'export default {};\n',
+    ]);
+  });
+
+  test('Should leave the file untouched and return exists when a file is already at the path', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'AGENTS.md', '# Mine\n');
+
+    const creation = await nodeContext(cwd).createFile('AGENTS.md', '# Template\n');
+
+    expect([creation, await readFile(join(cwd, 'AGENTS.md'), 'utf8')]).toEqual([{ status: 'exists' }, '# Mine\n']);
+  });
+
+  test('Should return the reason, not throw, when the file cannot be written', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'notes.txt', 'a file\n');
+
+    const creation = await nodeContext(cwd).createFile('notes.txt/README.md', '# Project\n');
+
+    expect(creation.status === 'failed' && creation.reason.includes('notes.txt')).toBe(true);
+  });
+});
+
+describe('nodeContext loadProjectTemplate', () => {
+  test('Should read every file of the template, sorted, with paths from the template folder when it is loaded', async () => {
+    const cwd = await tempFolder();
+
+    const template = await nodeContext(cwd).loadProjectTemplate();
+
+    expect(template.map((file) => file.path)).toEqual([
+      '.env.example',
+      'AGENTS.md',
+      'CLAUDE.md',
+      'README.md',
+      '_gitignore',
+      'boilerlift.config.ts',
+      'package.json',
+      'tsconfig.json',
+      'workflows/hello.workflow.ts',
+    ]);
+  });
+});
+
+describe('nodeContext isFile', () => {
+  test('Should tell a file from a folder and a missing path when it checks each', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'notes.txt', 'a file\n');
+
+    const ctx = nodeContext(cwd);
+
+    expect([await ctx.isFile('notes.txt'), await ctx.isFile('.'), await ctx.isFile('missing')]).toEqual([true, false, false]);
+  });
+});
+
+describe('project template', () => {
+  test('Should hold an example workflow that deploy accepts when the template is loaded', async () => {
+    const files = await nodeContext(join(__dirname, '..', '..', 'templates', 'project')).loadWorkflowFiles('workflows');
+
+    const loaded = loadWorkflows(files);
+
+    expect([files.map((file) => file.path), loaded.ok]).toEqual([['workflows/hello.workflow.ts'], true]);
   });
 });

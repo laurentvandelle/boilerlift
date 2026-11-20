@@ -162,6 +162,15 @@ export interface RenderView<Options, Needs extends NeedName, Prepared> {
   deps: Deps<Needs>;
 }
 
+/** A file of the project template: its path in the template, with `/`, and its text. */
+export interface TemplateFile {
+  path: string;
+  text: string;
+}
+
+/** What `CommandContext.createFile` did with one file. */
+export type FileCreation = { status: 'created' } | { status: 'exists' } | { status: 'failed'; reason: string };
+
 export interface CommandContext {
   version: string;
   registry: readonly CommandDefinition[];
@@ -204,6 +213,19 @@ export interface CommandContext {
    * same way. Resolves the line without its line break, or `undefined` when stdin closes first (EOF).
    */
   ask(prompt: string): Promise<string | undefined>;
+  /** True when `path`, relative to the current folder, is an existing file (not a folder). */
+  isFile(path: string): Promise<boolean>;
+  /**
+   * The files of the project template that `lift init` writes, sorted by path, read from the template folder that
+   * ships with Boilerlift. A missing template is a broken install: it throws.
+   */
+  loadProjectTemplate(): Promise<TemplateFile[]>;
+  /**
+   * Creates the file `path`, relative to the current folder, with `text`, creating its folders when needed. It never
+   * overwrites: anything already at `path` leaves it untouched, as `exists`. A disk error comes back as `failed` with
+   * its `reason`, never a throw.
+   */
+  createFile(path: string, text: string): Promise<FileCreation>;
   /**
    * True when stdin is a terminal, so a person can answer a question. A command that must not ask a script or an agent
    * (clean, before it archives) checks it before `ask`.

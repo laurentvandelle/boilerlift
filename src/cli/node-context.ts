@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from 'node:util';
-import { CommandContext, CredentialsFile, ProjectConfigFile, WorkflowFile } from '#src/cli/cli.model';
+import { CommandContext, CredentialsFile, FileCreation, ProjectConfigFile, TemplateFile, WorkflowFile } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
 import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
 import { isRecord } from '#src/core/common/is-record';
@@ -30,6 +30,9 @@ export function nodeContext(cwd: string): CommandContext {
     writeCredentialsFile: (path, text) => writeTextFileInFolder(resolve(cwd, path), text),
     ask,
     isInteractive: process.stdin.isTTY === true,
+    isFile: (path) => isFile(resolve(cwd, path)),
+    loadProjectTemplate,
+    createFile: (path, text) => createFile(resolve(cwd, path), text),
   };
 }
 
@@ -103,10 +106,48 @@ async function isFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
   } catch (error) {
-    if (isMissingFile(error)) {
+    if (isMissingFile(error) || (isRecord(error) && error.code === 'ENOTDIR')) {
       return false;
     }
     throw error;
+  }
+}
+
+/**
+ * The project template: `dist/templates/project/`, where the build copies it, when this file runs from `dist/cli/`;
+ * `templates/project/` at the root of the repository when it runs from `src/cli/` (the tests).
+ */
+async function loadProjectTemplate(): Promise<TemplateFile[]> {
+  const candidates = [join(__dirname, '..', 'templates', 'project'), join(__dirname, '..', '..', 'templates', 'project')];
+  for (const root of candidates) {
+    if (await isDirectory(root)) {
+      const entries = await readdir(root, { recursive: true, withFileTypes: true });
+      const paths = entries
+        .filter((entry) => entry.isFile())
+        .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'))
+        .sort();
+      return Promise.all(paths.map(async (path) => ({ path, text: await readFile(join(root, path), 'utf8') })));
+    }
+  }
+  throw new Error(`The project template is missing: none of ${candidates.join(', ')} exists`);
+}
+
+/** Creates the file with the `wx` flag, so anything already at `path` is never overwritten. */
+async function createFile(path: string, text: string): Promise<FileCreation> {
+  try {
+    // A file in the way of the folder fails with EEXIST too: that is a failure, not a file already there.
+    await mkdir(dirname(path), { recursive: true });
+  } catch (error) {
+    return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
+  }
+  try {
+    await writeFile(path, text, { encoding: 'utf8', flag: 'wx' });
+    return { status: 'created' };
+  } catch (error) {
+    if (isRecord(error) && error.code === 'EEXIST') {
+      return { status: 'exists' };
+    }
+    return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
   }
 }
 

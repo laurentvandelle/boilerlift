@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ping": "lift ping",
+    "check": "lift deploy --dry-run",
+    "deploy": "lift deploy",
+    "status": "lift status",
+    "n8n:publish": "lift publish",
+    "creds": "lift creds sync",
+    "clean": "lift clean"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "boilerlift": "^{{boilerliftVersion}}"
+  }
+}

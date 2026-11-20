@@ -46,6 +46,9 @@ export const EXIT_CREDENTIALS_WRITE_FAILED = 10;
  */
 export const EXIT_CONFIRMATION_NEEDED = 11;
 
+/** init could not write at least one file of the project; it still wrote the others. A rerun fills the gaps. */
+export const EXIT_INIT_WRITE_FAILED = 12;
+
 /** Every exit code a command can return. EXIT_UNEXPECTED is EXIT_USAGE's code, so the union lists it once. */
 export type ExitCode =
   | typeof EXIT_OK
@@ -59,7 +62,8 @@ export type ExitCode =
   | typeof EXIT_CREDENTIALS_MISSING
   | typeof EXIT_CREDENTIAL_SCOPE_MISSING
   | typeof EXIT_CREDENTIALS_WRITE_FAILED
-  | typeof EXIT_CONFIRMATION_NEEDED;
+  | typeof EXIT_CONFIRMATION_NEEDED
+  | typeof EXIT_INIT_WRITE_FAILED;
 
 /** The exit code of a failure: any code but EXIT_OK. */
 export type FailureExitCode = Exclude<ExitCode, typeof EXIT_OK>;
