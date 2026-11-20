@@ -15,9 +15,11 @@ export interface PublishedWorkflow {
  * What publish does, or would do, with one workflow of the plan:
  * - `to-publish`: its draft holds the local file and is waiting to be published (`draft-pending`).
  * - `already-published`: a named workflow whose published version already holds the local file (`up-to-date`).
- * - `refused`: a named workflow whose local file differs from the draft (`differs`): deploy it first.
+ * - `refused`: a named workflow whose local file differs from the draft (`differs`): deploy it first. The run exits 5.
+ * - `differs`: without names, a workflow whose local file differs from the draft, often after a change made in the n8n
+ *   editor. It is reported so that it is not left out without a word, never published, and not an error.
  */
-export type PlannedPublish = PublishedWorkflow & { action: 'to-publish' | 'already-published' | 'refused' };
+export type PlannedPublish = PublishedWorkflow & { action: 'to-publish' | 'already-published' | 'refused' | 'differs' };
 
 /**
  * Why a name given on the command line is unknown on a target, tagged by `reason`: no workflow file has that stable
@@ -66,10 +68,14 @@ export type PublishResult = PublishedWorkflow &
     | { action: 'published' }
     | { action: 'already-published' }
     | { action: 'refused' }
+    | { action: 'differs' }
     | { action: 'failed'; error: PublishFailure }
   );
 
-/** What publish did on one target. It exits 5 when a workflow was refused or failed; the others are still published. */
+/**
+ * What publish did on one target. It exits 5 when a workflow was refused or failed; the others are still published. A
+ * `differs` workflow, found without names, does not change the exit code.
+ */
 export interface PublishReport {
   results: PublishResult[];
   exitCode: typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE;

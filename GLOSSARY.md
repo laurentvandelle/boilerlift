@@ -40,7 +40,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Action**: what deploy does with one local workflow: `created`, `recreated` (its recorded id answers 404, so it is created again from code), `updated`, `skipped`, `restored`, `failed` or `not-processed` (a blocker stopped the run first).
 - **Blocker**: a failure that stops the whole run: the instance cannot be reached, it rejects the API key, it cannot save drafts, or the lock file cannot be written after a create. A failure on one workflow is not a blocker. _Avoid_: fatal, stop.
 - **Dry run**: `deploy --dry-run` computes deploy's plan and writes nothing.
-- **Publish**: `lift publish`, making the draft of deployed workflows the published version, after a `[Y/n]` confirmation (or `--yes` / `--force`). Without names, it publishes every `draft-pending` workflow; with names, only those, refusing a `differs` one and skipping an `up-to-date` one.
+- **Publish**: `lift publish`, making the draft of deployed workflows the published version, after a `[Y/n]` confirmation (or `--yes` / `--force`). Without names, it publishes every `draft-pending` workflow and reports the `differs` ones without publishing them; with names, only those, refusing a `differs` one and skipping an `up-to-date` one.
 - **Target tag**: The n8n tag named after the target, `boilerlift:<target>`, added on deploy, for display only.
 
 ### Credentials

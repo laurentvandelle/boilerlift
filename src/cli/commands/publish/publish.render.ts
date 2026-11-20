@@ -34,6 +34,7 @@ const MARKS: Record<PublishResult['action'], string> = {
   published: '^',
   'already-published': '=',
   refused: '✗',
+  differs: '✗',
   failed: '✗',
 };
 
@@ -41,6 +42,7 @@ const LABELS: Record<PublishResult['action'], string> = {
   published: 'published',
   'already-published': 'already published',
   refused: 'not published',
+  differs: 'not published',
   failed: 'failed',
 };
 
@@ -191,6 +193,7 @@ function planLine(workflow: PlannedPublish, width: number, target: PublishTarget
   case 'already-published':
     return `= ${name}already published`;
   case 'refused':
+  case 'differs':
     return `✗ ${name}differs from n8n → not published: run ${withTarget('lift deploy', target, format)} first`;
   }
 }
@@ -213,22 +216,24 @@ interface Summary {
   published: number;
   alreadyPublished: number;
   refused: number;
+  differs: number;
   failed: number;
 }
 
 function summarize(results: PublishResult[]): Summary {
   const count = (action: PublishResult['action']): number => results.filter((result) => result.action === action).length;
-  return { published: count('published'), alreadyPublished: count('already-published'), refused: count('refused'), failed: count('failed') };
+  return { published: count('published'), alreadyPublished: count('already-published'), refused: count('refused'), differs: count('differs'), failed: count('failed') };
 }
 
 /**
- * The last line of a target. Without names, the run holds only the drafts waiting to be published, so the counts of
- * `already published` and `to deploy first` would always read 0: they show only when the command line named workflows.
+ * The last line of a target. Without names, the run never holds an already published workflow, so that count shows
+ * only when the command line named workflows, and `to deploy first` (the workflows that differ) only when one does.
  */
-function summaryLine({ published, alreadyPublished, refused, failed }: Summary, named: boolean): string {
-  return named
-    ? `${published} published, ${alreadyPublished} already published, ${refused} to deploy first, ${failed} failed.`
-    : `${published} published, ${failed} failed.`;
+function summaryLine({ published, alreadyPublished, refused, differs, failed }: Summary, named: boolean): string {
+  if (named) {
+    return `${published} published, ${alreadyPublished} already published, ${refused} to deploy first, ${failed} failed.`;
+  }
+  return `${published} published, ${differs > 0 ? `${differs} to deploy first, ` : ''}${failed} failed.`;
 }
 
 /** The command to run next for one result, or null when there is nothing to run. */
@@ -238,6 +243,7 @@ function nextCommand(result: PublishResult, target: PublishTarget, format: Publi
   case 'already-published':
     return null;
   case 'refused':
+  case 'differs':
     return withTarget('lift deploy', target, format);
   case 'failed':
     switch (result.error.kind) {
@@ -258,7 +264,8 @@ function hintOf(result: PublishResult, target: PublishTarget, format: PublishFor
   case 'already-published':
     return undefined;
   case 'refused':
-    return `Run ${withTarget('lift deploy', target, format)} first, then ${withTarget(`lift publish ${result.stableName}`, target, format)}`;
+  case 'differs':
+    return `Run ${withTarget('lift deploy', target, format)} first (it replaces any change made in the n8n editor), then ${withTarget(`lift publish ${result.stableName}`, target, format)}`;
   case 'failed':
     switch (result.error.kind) {
     case 'unreachable':
@@ -278,6 +285,7 @@ function detailOf(result: PublishResult): string {
   case 'already-published':
     return 'the published version holds the local file';
   case 'refused':
+  case 'differs':
     return 'differs from n8n: the local file and the n8n draft differ';
   case 'failed':
     return `${result.error.call} → ${result.error.detail}`;
@@ -286,11 +294,12 @@ function detailOf(result: PublishResult): string {
 
 /**
  * What publish did on one target: its text, its JSON payload and its recap. `named`: the command line named workflows;
- * without names, an empty plan reads "Nothing to publish".
+ * without names, a plan with no draft waiting reads "Nothing to publish", above the workflows that differ.
  */
 export function renderReport(target: PublishTarget, report: PublishReport, format: PublishFormat, named: boolean): TargetRun {
   const summary = summarize(report.results);
-  const message = report.results.length === 0 && !named ? 'Nothing to publish: no draft is waiting to be published.' : undefined;
+  const nothing = report.results.every(({ action }) => action === 'differs');
+  const message = nothing && !named ? 'Nothing to publish: no draft is waiting to be published.' : undefined;
   return {
     target: target.name,
     url: target.instance,
@@ -318,7 +327,6 @@ function renderText(target: PublishTarget, report: PublishReport, format: Publis
   const stdout = [`lift publish → ${target.name} (${target.instance})`];
   if (message !== undefined) {
     stdout.push(message);
-    return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: '' };
   }
   const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
   for (const result of report.results) {
@@ -331,7 +339,9 @@ function renderText(target: PublishTarget, report: PublishReport, format: Publis
       stdout.push(`${INDENT}→ ${hint}`);
     }
   }
-  stdout.push(summaryLine(summarize(report.results), named));
+  if (message === undefined) {
+    stdout.push(summaryLine(summarize(report.results), named));
+  }
   const notPublished = report.results.filter((result) => result.action === 'refused' || result.action === 'failed').map((result) => result.stableName);
   const stderr =
     notPublished.length === 0 ? '' : `Not published: ${notPublished.join(', ')}.\nNext: follow the step under each line, then run publish again.\n`;

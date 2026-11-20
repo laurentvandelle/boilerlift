@@ -16,7 +16,7 @@ import { ManagedStatus } from '#src/core/status/status.model';
 /**
  * Works out what publish would do on one target, with the reads of `readStatus` only (the workflows of the project,
  * found by the ids of the lock file, ADR 0009). Without names, the plan holds every workflow whose draft is waiting to
- * be published. With names, each one must be a deployed workflow of the project: a name that matches no workflow
+ * be published, and every workflow that differs from n8n, to report it. With names, each one must be a deployed workflow of the project: a name that matches no workflow
  * file, no recorded id, or an archived workflow is unknown, and the plan publishes nothing.
  */
 export async function planPublish({ workflows, client, managed, names }: PlanPublishInput): Promise<PublishPlan> {
@@ -45,7 +45,10 @@ export async function planPublish({ workflows, client, managed, names }: PlanPub
   return unknown.length > 0 ? { kind: 'unknown-names', unknown } : { kind: 'ready', workflows: chosen };
 }
 
-/** The plan entry of one workflow. Without names (`pendingOnly`), only the drafts waiting to be published. */
+/**
+ * The plan entry of one workflow. Without names (`pendingOnly`), the drafts waiting to be published, plus the workflows
+ * that differ from n8n, reported but never published.
+ */
 function planned(status: ManagedStatus, pendingOnly: boolean): PlannedPublish[] {
   const { stableName, path, name } = status;
   switch (status.state) {
@@ -54,7 +57,7 @@ function planned(status: ManagedStatus, pendingOnly: boolean): PlannedPublish[] 
   case 'up-to-date':
     return pendingOnly ? [] : [{ stableName, path, name, id: status.id, action: 'already-published' }];
   case 'differs':
-    return pendingOnly ? [] : [{ stableName, path, name, id: status.id, action: 'refused' }];
+    return [{ stableName, path, name, id: status.id, action: pendingOnly ? 'differs' : 'refused' }];
   case 'missing':
   case 'archived':
     return [];
@@ -71,6 +74,7 @@ export async function applyPublish(workflows: PlannedPublish[], client: N8nClien
     switch (action) {
     case 'already-published':
     case 'refused':
+    case 'differs':
       results.push({ ...workflow, action });
       break;
     case 'to-publish': {

@@ -49,14 +49,21 @@ describe('publishCommand', () => {
     const result = await publishCommand.run(TEXT, context(n8n, { ask: stdin.ask }));
 
     expect(stdin.prompts).toEqual([
-      'lift publish → dev (https://n8n.example.com)\n  ^ daily-report  draft not yet published → will be published\nPublish 1 workflow? [Y/n] ',
+      [
+        'lift publish → dev (https://n8n.example.com)',
+        '  ✗ crm-import    differs from n8n → not published: run lift deploy first',
+        '  ^ daily-report  draft not yet published → will be published',
+        'Publish 1 workflow? [Y/n] ',
+      ].join('\n'),
     ]);
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
         'lift publish → dev (https://n8n.example.com)',
+        '✗ not published     crm-import     differs from n8n: the local file and the n8n draft differ',
+        '                    → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
         '^ published         daily-report   workflows/daily-report.json (the workflow now runs this version)',
-        '1 published, 0 failed.',
+        '1 published, 1 to deploy first, 0 failed.',
         '',
       ].join('\n'),
       stderr: '',
@@ -120,6 +127,25 @@ describe('publishCommand', () => {
     });
   });
 
+  test('Should report the differing workflows under "Nothing to publish" and exit 0 when no draft is waiting', async () => {
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(CRM, { id: 'crm1', nodes: [fakeNode({ name: 'Changed in n8n' })] }), fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] });
+
+    const result = await publishCommand.run(TEXT, context(n8n));
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: [
+        'lift publish → dev (https://n8n.example.com)',
+        'Nothing to publish: no draft is waiting to be published.',
+        '✗ not published     crm-import   differs from n8n: the local file and the n8n draft differ',
+        '                    → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
+        '',
+      ].join('\n'),
+      stderr: '',
+    });
+    expect(published(n8n)).toEqual([]);
+  });
+
   test('Should report an up-to-date named workflow as already published and exit 0 when it is the only one named', async () => {
     const n8n = instance();
 
@@ -138,7 +164,7 @@ describe('publishCommand', () => {
     expect(result.exitCode).toBe(5);
     expect(result.stdout).toContain(
       '✗ not published     crm-import     differs from n8n: the local file and the n8n draft differ\n' +
-        '                    → Run lift deploy first, then lift publish crm-import\n',
+        '                    → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import\n',
     );
     expect(result.stderr).toBe('Not published: crm-import.\nNext: follow the step under each line, then run publish again.\n');
     expect(published(n8n)).toEqual(['POST /api/v1/workflows/rep1/activate']);
@@ -177,7 +203,7 @@ describe('publishCommand', () => {
         { stableName: 'crm-import', path: 'workflows/crm-import.json', name: 'CRM import', id: 'crm1', action: 'refused', next: 'lift deploy' },
         { stableName: 'daily-report', path: 'workflows/daily-report.json', name: 'Daily report', id: 'rep1', action: 'published', next: null },
       ],
-      summary: { published: 1, alreadyPublished: 0, refused: 1, failed: 0 },
+      summary: { published: 1, alreadyPublished: 0, refused: 1, differs: 0, failed: 0 },
       exitCode: 5,
     });
   });

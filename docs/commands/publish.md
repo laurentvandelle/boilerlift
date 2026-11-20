@@ -31,6 +31,7 @@ With `--json`, the question still goes to stderr, so stdout holds only the JSON 
 ## Which workflows
 
 - Without names: every workflow of the project whose draft is waiting to be published (the `draft-pending` state of [`lift status`](status.md)). With none, it prints `Nothing to publish: no draft is waiting to be published.` and exits 0.
+  - A workflow whose local file differs from the n8n draft (`differs`), often after a change made in the n8n editor, is listed as `not published` with `lift deploy` as its next step, in the question and in the result. It is never published, and it is not an error: `publish` still exits 0. `lift deploy` replaces the change made in n8n with the local file.
 - With names: only those workflows, by stable name.
   - A name that matches no workflow file, has no id in `boilerlift.lock.json` (or n8n no longer has that id), or is archived in n8n is unknown. Nothing is published, on any target, and nothing is asked. Each unknown name is listed with its next step (`lift deploy` or `lift status`), and `publish` exits 1.
   - A workflow whose local file differs from the n8n draft (`differs`) is not published: run `lift deploy` first. The others are still published, and `publish` exits 5.
@@ -56,7 +57,7 @@ Without names, the last line counts only `published` and `failed`: workflows alr
 
 ## JSON
 
-Each result carries its `action` (`published`, `already-published`, `refused` or `failed`, with its `error`) and `next`, the command to run, or `null`. The types live in [`src/core/publish/publish.model.ts`](../../src/core/publish/publish.model.ts).
+Each result carries its `action` (`published`, `already-published`, `refused`, `differs` (without names) or `failed`, with its `error`) and `next`, the command to run, or `null`. The types live in [`src/core/publish/publish.model.ts`](../../src/core/publish/publish.model.ts).
 
 ## Calls
 

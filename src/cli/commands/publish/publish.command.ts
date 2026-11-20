@@ -24,7 +24,9 @@ import { applyPublish, planPublish } from '#src/core/publish/publish';
 const DESCRIPTION = `Publishes deployed drafts on the n8n instance of a target: the draft becomes the published
 version, and the workflow runs it on its triggers.
   With names, publishes only those workflows. Without names, publishes every workflow whose
-  draft is waiting to be published (the "draft not yet published" state of lift status).
+  draft is waiting to be published (the "draft not yet published" state of lift status), and
+  lists the workflows that differ from n8n, such as after a change in the n8n editor, without
+  publishing them.
 Before publishing, publish lists the workflows of every selected target, then asks once, on
 stderr, and reads the answer from stdin, TTY or not. Enter, y or yes publishes; any other answer,
 or a closed stdin, publishes nothing. -y or -f skips the question.

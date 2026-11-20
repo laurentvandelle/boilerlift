@@ -34,12 +34,18 @@ function managed(): Map<StableName, WorkflowId> {
 }
 
 describe('planPublish', () => {
-  test('Should plan only the drafts waiting to be published when no name is given', async () => {
+  test('Should plan the drafts waiting to be published, and report the differing workflows, when no name is given', async () => {
     const n8n = instance();
 
     const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: [] });
 
-    expect(plan).toEqual({ kind: 'ready', workflows: [expect.objectContaining({ stableName: 'daily-report', id: 'rep1', action: 'to-publish' })] });
+    expect(plan).toEqual({
+      kind: 'ready',
+      workflows: [
+        expect.objectContaining({ stableName: 'crm-import', id: 'crm1', action: 'differs' }),
+        expect.objectContaining({ stableName: 'daily-report', id: 'rep1', action: 'to-publish' }),
+      ],
+    });
   });
 
   test('Should refuse a differing workflow and skip an up-to-date one when they are named', async () => {
@@ -88,7 +94,10 @@ describe('applyPublish', () => {
 
     const report = await applyPublish(plan.kind === 'ready' ? plan.workflows : [], n8n.client);
 
-    expect(report).toEqual({ results: [expect.objectContaining({ stableName: 'daily-report', action: 'published' })], exitCode: 0 });
+    expect(report).toEqual({
+      results: [expect.objectContaining({ stableName: 'crm-import', action: 'differs' }), expect.objectContaining({ stableName: 'daily-report', action: 'published' })],
+      exitCode: 0,
+    });
     expect(n8n.workflows.find((workflow) => workflow.id === 'rep1')).toMatchObject({ versionId: 'v2', activeVersionId: 'v2' });
   });
 
