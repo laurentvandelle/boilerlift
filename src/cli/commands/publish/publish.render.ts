@@ -316,7 +316,10 @@ function renderText(target: PublishTarget, report: PublishReport, format: Publis
   }
   const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
   for (const result of report.results) {
-    stdout.push(`${MARKS[result.action]} ${LABELS[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
+    const [first = '', ...rest] = detailOf(result).split('\n').filter((line) => line.trim() !== '');
+    stdout.push(`${MARKS[result.action]} ${LABELS[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${first}`);
+    // A message of several lines (n8n lists the issues of each node) goes under the result, in the step's column.
+    stdout.push(...rest.map((line) => `${INDENT}${line.trimEnd()}`));
     const hint = hintOf(result, target, format);
     if (hint !== undefined) {
       stdout.push(`${INDENT}→ ${hint}`);

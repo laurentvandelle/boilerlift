@@ -196,6 +196,26 @@ describe('publishCommand', () => {
     );
     expect(n8n.workflows.find(({ id }) => id === 'rep1')).toMatchObject({ activeVersionId: 'v2' });
   });
+
+  test('Should indent each line of a multi-line n8n message under the result, above the step, when n8n refuses to publish', async () => {
+    const message = 'Cannot publish workflow: 1 node have configuration issues:\n\nNode "Webhook":\n  - Missing required credential: httpHeaderAuth';
+    const n8n = fakeN8n({
+      workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1', versionId: 'v2', activeVersionId: 'v1' })],
+      failures: [httpError('POST /api/v1/workflows/rep1/activate', 400, message)],
+    });
+
+    const result = await publishCommand.run(YES, context(n8n, { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(REPORT)]) }));
+
+    expect(result.stdout).toContain(
+      [
+        '✗ failed            daily-report   POST /api/v1/workflows/rep1/activate → HTTP 400: Cannot publish workflow: 1 node have configuration issues:',
+        '                    Node "Webhook":',
+        '                      - Missing required credential: httpHeaderAuth',
+        '                    → Fix the workflow in the n8n editor, then run lift publish daily-report',
+        '',
+      ].join('\n'),
+    );
+  });
 });
 
 describe('publishCommand targets', () => {
