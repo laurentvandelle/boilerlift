@@ -17,15 +17,18 @@ export const VERSION_PLACEHOLDER = '{{boilerliftVersion}}';
 const DESCRIPTION = `Writes a ready-to-use Boilerlift project into folder, created when missing, or into the
 current folder: boilerlift.config.ts with one target, dev, read from N8N_URL and N8N_API_KEY,
 an example workflow in workflows/ with its tested Code node function in code/, package.json
-with npm run verify (ESLint, tsc, Vitest), tsconfig.json, eslint.config.mjs, .env.example,
-.gitignore and README.md.
+with npm run verify (ESLint, tsc, Vitest) and npm run n8n (one call to the n8n public API),
+tsconfig.json, eslint.config.mjs, .env.example, .gitignore and README.md.
 
-It also writes the Agent kit: AGENTS.md with its docs, and the BOILERLIFT: skills in
+It also writes the Agent kit: AGENTS.md with its docs, the BOILERLIFT: skills in
 .claude/skills/, with which an AI agent takes a workflow request from interview to a checked
-draft on n8n.
+draft on n8n, and the Claude Code guardrails: a hook in .claude/hooks/, wired by
+.claude/settings.json, that asks the user before a Guarded command (publish, a real clean, a
+deploy outside dev, an n8n API write) and blocks reading .env.
 
 init never overwrites a file: one already there is left as it is and reported as skipped, so
 it can run in a folder that already holds part of a project, and again after a failed write.
+When .claude/settings.json is already there, the next steps say how to add the hook to it.
 It never writes .env and never runs npm install.`;
 
 export const initCommand: CommandDefinition = defineCommand({

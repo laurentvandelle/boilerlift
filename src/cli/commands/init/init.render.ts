@@ -5,6 +5,13 @@ import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core
 /** Printed before the next steps: the project is not usable until they are run. */
 export const NEXT_STEPS_HEADING = 'The project is not ready yet. Run these commands, in order, to finish the setup:';
 
+/** The Claude Code settings of the template, which wire the hook of the Agent kit. */
+const SETTINGS_PATH = '.claude/settings.json';
+
+/** The `PreToolUse` entry of the template's settings, for a project whose settings were already there. */
+const HOOK_ENTRY =
+  '{ "matcher": "Bash|Read|Grep", "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.ts\\"" }] }';
+
 /**
  * The files of the project, one line each (`✓` created, `–` skipped, `✗` failed), then the next steps. A failed write
  * exits EXIT_INIT_WRITE_FAILED, with the count on stderr. The --json payload holds the folder, the files, the next
@@ -13,7 +20,7 @@ export const NEXT_STEPS_HEADING = 'The project is not ready yet. Run these comma
 export function renderInit(files: InitFile[], folder: string, format: { json: boolean }): CliResult {
   const failed = files.filter((file) => file.status === 'failed');
   const exitCode: ExitCode = failed.length === 0 ? EXIT_OK : EXIT_INIT_WRITE_FAILED;
-  const next = nextSteps(folder);
+  const next = nextSteps(folder, files);
   const stderr =
     failed.length === 0 ? '' : `${failed.length} of ${files.length} files could not be written. Run lift init again to write them.\n`;
   if (format.json) {
@@ -71,8 +78,15 @@ function fileLine(file: InitFile): string {
   }
 }
 
-/** What to do once the files are written: go into the folder, install, fill in .env, then check the connection. */
-function nextSteps(folder: string): string[] {
+/**
+ * What to do once the files are written: go into the folder, install, fill in .env, then check the connection. When
+ * `.claude/settings.json` was already there, init left it as it is: one more step says how to wire the hook into it.
+ */
+function nextSteps(folder: string, files: InitFile[]): string[] {
   const enter = folder === '.' ? [] : [`cd ${folder}`];
-  return [...enter, 'npm install', 'cp .env.example .env, then fill in N8N_URL and N8N_API_KEY', 'npx lift ping'];
+  const settingsKept = files.some((file) => file.path === SETTINGS_PATH && file.status === 'exists');
+  const hook = settingsKept
+    ? [`${SETTINGS_PATH} was already there: to guard the agent, add this entry to its "hooks" → "PreToolUse" list: ${HOOK_ENTRY}`]
+    : [];
+  return [...enter, 'npm install', 'cp .env.example .env, then fill in N8N_URL and N8N_API_KEY', ...hook, 'npx lift ping'];
 }

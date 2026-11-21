@@ -309,6 +309,9 @@ describe('nodeContext loadProjectTemplate', () => {
     const template = await nodeContext(cwd).loadProjectTemplate();
 
     expect(template.map((file) => file.path)).toEqual([
+      '.claude/hooks/guard.test.ts',
+      '.claude/hooks/guard.ts',
+      '.claude/settings.json',
       '.claude/skills/BOILERLIFT:interviewing/SKILL.md',
       '.claude/skills/BOILERLIFT:plan/SKILL.md',
       '.claude/skills/BOILERLIFT:qa/SKILL.md',
@@ -332,6 +335,8 @@ describe('nodeContext loadProjectTemplate', () => {
       'docs/testing.md',
       'eslint.config.mjs',
       'package.json',
+      'scripts/n8n.test.ts',
+      'scripts/n8n.ts',
       'tsconfig.json',
       'workflows/AGENTS.md',
       'workflows/hello.workflow.ts',
