@@ -1,16 +1,17 @@
-# Build once. Lift everywhere.
+# Boilerlift
 
-**Version, test and deploy your n8n workflows to every environment and client, from one Git repo.**
+**Build n8n workflows with AI in minutes**
 
 ![A lift raising a block of generic workflow nodes](https://raw.githubusercontent.com/laurentvandelle/boilerlift/main/.github/assets/boilerlift-lift.gif)
 
-[![npm version](https://img.shields.io/npm/v/boilerlift)](https://www.npmjs.com/package/boilerlift)
-[![CI](https://github.com/laurentvandelle/boilerlift/actions/workflows/verify.yml/badge.svg?branch=main)](https://github.com/laurentvandelle/boilerlift/actions/workflows/verify.yml?query=branch%3Amain)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/laurentvandelle/boilerlift/blob/main/LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen)](https://nodejs.org)
-[![n8n](https://img.shields.io/badge/n8n-%3E%3D2.35.0-orange)](https://docs.n8n.io)
+[![npm version](https://img.shields.io/npm/v/boilerlift)](https://www.npmjs.com/package/boilerlift) [![CI](https://github.com/laurentvandelle/boilerlift/actions/workflows/verify.yml/badge.svg?branch=main)](https://github.com/laurentvandelle/boilerlift/actions/workflows/verify.yml?query=branch%3Amain) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/laurentvandelle/boilerlift/blob/main/LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen)](https://nodejs.org) [![n8n](https://img.shields.io/badge/n8n-%3E%3D2.35.0-orange)](https://docs.n8n.io)
 
-Build a workflow once, keep it in Git, and lift it to dev, staging, prod or every client's n8n instance with one command. Every change is checked before it leaves your machine, and lands as a draft: the published version keeps running until you publish.
+## Why Boilerlift
+
+- 🛡️ Nothing breaks: every change is checked before it leaves your machine, lands as a draft, and goes live only when you publish.
+- 🗂️ Git is your source of truth and backup.
+- 🌍 Every environment and client from one repo.
+- 🤖 Ready for AI: typed workflows and `--json` output.
 
 > Status: pre-release (0.x). It works, but expect changes between versions.
 
