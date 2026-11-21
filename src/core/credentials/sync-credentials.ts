@@ -1,5 +1,6 @@
 import { UNKNOWN_CREDENTIAL_TYPE, findCredentialUses } from '#src/core/compile/credential';
-import { CredentialEntry } from '#src/core/compile/credential.model';
+import { credentialsFilePath } from '#src/core/compile/credential-lists';
+import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import {
   EXIT_API_KEY_REJECTED,
   EXIT_CREDENTIALS_MISSING,
@@ -9,27 +10,9 @@ import {
   EXIT_UNREACHABLE,
   FailureExitCode,
 } from '#src/core/common/exit-codes';
-import { isRecord } from '#src/core/common/is-record';
-import {
-  CredentialsFile,
-  CredentialsWriter,
-  MissingCredential,
-  SyncError,
-  SyncInput,
-  SyncReport,
-} from '#src/core/credentials/credentials.model';
+import { CredentialsWriter, SyncError, SyncInput, SyncReport } from '#src/core/credentials/credentials.model';
+import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nCredential } from '#src/core/n8n/n8n.model';
-
-/** The folder of the generated credential lists, next to `boilerlift.config.ts`. */
-export const CREDENTIALS_DIR = 'credentials';
-
-/** The scope an n8n API key needs to list the credentials. */
-export const CREDENTIAL_LIST_SCOPE = 'credential:list';
-
-/** The file of the credential list of `target`: `credentials/<target>.ts`. */
-export function credentialsFilePath(target: string): string {
-  return `${CREDENTIALS_DIR}/${target}.ts`;
-}
 
 const EXIT_CODES: Record<SyncError['kind'], FailureExitCode> = {
   unreachable: EXIT_UNREACHABLE,
@@ -62,26 +45,6 @@ export async function syncCredentials(input: SyncInput, write: CredentialsWriter
   }
   const missing = missingCredentials(input, new Set(credentials.map(({ key }) => key)));
   return { status: 'synced', file, credentials, missing, exitCode: missing.length === 0 ? EXIT_OK : EXIT_CREDENTIALS_MISSING };
-}
-
-/**
- * The type of each key in the credential lists the project holds now, from the files `lift creds sync` generated.
- * A file that cannot be imported, or that holds no list, adds nothing. When two lists hold one key, the first wins.
- */
-export function knownCredentialTypes(files: readonly CredentialsFile[]): Map<string, string> {
-  const types = new Map<string, string>();
-  for (const file of files) {
-    if ('error' in file || !Array.isArray(file.content)) {
-      continue;
-    }
-    const entries: unknown[] = file.content;
-    for (const entry of entries) {
-      if (isRecord(entry) && typeof entry.key === 'string' && typeof entry.type === 'string' && !types.has(entry.key)) {
-        types.set(entry.key, entry.type);
-      }
-    }
-  }
-  return types;
 }
 
 function failed(error: SyncError): SyncReport {

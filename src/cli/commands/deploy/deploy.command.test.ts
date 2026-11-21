@@ -5,16 +5,18 @@ import {
   FAKE_PROD_URL as PROD_URL,
   FakeLockFile,
   fakeContext,
+  fakeCredentialsFolder,
   fakeLockFile,
   fakeProjectConfig,
   fakeSingleTarget,
   fakeTwoTargets,
 } from '#src/cli/cli.fake';
 import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
-import { fakeWorkflowFileUsing } from '#src/core/compile/credential.fake';
+import { fakeCredentialEntry, fakeWorkflowFileUsing } from '#src/core/compile/credential.fake';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
 import { fakeLockText } from '#src/core/deliver/lock-file.fake';
-import { FakeN8n, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, invalidResponse, unreachable } from '#src/core/n8n/n8n.fake';
+import { isRecord } from '#src/core/common/is-record';
+import { FakeN8n, fakeCredential, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, invalidResponse, unreachable } from '#src/core/n8n/n8n.fake';
 
 const TEXT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
@@ -990,30 +992,84 @@ describe('deployCommand targets', () => {
     expect(result.exitCode).toBe(0);
     expect([dev, prod].map((n8n) => n8n.workflows.map(({ name }) => name))).toEqual([['Workflow invoice-sync'], ['Workflow invoice-sync']]);
   });
-  test('Should refuse, send nothing and name each node when a workflow uses credential()', async () => {
+  test('Should stop before any write, exit 8 and name each missing key with its type and workflows when the target lacks a credential', async () => {
     const n8n = fakeN8n();
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFileUsing('workflows/invoice-sync.workflow.ts', ['gmail-sales'])]) });
 
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result).toEqual({
-      exitCode: 1,
-      stdout: '',
+      exitCode: 8,
+      stdout: 'lift deploy → dev (https://n8n.example.com)\n',
       stderr:
-        'Workflows pick credentials with credential(), which deploy cannot resolve yet. Nothing was sent to n8n.\n' +
-        '✗ workflows/invoice-sync.workflow.ts  node "Node 1" uses credential(\'gmail-sales\')\n' +
-        '  → Until deploy resolves it, set the credentials of these nodes as n8n exports them: { "<type>": { "id": "…", "name": "…" } }.\n',
+        '✗ GET /api/v1/credentials → 1 credential missing on target dev: gmail-sales\n' +
+        '✗ gmail-sales (httpHeaderAuth)  not in credentials/dev.ts; used by invoice-sync\n' +
+        '  → Run lift creds sync --target dev to update credentials/dev.ts, or create the missing credentials in n8n first, then run deploy again\n' +
+        'Nothing was written to n8n.\n',
     });
-    expect(n8n.requests).toEqual([]);
+    expect(n8n.requests.filter((request) => !request.startsWith('GET'))).toEqual([]);
   });
 
-  test('Should refuse and send nothing when a dry run finds a workflow that uses credential()', async () => {
+  test('Should list each missing credential in the JSON error when the target lacks a credential', async () => {
+    const n8n = fakeN8n({ credentials: [fakeCredential('slack', { id: 'other-id' })] });
+    const folder = fakeCredentialsFolder({ files: [{ path: 'credentials/dev.ts', content: [fakeCredentialEntry('slack')] }] });
+    const ctx = context({ fetch: n8n.fetch, ...folder.context, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFileUsing('workflows/a.json', ['slack'])]) });
+
+    const result = await deployCommand.run(JSON_INPUT, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      exitCode: 8,
+      error: { kind: 'credentials-missing', missing: [{ key: 'slack', type: 'httpHeaderAuth', reason: 'gone', id: 'slack-id', workflows: ['a'] }] },
+    });
+  });
+
+  test('Should exit 8 and write nothing when a dry run finds a credential the target lacks', async () => {
     const n8n = fakeN8n();
     const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFileUsing('workflows/a.json', ['slack'])]) });
 
     const result = await deployCommand.run(DRY_RUN, ctx);
 
-    expect(result.exitCode).toBe(1);
-    expect(n8n.requests).toEqual([]);
+    expect([result.exitCode, n8n.requests.filter((request) => !request.startsWith('GET'))]).toEqual([8, []]);
+  });
+
+  test('Should resolve each target through its own list when two targets pick the same key', async () => {
+    const dev = fakeN8n({ credentials: [fakeCredential('slack', { id: 'dev-slack' })] });
+    const prod = fakeN8n({ credentials: [fakeCredential('slack', { id: 'prod-slack', type: 'slackApi' })] });
+    const folder = fakeCredentialsFolder({
+      files: [
+        { path: 'credentials/dev.ts', content: [fakeCredentialEntry('slack', { id: 'dev-slack' })] },
+        { path: 'credentials/prod.ts', content: [fakeCredentialEntry('slack', { id: 'prod-slack', type: 'slackApi' })] },
+      ],
+    });
+    const files = (dir: string): Promise<ReturnType<typeof fakeWorkflowFileUsing>[]> => Promise.resolve([fakeWorkflowFileUsing(`${dir.slice(2)}/a.json`, ['slack'])]);
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }), ...folder.context, loadWorkflowFiles: files });
+
+    await deployCommand.run(ALL, ctx);
+
+    expect([dev, prod].map((n8n) => n8n.workflows.map(({ nodes }) => nodes.map((node) => (isRecord(node) ? node.credentials : undefined))))).toEqual([
+      [[{ httpHeaderAuth: { id: 'dev-slack', name: 'slack' } }]],
+      [[{ slackApi: { id: 'prod-slack', name: 'slack' } }]],
+    ]);
+  });
+
+  test('Should still deploy the other targets with --all when one target lacks a credential', async () => {
+    const dev = fakeN8n();
+    const prod = fakeN8n({ credentials: [fakeCredential('slack')] });
+    const folder = fakeCredentialsFolder({ files: [{ path: 'credentials/prod.ts', content: [fakeCredentialEntry('slack')] }] });
+    const files = (dir: string): Promise<ReturnType<typeof fakeWorkflowFileUsing>[]> => Promise.resolve([fakeWorkflowFileUsing(`${dir.slice(2)}/a.json`, ['slack'])]);
+    const ctx = targetsContext({ fetch: fakeN8nByOrigin({ [DEV_URL]: dev, [PROD_URL]: prod }), ...folder.context, loadWorkflowFiles: files });
+
+    const result = await deployCommand.run(ALL_JSON, ctx);
+
+    expect([result.exitCode, dev.workflows.length, prod.workflows.length]).toEqual([8, 0, 1]);
+  });
+
+  test('Should stop before any write and exit 9 when workflows use credential() and the API key lacks the credential:list scope', async () => {
+    const n8n = fakeN8n({ failures: [httpError('GET /api/v1/credentials', 403, 'Forbidden')] });
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFileUsing('workflows/a.json', ['slack'])]) });
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect([result.exitCode, n8n.workflows.length]).toEqual([9, 0]);
   });
 });

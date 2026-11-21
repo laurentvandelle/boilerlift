@@ -41,7 +41,7 @@ function run(
   n8n: FakeN8n,
   { workflows = [CRM, REPORT, ARCHIVED, NEW], managed = fakeManaged(MIXED_IDS), tagOff = false, lock = fakeLockWriter({ entries: MIXED_IDS }) }: RunOptions = {},
 ): Promise<DeployReport> {
-  return deploy({ workflows, client: n8n.client, managed, ...(tagOff ? {} : { targetTag: 'boilerlift:sales-prod' }) }, lock.writer);
+  return deploy({ workflows, target: 'dev', credentials: [], client: n8n.client, managed, ...(tagOff ? {} : { targetTag: 'boilerlift:sales-prod' }) }, lock.writer);
 }
 
 function tagsOf(n8n: FakeN8n): Record<string, string[]> {
@@ -194,7 +194,7 @@ describe('target tag in a dry run', () => {
   test('Should count the workflows that would receive the target tag and write nothing when it previews a deploy', async () => {
     const n8n = mixedInstance({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1', tags: [SALES_PROD] }), fakeN8nWorkflow(CRM, { id: 'crm1' })] });
 
-    const report = await previewDeploy({ workflows: [CRM, REPORT, NEW], client: n8n.client, managed: fakeManaged(MIXED_IDS), targetTag: 'boilerlift:sales-prod' });
+    const report = await previewDeploy({ workflows: [CRM, REPORT, NEW], target: 'dev', credentials: [], client: n8n.client, managed: fakeManaged(MIXED_IDS), targetTag: 'boilerlift:sales-prod' });
 
     expect({ tag: report.tag, readOnly: n8n.calls.every((call) => call.startsWith('GET ')), tagCalls: n8n.calls.filter((call) => call.includes('/tags')) }).toEqual({
       tag: { name: 'boilerlift:sales-prod', added: 2 },
@@ -206,7 +206,7 @@ describe('target tag in a dry run', () => {
   test('Should report no target tag when it previews a deploy to a target that turns the tag off', async () => {
     const n8n = mixedInstance();
 
-    const report = await previewDeploy({ workflows: [CRM], client: n8n.client, managed: fakeManaged(MIXED_IDS) });
+    const report = await previewDeploy({ workflows: [CRM], target: 'dev', credentials: [], client: n8n.client, managed: fakeManaged(MIXED_IDS) });
 
     expect(report.tag).toBeUndefined();
   });

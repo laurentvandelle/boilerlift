@@ -1,7 +1,7 @@
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
 import { Result } from '#src/core/common/result';
-import { CredentialsFile } from '#src/core/credentials/credentials.model';
+import { CredentialsFile } from '#src/core/compile/credential.model';
 import { BoilerliftConfig, ProjectConfig, ProjectConfigFile, Target, TargetSelection } from '#src/core/config/config.model';
 import { N8nClient } from '#src/core/n8n/n8n.model';
 

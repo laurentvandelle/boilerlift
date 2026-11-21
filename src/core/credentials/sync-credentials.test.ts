@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { fakeWorkflowFileUsing } from '#src/core/compile/credential.fake';
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { fakeCredentialsWriter } from '#src/core/credentials/credentials.fake';
-import { knownCredentialTypes, syncCredentials } from '#src/core/credentials/sync-credentials';
+import { syncCredentials } from '#src/core/credentials/sync-credentials';
 import { fakeCredential, fakeN8n, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { N8nCredential } from '#src/core/n8n/n8n.model';
 import { FakeCredentialsWriter } from '#src/core/credentials/credentials.fake';
@@ -217,19 +217,5 @@ declare module 'boilerlift' {
     const report = await syncCredentials({ target: 'dev', client: fakeN8n().client, files: [], knownTypes: new Map() }, writer.write);
 
     expect(report).toMatchObject({ status: 'failed', error: { kind: 'write-failed', path: FILE, detail: 'EACCES: permission denied' }, exitCode: 10 });
-  });
-});
-
-describe('knownCredentialTypes', () => {
-  test('Should map each key to its type, the first list winning, when lists hold entries', () => {
-    const files = [
-      { path: 'credentials/dev.ts', content: [{ key: 'slack', name: 'Slack', type: 'slackApi', id: '1' }] },
-      { path: 'credentials/prod.ts', content: [{ key: 'slack', name: 'Slack', type: 'other', id: '2' }] },
-      { path: 'credentials/broken.ts', error: 'SyntaxError' },
-    ];
-
-    const types = knownCredentialTypes(files);
-
-    expect(types).toEqual(new Map([['slack', 'slackApi']]));
   });
 });

@@ -1,11 +1,8 @@
-import { CredentialEntry } from '#src/core/compile/credential.model';
+import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { EXIT_CREDENTIALS_MISSING, EXIT_OK, FailureExitCode } from '#src/core/common/exit-codes';
 import { Result } from '#src/core/common/result';
 import { N8nClient } from '#src/core/n8n/n8n.model';
-
-/** One `credentials/<target>.ts` file found in the project: its default export, or why it could not be imported. */
-export type CredentialsFile = { path: string; content: unknown } | { path: string; error: string };
 
 /** Writes `text` as the whole file at `path`. A disk error comes back as a failure with its `reason`, never a throw. */
 export type CredentialsWriter = (path: string, text: string) => Promise<Result<void, { reason: string }>>;
@@ -18,15 +15,6 @@ export interface SyncInput {
   files: readonly WorkflowFile[];
   /** The type of each key of the lists the project held before the sync, so a key gone from the instance keeps its type. */
   knownTypes: ReadonlyMap<string, string>;
-}
-
-/** A key that workflows of the target use and that its list does not have. */
-export interface MissingCredential {
-  key: string;
-  /** The type of the key, from a list of the project; `undefined` when no list ever held it. */
-  type: string | undefined;
-  /** The workflows that use it, by stable name, sorted. */
-  workflows: string[];
 }
 
 /**

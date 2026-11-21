@@ -1,3 +1,4 @@
+import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/core/common/exit-codes';
 import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
@@ -53,19 +54,45 @@ export type DeployResult = {
 } & ResultAction;
 
 /**
- * What went wrong with a deploy, tagged by `kind`. `effectOf` in deploy-failure.ts derives from the kind whether it
+ * What went wrong with a deploy, tagged by `kind`. `EFFECTS` in deploy-failure.ts derives from the kind whether it
  * stops the run and its exit code.
  * - `unreachable`: the instance gives no answer, or an answer that is not the n8n public API. Stops the run.
  * - `key-rejected`: the instance rejects the API key. Stops the run.
  * - `drafts-unsupported`: the instance is older than MIN_N8N_VERSION. Stops the run before any write.
+ * - `credential-scope-missing`: workflows use `credential()`, and the API key cannot list the credentials (403).
+ *   Stops the run before any write.
+ * - `credentials-missing`: workflows use credentials the target does not provide. Stops the run before any write.
  * - `workflow-failed`: one workflow failed; the others are still delivered.
  * - `lock-write-failed`: a workflow was created, but its id could not be recorded in the lock file. Stops the run.
  */
-export type DeployErrorKind = 'unreachable' | 'key-rejected' | 'drafts-unsupported' | 'workflow-failed' | 'lock-write-failed';
+export type DeployErrorKind =
+  | 'unreachable'
+  | 'key-rejected'
+  | 'drafts-unsupported'
+  | 'credential-scope-missing'
+  | 'credentials-missing'
+  | 'workflow-failed'
+  | 'lock-write-failed';
 
-export interface DeployError extends WorkflowError {
-  kind: DeployErrorKind;
+/**
+ * Why a credential the workflows use is missing on the target:
+ * - `not-listed`: its key is not in `credentials/<target>.ts`.
+ * - `gone`: the list has it, but the instance no longer has its id.
+ * - `type-changed`: the instance has its id under another type than the list says.
+ */
+export type MissingReason = 'not-listed' | 'gone' | 'type-changed';
+
+/** A credential the workflows of the target use and that the target does not provide, and why. */
+export interface UnresolvedCredential extends MissingCredential {
+  reason: MissingReason;
+  /** The id the list gives it; absent when the list does not have the key. */
+  id?: string;
 }
+
+/** A deploy error. `credentials-missing` also carries each missing credential, sorted by key. */
+export type DeployError =
+  | (WorkflowError & { kind: Exclude<DeployErrorKind, 'credentials-missing'> })
+  | (WorkflowError & { kind: 'credentials-missing'; missing: UnresolvedCredential[] });
 
 /**
  * Something that went through but that the user should know about. It is data: the deploy command words it as what
@@ -120,6 +147,13 @@ export interface DeployInput {
   managed: Map<StableName, WorkflowId>;
   /** The target tag to add to every delivered workflow: the target's name. Absent when the target turns it off. */
   targetTag?: string;
+  /** The name of the target: the hints name it. */
+  target: string;
+  /**
+   * The credential list of the target (`credentials/<target>.ts`), through which each `credential()` marker resolves.
+   * Empty when the project has none.
+   */
+  credentials: readonly CredentialEntry[];
 }
 
 /** One workflow in a deploy plan: the action a deploy would take, and what apply needs to take it. */

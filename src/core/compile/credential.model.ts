@@ -52,3 +52,15 @@ export interface CredentialUse {
   /** The type the entry is stored under in the node. */
   type: string;
 }
+
+/** One `credentials/<target>.ts` file found in the project: its default export, or why it could not be imported. */
+export type CredentialsFile = { path: string; content: unknown } | { path: string; error: string };
+
+/** A key that workflows of a target use and that the target does not provide. */
+export interface MissingCredential {
+  key: string;
+  /** The type of the key, from a list of the project; `undefined` when no list ever held it. */
+  type: string | undefined;
+  /** The workflows that use it, by stable name, sorted. */
+  workflows: string[];
+}
