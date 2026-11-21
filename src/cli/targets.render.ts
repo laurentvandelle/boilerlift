@@ -1,4 +1,5 @@
 import { CliResult } from '#src/cli/cli.model';
+import { SYMBOLS } from '#src/cli/output.render';
 import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
 import { describeConfigError } from '#src/core/config/config-error';
 import { ConfigError } from '#src/core/config/config.model';
@@ -49,7 +50,8 @@ export function renderConfigError(error: ConfigError, format: { json: boolean })
 
 /**
  * The output of a command over its targets. One target: its own output, the --json payload naming the target.
- * --all: one block per target, headed by its name and URL, then a recap line per target; the exit code is the worst
+ * --all: one block per target, headed by its name and URL, a blank line between two blocks, then a recap line per
+ * target (`✓` exit 0, `✗` otherwise); the exit code is the worst
  * of them (the highest).
  */
 export function renderTargets(runs: TargetRun[], format: TargetsFormat): CliResult {
@@ -65,12 +67,12 @@ export function renderTargets(runs: TargetRun[], format: TargetsFormat): CliResu
   const nameWidth = Math.max(...runs.map((run) => run.target.length));
   const urlWidth = Math.max(...runs.map((run) => run.url.length));
   const recap = runs.map(
-    (run) => `  ${run.text.exitCode === EXIT_OK ? '✓' : '✗'} ${run.target.padEnd(nameWidth)}  ${run.url.padEnd(urlWidth)}  ${run.outcome}`,
+    (run) => `  ${run.text.exitCode === EXIT_OK ? SYMBOLS.ok : SYMBOLS.failed} ${run.target.padEnd(nameWidth)}  ${run.url.padEnd(urlWidth)}  ${run.outcome}`,
   );
   const stderr = runs
     .filter((run) => run.text.stderr !== '')
     .map((run) => `── ${run.target} (${run.url})\n${run.text.stderr}`)
-    .join('');
+    .join('\n');
   return { exitCode, stdout: `${blocks.join('\n')}\nTargets:\n${recap.join('\n')}\n`, stderr };
 }
 

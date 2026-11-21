@@ -231,6 +231,12 @@ export interface CommandContext {
    * (clean, before it archives) checks it before `ask`.
    */
   isInteractive: boolean;
+  /**
+   * True when the human output is coloured: stdout and stderr are terminals, unless `NO_COLOR` turns it off.
+   * `FORCE_COLOR` turns it on, and wins over `NO_COLOR` (`FORCE_COLOR=0` turns it off). A --json stdout is never
+   * coloured. defineCommand applies it to every result and question (`paint`, `output.render.ts`): commands never read it.
+   */
+  color: boolean;
 }
 
 /** A command as the registry and runCli see it, its types erased. Build one with defineCommand. */
