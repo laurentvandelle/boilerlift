@@ -1,5 +1,5 @@
 ---
-status: accepted, amends the "removed from the project" consequence of ADR-0009
+status: accepted, amends the "removed from the project" consequence of ADR-0009; its "only archives" is amended by ADR-0017
 ---
 
 # `lift clean` archives the workflows removed from the project, and drops their lock entries
