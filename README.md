@@ -84,6 +84,7 @@ This installs the `lift` command (`boilerlift` is an alias). Requires Node.js 22
 - [`lift deploy`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/deploy.md): deliver your workflows, or preview with `--dry-run`
 - [`lift publish`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/publish.md): publish your deployed drafts, after a confirmation
 - [`lift clean`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/clean.md): archive the workflows you removed from the project, or delete them for good with `--delete`, after a confirmation
+- [`lift reset`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/reset.md): remove every workflow Boilerlift deployed on one target, after you type its name
 - [`lift creds sync`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/creds.md): write the credentials of your instance to your project, and see the ones your workflows miss
 
 `lift help` lists every command and `lift help <command>` its options; `lift version` prints the installed version.
