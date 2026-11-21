@@ -2,7 +2,9 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#code/*": "./code/*.ts"
+    "#code/*": "./code/*.ts",
+    "#hooks/*": "./.claude/hooks/*.ts",
+    "#scripts/*": "./scripts/*.ts"
   },
   "scripts": {
     "lint": "eslint",
@@ -15,7 +17,8 @@
     "status": "lift status",
     "n8n:publish": "lift publish",
     "creds": "lift creds sync",
-    "clean": "lift clean"
+    "clean": "lift clean",
+    "n8n": "node --disable-warning=ExperimentalWarning scripts/n8n.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

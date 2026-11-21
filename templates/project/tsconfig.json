@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["boilerlift.config.ts", "workflows/**/*.ts", "code/**/*.ts", "credentials/*.ts"]
+  "include": ["boilerlift.config.ts", "workflows/**/*.ts", "code/**/*.ts", "credentials/*.ts", "scripts/**/*.ts", ".claude/hooks/**/*.ts"]
 }
