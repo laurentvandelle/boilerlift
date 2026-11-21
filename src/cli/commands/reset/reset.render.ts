@@ -1,4 +1,5 @@
 import { CliResult } from '#src/cli/cli.model';
+import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
@@ -41,12 +42,19 @@ const STATE_LABELS: Record<WorkflowToRemove['state'], string> = {
   'not-found': `not found in n8n: its entry will be dropped from ${LOCK_FILE}`,
 };
 
-const MARKS: Record<RemovalResult['action'], string> = {
-  archived: '-',
-  'already-archived': '=',
-  deleted: '-',
-  'not-found': '?',
-  failed: '✗',
+const STATE_SYMBOLS: Record<WorkflowToRemove['state'], Row['symbol']> = {
+  'to-archive': SYMBOLS.removed,
+  'to-delete': SYMBOLS.removed,
+  'already-archived': SYMBOLS.unchanged,
+  'not-found': SYMBOLS.notFound,
+};
+
+const SYMBOL_OF: Record<RemovalResult['action'], Row['symbol']> = {
+  archived: SYMBOLS.removed,
+  'already-archived': SYMBOLS.unchanged,
+  deleted: SYMBOLS.removed,
+  'not-found': SYMBOLS.notFound,
+  failed: SYMBOLS.failed,
 };
 
 const LABELS: Record<RemovalResult['action'], string> = {
@@ -57,16 +65,13 @@ const LABELS: Record<RemovalResult['action'], string> = {
   failed: 'failed',
 };
 
-const ACTION_WIDTH = 1 + Math.max(...Object.values(LABELS).map((label) => label.length));
-const INDENT = ' '.repeat(2 + ACTION_WIDTH);
-
 /** `lift reset --target <name>`, with `--delete` in delete mode and `extra` flags after it. */
 function resetCommand(target: ResetTarget, mode: RemovalMode, extra = ''): string {
   return `lift reset --target ${target.name}${mode === 'delete' ? ' --delete' : ''}${extra}`;
 }
 
-function header(target: ResetTarget): string {
-  return `lift reset → ${target.name} (${target.instance})`;
+function heading(target: ResetTarget): string {
+  return header('lift reset', target.name, target.instance);
 }
 
 /** Reset ran without `--target <name>`, or with `--all`: exit 1, nothing was read or removed. */
@@ -88,7 +93,10 @@ export function renderInvalidLockFile(target: ResetTarget, error: LockFileError)
     text: {
       exitCode: EXIT_USAGE,
       stdout: '',
-      stderr: `${message}\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run lift reset again.\n`,
+      stderr: sections(
+        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run lift reset again.')] }]),
+        [message],
+      ),
     },
     payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
     outcome: `invalid ${LOCK_FILE}, nothing removed`,
@@ -102,9 +110,9 @@ export function renderStopped(target: ResetTarget, plan: Extract<ResetPlan, { ki
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: plan.exitCode, stdout: '', stderr: `✗ ${error.call} → ${error.detail}\n  → ${ping}\nNothing was ${DONE[mode]}.\n` },
+    text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), [`Nothing was ${DONE[mode]}.`]) },
     payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
-    outcome: `stopped: ${error.call} → ${error.detail}`,
+    outcome: `stopped: ${error.call} : ${error.detail}`,
   };
 }
 
@@ -113,11 +121,12 @@ function nameOf(workflow: { id: string; name: string | null }): string {
 }
 
 function workflowLines(workflows: WorkflowToRemove[]): string[] {
-  const width = Math.max(0, ...workflows.map(({ stableName }) => stableName.length)) + 2;
-  return workflows.map((workflow) => {
-    const name = nameOf({ id: workflow.id, name: workflow.state === 'not-found' ? null : workflow.name });
-    return `  - ${workflow.stableName.padEnd(width)}${name}: ${STATE_LABELS[workflow.state]}`;
-  });
+  return rows(
+    workflows.map((workflow) => {
+      const name = nameOf({ id: workflow.id, name: workflow.state === 'not-found' ? null : workflow.name });
+      return { symbol: STATE_SYMBOLS[workflow.state], name: workflow.stableName, state: `${name}: ${STATE_LABELS[workflow.state]}` };
+    }),
+  );
 }
 
 /** One line per other target on the instance: reset never touches its entries. */
@@ -140,27 +149,19 @@ export function renderListing({ target, plan }: PlannedReset, stage: ListingStag
   const yes = resetCommand(target, mode, ' --yes');
   const exitCode = nothing || stage === 'dry-run' ? EXIT_OK : EXIT_CONFIRMATION_NEEDED;
   const done = DONE[mode];
-  const does = (command: string): string =>
-    mode === 'delete' ? `${command} deletes the ${count(workflows)} for good` : `${command} archives the ${count(workflows)}`;
-  const message = nothing
-    ? `Nothing to remove on ${target.name}.`
-    : stage === 'dry-run'
-      ? `Dry run: nothing was ${done}. ${does(resetCommand(target, mode))}.`
-      : `Confirmation needed: nothing was ${done}. ${does(yes)}.`;
-  const stdout = [header(target)];
-  if (nothing) {
-    stdout.push(message, ...keptLines(kept));
-  } else {
-    stdout.push(`Deployed by Boilerlift on ${target.name}:`, ...workflowLines(workflows), ...keptLines(kept), message);
-  }
-  const next = stage === 'dry-run' ? resetCommand(target, mode) : yes;
+  const purpose = mode === 'delete' ? `deletes the ${count(workflows)} for good` : `archives the ${count(workflows)}`;
+  const command = stage === 'dry-run' ? resetCommand(target, mode) : yes;
+  const stageLine = stage === 'dry-run' ? `Dry run: nothing was ${done}.` : `Confirmation needed: nothing was ${done}.`;
+  // The --json message keeps its sentence; the text puts the command in the next-step section.
+  const message = nothing ? `Nothing to remove on ${target.name}.` : `${stageLine} ${command} ${purpose}.`;
+  const list = nothing ? [] : [`Deployed by Boilerlift on ${target.name}:`, ...workflowLines(workflows)];
   return {
     target: target.name,
     url: target.instance,
     text: {
       exitCode,
-      stdout: `${stdout.join('\n')}\n`,
-      stderr: exitCode === EXIT_CONFIRMATION_NEEDED ? `Confirmation needed: nothing was ${done}.\nNext: ${yes}\n` : '',
+      stdout: sections([heading(target)], list, nothing ? [message, ...keptLines(kept)] : [...keptLines(kept), stageLine], nothing ? [] : [next(command, purpose)]),
+      stderr: exitCode === EXIT_CONFIRMATION_NEEDED ? sections([`Confirmation needed: nothing was ${done}.`], [next(yes)]) : '',
     },
     payload: {
       instance: target.instance,
@@ -171,7 +172,7 @@ export function renderListing({ target, plan }: PlannedReset, stage: ListingStag
         id: workflow.id,
         name: workflow.state === 'not-found' ? null : workflow.name,
         state: workflow.state,
-        next,
+        next: command,
       })),
       kept,
       exitCode,
@@ -183,17 +184,12 @@ export function renderListing({ target, plan }: PlannedReset, stage: ListingStag
 /** The listing and the typed-name question, written to stderr before archiving or deleting. */
 export function renderConfirmation({ target, plan }: PlannedReset, mode: RemovalMode): string {
   const { workflows, kept } = plan;
-  const lines = [header(target), ...workflowLines(workflows), ...keptLines(kept)];
-  switch (mode) {
-  case 'archive':
-    lines.push(`Reset ${target.name}? The ${count(workflows)} are archived in n8n and dropped from ${LOCK_FILE}.`);
-    break;
-  case 'delete':
-    lines.push(`Reset ${target.name}? The ${count(workflows)} are deleted for good: this cannot be undone.`);
-    break;
-  }
-  lines.push(`Type the target name (${target.name}) to confirm: `);
-  return lines.join('\n');
+  const question =
+    mode === 'delete'
+      ? `Reset ${target.name}? The ${count(workflows)} are deleted for good: this cannot be undone.`
+      : `Reset ${target.name}? The ${count(workflows)} are archived in n8n and dropped from ${LOCK_FILE}.`;
+  const blocks = [[heading(target)], workflowLines(workflows), keptLines(kept), [question, `Type the target name (${target.name}) to confirm: `]];
+  return blocks.filter((block) => block.length > 0).map((block) => block.join('\n')).join('\n\n');
 }
 
 /** The typed name was not the target's (or stdin closed): exit 0, nothing was archived or deleted. */
@@ -271,7 +267,7 @@ function detailOf(result: RemovalResult): string {
   case 'not-found':
     return `${result.id} is not in n8n, entry dropped from ${LOCK_FILE}`;
   case 'failed':
-    return `${result.error.call} → ${result.error.detail}`;
+    return '';
   }
 }
 
@@ -302,26 +298,30 @@ export function renderReport(planned: PlannedReset, report: RemovalReport, mode:
   }
   const summary = summarize(report.results, mode);
   const dropped = report.results.some(({ action }) => action !== 'failed');
-  const stdout = [header(target)];
-  const width = Math.max(...report.results.map(({ stableName }) => stableName.length)) + 2;
-  for (const result of report.results) {
-    stdout.push(`${MARKS[result.action]} ${LABELS[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
-    const hint = hintOf(result, target, mode);
-    if (hint !== undefined) {
-      stdout.push(`${INDENT}→ ${hint}`);
-    }
-  }
-  stdout.push(summaryLine(summary));
-  if (dropped) {
-    stdout.push(`${LOCK_FILE} updated — commit it.`);
-  }
-  stdout.push(...keptLines(plan.kept));
+  const list = rows(
+    report.results.map((result) => {
+      const hint = hintOf(result, target, mode);
+      return {
+        symbol: SYMBOL_OF[result.action],
+        name: result.stableName,
+        state: result.action === 'failed' ? LABELS.failed : `${LABELS[result.action]}  ${detailOf(result)}`,
+        followUps: [...(result.action === 'failed' ? cause(result.error.call, result.error.detail) : []), ...(hint === undefined ? [] : [next(hint)])],
+      };
+    }),
+  );
+  const stdout = sections(
+    [heading(target)],
+    list,
+    [summaryLine(summary), ...keptLines(plan.kept)],
+    dropped ? [next(`commit ${LOCK_FILE}`, 'it was updated')] : [],
+  );
   const failed = report.results.filter(({ action }) => action === 'failed').map(({ stableName }) => stableName);
-  const stderr = failed.length === 0 ? '' : `Not reset: ${failed.join(', ')}.\nNext: follow the step under each line, then run ${resetCommand(target, mode)} again.\n`;
+  const stderr =
+    failed.length === 0 ? '' : sections([`Not reset: ${failed.join(', ')}.`], [next(resetCommand(target, mode), 'once the step under each line is done')]);
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr },
+    text: { exitCode: report.exitCode, stdout, stderr },
     payload: {
       instance: target.instance,
       stage: 'reset',

@@ -1,4 +1,5 @@
 import { CliResult } from '#src/cli/cli.model';
+import { Row, SYMBOLS, cause, header, next, rows, sections, stopped, warning } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { LoadProblem } from '#src/core/compile/workflow.model';
@@ -21,14 +22,14 @@ export interface DeployTarget {
   instance: string;
 }
 
-const MARKS: Record<DeployAction, string> = {
-  created: '+',
-  recreated: '*',
-  updated: '~',
-  skipped: '=',
-  restored: '!',
-  failed: '✗',
-  'not-processed': '-',
+const SYMBOL_OF: Record<DeployAction, Row['symbol']> = {
+  created: SYMBOLS.created,
+  recreated: SYMBOLS.recreated,
+  updated: SYMBOLS.updated,
+  skipped: SYMBOLS.unchanged,
+  restored: SYMBOLS.restored,
+  failed: SYMBOLS.failed,
+  'not-processed': SYMBOLS.skipped,
 };
 
 interface Summary {
@@ -49,8 +50,10 @@ interface Wording {
   command: string;
   /** What the result lines call each action. */
   labels: Record<DeployAction, string>;
-  /** The lines under the results. `publish` is the command that publishes the drafts. */
-  summary: (counts: Summary, publish: string) => string[];
+  /** The lines under the results. */
+  summary: (counts: Summary) => string[];
+  /** The next steps after the summary. `publish` is the command that publishes the drafts. */
+  next: (counts: Summary, publish: string) => string[];
   /** How the stderr recap introduces the failed workflows. */
   failed: string;
   /** What each warning says deploy did, or would do. */
@@ -71,17 +74,16 @@ const DEPLOY_WORDING: Wording = {
     skipped: 'skipped',
     restored: 'restored',
     failed: 'failed',
-    'not-processed': 'not-processed',
+    'not-processed': 'not processed',
   },
-  summary: (counts, publish) => {
-    const { created, recreated, updated, restored, skipped, failed } = counts;
-    const drafts = deliveredDrafts(counts) ? ` Run ${publish} to publish the drafts.` : '';
+  summary: ({ created, recreated, updated, restored, skipped, failed }) => {
     const recreatedCount = recreated > 0 ? `${recreated} recreated, ` : '';
-    return [`${created} created, ${recreatedCount}${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.${drafts}`];
+    return [`${created} created, ${recreatedCount}${updated} updated, ${restored} restored, ${skipped} skipped, ${failed} failed.`];
   },
+  next: (counts, publish) => (deliveredDrafts(counts) ? [next(publish, 'publishes the drafts')] : []),
   failed: 'Failed',
   outcomes: { restored: 'it is back', 'tag-failed': 'the workflow is deployed without it' },
-  lockFile: `${LOCK_FILE} updated — commit it`,
+  lockFile: next(`commit ${LOCK_FILE}`, 'it was updated'),
   tag: (name, added) => `Tag ${name} added to ${added} workflows`,
 };
 
@@ -99,12 +101,13 @@ const DRY_RUN_WORDING: Wording = {
   },
   summary: ({ created, recreated, updated, restored, skipped, failed }) => [
     `Would: ${created} create, ${recreated > 0 ? `${recreated} recreate, ` : ''}${updated} update, ${restored} restore, ${skipped} skip, ${failed} fail.`,
-    'Dry run: nothing was written. Run lift deploy to apply.',
+    'Dry run: nothing was written.',
     'n8n can still reject a write; this preview covers what reads can show.',
   ],
+  next: () => [next('lift deploy', 'applies it')],
   failed: 'Would fail',
   outcomes: { restored: 'deploy would bring it back', 'tag-failed': 'the workflow would be deployed without it' },
-  lockFile: `${LOCK_FILE} would update — commit it after lift deploy`,
+  lockFile: next(`commit ${LOCK_FILE} after lift deploy`, 'it would update'),
   tag: (name, added) => `Tag ${name} would be added to ${added} workflows`,
 };
 
@@ -118,39 +121,37 @@ function publishCommand(target: DeployTarget, format: DeployFormat): string {
   return format.named ? `lift publish --target ${target.name}` : 'lift publish';
 }
 
-const LABELS = [DEPLOY_WORDING, DRY_RUN_WORDING].flatMap(({ labels }) => Object.values(labels));
-const ACTION_WIDTH = 1 + Math.max(...LABELS.map((label) => label.length));
-const INDENT = ' '.repeat(2 + ACTION_WIDTH);
-
 /**
  * Targets on one instance whose folders hold the same stable name: exit 1, nothing was sent. With --json, the error
  * on stdout too.
  */
 export function renderSharedEntries(shared: SharedEntry[], format: { json: boolean }): CliResult {
-  const lines = shared.map(
-    ({ stableName, instance, first, second }) =>
-      `✗ ${stableName}  targets ${first.target} (${first.path}) and ${second.target} (${second.path}) both deploy it to ${instance}`,
+  const title = 'Targets share a workflow on the same instance. Nothing was sent to n8n.';
+  const step = `Both would use one entry of ${LOCK_FILE} and overwrite each other. Rename one of the files, or point the targets at different instances in ${CONFIG_FILE}.`;
+  const states = shared.map(
+    ({ stableName, instance, first, second }) => ({
+      stableName,
+      state: `targets ${first.target} (${first.path}) and ${second.target} (${second.path}) both deploy it to ${instance}`,
+    }),
   );
-  const message = [
-    'Targets share a workflow on the same instance. Nothing was sent to n8n.',
-    ...lines,
-    `  → Both would use one entry of ${LOCK_FILE} and overwrite each other. Rename one of the files, or point the targets at different instances in ${CONFIG_FILE}.`,
-  ].join('\n');
+  const stderr = sections(rows(states.map(({ stableName, state }) => ({ symbol: SYMBOLS.failed, name: stableName, state }))), [title], [next(step)]);
   if (!format.json) {
-    return { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n` };
+    return { exitCode: EXIT_USAGE, stdout: '', stderr };
   }
+  // The --json message keeps its own layout, so the payload stays as it was.
+  const message = [title, ...states.map(({ stableName, state }) => `✗ ${stableName}  ${state}`), `  → ${step}`].join('\n');
   const payload = { error: { kind: 'shared-lock-entry', message }, exitCode: EXIT_USAGE };
-  return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: `${message}\n` };
+  return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr };
 }
 
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
 export function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]): TargetRun {
-  const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
+  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
   const message = 'Invalid workflow files. Nothing was sent to n8n.';
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n${lines.join('\n')}\n` },
+    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
     payload: {
       instance: target.instance,
       error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
@@ -169,7 +170,10 @@ export function renderInvalidLockFile(target: DeployTarget, error: LockFileError
     text: {
       exitCode: EXIT_USAGE,
       stdout: '',
-      stderr: `${message}\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run deploy again.\n`,
+      stderr: sections(
+        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run deploy again.')] }]),
+        [message],
+      ),
     },
     payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
     outcome: `invalid ${LOCK_FILE}, nothing sent`,
@@ -183,7 +187,7 @@ export function renderNothingToDeploy(target: DeployTarget, dir: string, format:
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_OK, stdout: `${message}\n`, stderr: '' },
+    text: { exitCode: EXIT_OK, stdout: sections([header(wordingOf(format).command, target.name, target.instance)], [message]), stderr: '' },
     payload: jsonPayload(target, report, wordingOf(format), format),
     outcome: message,
   };
@@ -192,13 +196,12 @@ export function renderNothingToDeploy(target: DeployTarget, dir: string, format:
 /** The report of a deploy or a dry run on one target: its text, its JSON payload and its recap. */
 export function renderReport(target: DeployTarget, report: DeployReport, format: DeployFormat): TargetRun {
   const wording = wordingOf(format);
-  const [summary = ''] = wording.summary(summarize(report.results), publishCommand(target, format));
+  const counts = summarize(report.results);
+  const [summary = ''] = wording.summary(counts);
+  const drafts = wording.dryRun || !deliveredDrafts(counts) ? '' : `  ${next(publishCommand(target, format))}`;
+  const stopped = report.error === undefined ? undefined : `stopped: ${report.error.call} : ${report.error.detail}`;
   const outcome =
-    report.error !== undefined && report.results.length === 0
-      ? `stopped: ${report.error.call} → ${report.error.detail}`
-      : report.error !== undefined
-        ? `stopped: ${report.error.call} → ${report.error.detail}; ${summary}`
-        : summary;
+    stopped !== undefined && report.results.length === 0 ? stopped : stopped !== undefined ? `${stopped}; ${summary}` : `${summary}${drafts}`;
   return {
     target: target.name,
     url: target.instance,
@@ -225,6 +228,7 @@ function summarize(results: DeployResult[]): Summary {
   };
 }
 
+/** The detail after the label of a result: where it came from, or nothing. A failure has its cause under its line. */
 function detailOf(result: DeployResult): string {
   switch (result.action) {
   case 'created':
@@ -238,49 +242,51 @@ function detailOf(result: DeployResult): string {
   case 'skipped':
     return 'unchanged';
   case 'failed':
-    return `${result.error.call} → ${result.error.detail}`;
   case 'not-processed':
-    return 'not processed';
+    return '';
   }
 }
 
-/** One warning as a sentence. The --json report keeps the sentences. */
-function warningText(warning: DeployWarning, wording: Wording): string {
-  const { stableName } = warning;
-  const outcome = wording.outcomes[warning.kind];
-  switch (warning.kind) {
+/** One result as a row: its label and detail, then for a failure its cause and the next step under it. */
+function resultRow(result: DeployResult, wording: Wording): Row {
+  const detail = detailOf(result);
+  const label = wording.labels[result.action];
+  return {
+    symbol: SYMBOL_OF[result.action],
+    name: result.stableName,
+    state: detail === '' ? label : `${label}  ${detail}`,
+    followUps: result.action === 'failed' ? [...cause(result.error.call, result.error.detail), next(result.error.hint)] : [],
+  };
+}
+
+/**
+ * One warning as a sentence. `separator` goes between the failed call and its detail: ` : ` in the text, ` → ` in the
+ * --json report, which keeps its sentences as they were.
+ */
+function warningText(item: DeployWarning, wording: Wording, separator = ' : '): string {
+  const { stableName } = item;
+  const outcome = wording.outcomes[item.kind];
+  switch (item.kind) {
   case 'restored':
-    return `${stableName}: workflow ${warning.id} was archived in n8n; ${outcome} as an unpublished draft`;
+    return `${stableName}: workflow ${item.id} was archived in n8n; ${outcome} as an unpublished draft`;
   case 'tag-failed':
-    return `${stableName}: tag ${warning.tag} not added (${warning.call} → ${warning.detail}); ${outcome}`;
+    return `${stableName}: tag ${item.tag} not added (${item.call}${separator}${item.detail}); ${outcome}`;
   }
 }
 
 function renderText(target: DeployTarget, report: DeployReport, wording: Wording, format: DeployFormat): CliResult {
-  const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
-  const stdout = [`${wording.command} → ${target.name} (${target.instance})`];
-  for (const result of report.results) {
-    stdout.push(`${MARKS[result.action]} ${wording.labels[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
-    if (result.action === 'failed') {
-      stdout.push(`${INDENT}→ ${result.error.hint}`);
-    }
-  }
-  stdout.push(...report.warnings.map((warning) => `⚠ ${warningText(warning, wording)}`));
+  const top = [header(wording.command, target.name, target.instance)];
+  const list = [...rows(report.results.map((result) => resultRow(result, wording))), ...report.warnings.map((item) => warning(warningText(item, wording)))];
   const { error } = report;
   if (error !== undefined && report.results.length === 0) {
-    const stderr = [`✗ ${error.call} → ${error.detail}`, ...missingLines(target, error), `  → ${error.hint}`, 'Nothing was written to n8n.'];
-    return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: `${stderr.join('\n')}\n` };
+    const stop = stopped(error.call, error.detail, [...missingLines(target, error), next(error.hint)]);
+    return { exitCode: report.exitCode, stdout: sections(top, list), stderr: sections(stop, ['Nothing was written to n8n.']) };
   }
-  const [summary = '', ...notes] = wording.summary(summarize(report.results), publishCommand(target, format));
-  stdout.push(summary);
-  if (report.tag !== undefined && report.tag.added > 0) {
-    stdout.push(wording.tag(report.tag.name, report.tag.added));
-  }
-  stdout.push(...notes);
-  if (report.lockFile.changed) {
-    stdout.push(wording.lockFile);
-  }
-  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: recap(report, wording) };
+  const counts = summarize(report.results);
+  const [summary = '', ...notes] = wording.summary(counts);
+  const tag = report.tag !== undefined && report.tag.added > 0 ? [wording.tag(report.tag.name, report.tag.added)] : [];
+  const steps = [...wording.next(counts, publishCommand(target, format)), ...(report.lockFile.changed ? [wording.lockFile] : [])];
+  return { exitCode: report.exitCode, stdout: sections(top, list, [summary, ...tag, ...notes], steps), stderr: recap(report, wording) };
 }
 
 /** Why a credential is missing, as the line under the stop says it. */
@@ -296,14 +302,14 @@ function missingReason(target: DeployTarget, credential: UnresolvedCredential): 
   }
 }
 
-/** One line per missing credential of a `credentials-missing` stop: its key, type, reason and workflows. */
+/** One line per missing credential of a `credentials-missing` stop, under the stop: its key, type, reason and workflows. */
 function missingLines(target: DeployTarget, error: DeployError): string[] {
   if (error.kind !== 'credentials-missing') {
     return [];
   }
   return error.missing.map(
     (credential) =>
-      `✗ ${credential.key} (${credential.type ?? 'type unknown'})  ${missingReason(target, credential)}; used by ${credential.workflows.join(', ')}`,
+      `${credential.key} (${credential.type ?? 'type unknown'})  ${missingReason(target, credential)}; used by ${credential.workflows.join(', ')}`,
   );
 }
 
@@ -324,19 +330,20 @@ function recap(report: DeployReport, wording: Wording): string {
   const failedNames = names('failed');
   const notProcessed = names('not-processed');
   const lines: string[] = [];
+  const steps: string[] = [];
   if (failedNames.length > 0) {
     lines.push(`${wording.failed}: ${failedNames.join(', ')}.`);
   }
   if (report.error !== undefined) {
-    lines.push(`Stopped: ${report.error.call} → ${report.error.detail}`);
+    lines.push(`Stopped: ${report.error.call} : ${report.error.detail}`);
     if (notProcessed.length > 0) {
       lines.push(`Not processed: ${notProcessed.join(', ')}.`);
     }
-    lines.push(`Next: ${report.error.hint}.`);
+    steps.push(next(report.error.hint));
   } else if (failedNames.length > 0) {
-    lines.push('Next: fix each failure with the hint under its line, then run deploy again.');
+    steps.push(next('lift deploy', 'once each failure is fixed with the step under its line'));
   }
-  return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
+  return sections(lines, steps);
 }
 
 /** The --json report. `next` is the publish command when the deploy delivered drafts, or null. */
@@ -356,7 +363,7 @@ function jsonPayload(target: DeployTarget, report: DeployReport, wording: Wordin
       ...(result.action === 'failed' ? { error: result.error } : {}),
     })),
     summary,
-    warnings: report.warnings.map((warning) => warningText(warning, wording)),
+    warnings: report.warnings.map((item) => warningText(item, wording, ' → ')),
     lockFile: report.lockFile,
     tag: report.tag ?? null,
     error: error === undefined ? null : errorPayload(error),

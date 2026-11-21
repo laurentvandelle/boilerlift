@@ -192,6 +192,7 @@ export default tseslint.config(
         { category: 'cli-model', pattern: 'src/cli/*.model.ts' },
         { category: 'define-command', pattern: 'src/cli/define-command.ts' },
         { category: 'targets-render', pattern: 'src/cli/targets.render.ts' },
+        { category: 'output-render', pattern: 'src/cli/output.render.ts' },
         { category: 'targets-need', pattern: 'src/cli/targets-need.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'n8n-client', pattern: 'src/services/n8n/n8n-client.ts' },
@@ -290,8 +291,9 @@ export default tseslint.config(
             {
               // defineCommand builds each command's CommandDefinition, with option values typed by its options.
               // targets.render.ts lays out the output of a command that runs on targets (--target, --all).
+              // output.render.ts holds the style every human output follows: sections, rows, symbols and colour.
               from: { element: { type: 'cli-command' } },
-              allow: { to: { file: { categories: ['cli-model', 'define-command', 'targets-render'] } } },
+              allow: { to: { file: { categories: ['cli-model', 'define-command', 'targets-render', 'output-render'] } } },
             },
             {
               from: { element: { type: 'cli-command' } },

@@ -50,25 +50,39 @@ describe('publishCommand', () => {
 
     expect(stdin.prompts).toEqual([
       [
-        'lift publish → dev (https://n8n.example.com)',
-        '  ✗ crm-import    differs from n8n → not published: run lift deploy first',
-        '  ^ daily-report  draft not yet published → will be published',
+        'lift publish · dev (https://n8n.example.com)',
+        '',
+        '✗ crm-import    differs from n8n, not published',
+        '  → lift deploy  first',
+        '^ daily-report  draft not yet published, will be published',
+        '',
         'Publish 1 workflow? [Y/n] ',
       ].join('\n'),
     ]);
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
-        'lift publish → dev (https://n8n.example.com)',
-        '✗ not published     crm-import     differs from n8n: the local file and the n8n draft differ',
-        '                    → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
-        '^ published         daily-report   workflows/daily-report.json (the workflow now runs this version)',
+        'lift publish · dev (https://n8n.example.com)',
+        '',
+        '✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ',
+        '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
+        '^ daily-report  published  workflows/daily-report.json (the workflow now runs this version)',
+        '',
         '1 published, 1 to deploy first, 0 failed.',
         '',
       ].join('\n'),
       stderr: '',
     });
     expect(n8n.workflows.find(({ id }) => id === 'rep1')).toMatchObject({ activeVersionId: 'v2' });
+  });
+
+  test('Should colour the question like the result when colour is on', async () => {
+    const n8n = instance();
+    const stdin = fakeAnswer('n');
+
+    await publishCommand.run(TEXT, context(n8n, { ask: stdin.ask, color: true }));
+
+    expect(stdin.prompts[0]).toContain('\u001b[31m✗\u001b[39m crm-import    differs from n8n, not published\n  \u001b[36m→ lift deploy\u001b[39m  first\n');
   });
 
   test('Should publish when the answer is empty (Enter)', async () => {
@@ -122,7 +136,7 @@ describe('publishCommand', () => {
 
     expect(result).toEqual({
       exitCode: 0,
-      stdout: 'lift publish → dev (https://n8n.example.com)\nNothing to publish: no draft is waiting to be published.\n',
+      stdout: 'lift publish · dev (https://n8n.example.com)\n\nNothing to publish: no draft is waiting to be published.\n',
       stderr: '',
     });
   });
@@ -135,10 +149,12 @@ describe('publishCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
-        'lift publish → dev (https://n8n.example.com)',
+        'lift publish · dev (https://n8n.example.com)',
+        '',
+        '✗ crm-import  not published  differs from n8n: the local file and the n8n draft differ',
+        '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
+        '',
         'Nothing to publish: no draft is waiting to be published.',
-        '✗ not published     crm-import   differs from n8n: the local file and the n8n draft differ',
-        '                    → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
         '',
       ].join('\n'),
       stderr: '',
@@ -152,7 +168,7 @@ describe('publishCommand', () => {
     const result = await publishCommand.run({ positionals: ['weekly'], values: {} }, context(n8n));
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('= already published weekly   the published version holds the local file');
+    expect(result.stdout).toContain('= weekly  already published  the published version holds the local file');
     expect(published(n8n)).toEqual([]);
   });
 
@@ -163,10 +179,10 @@ describe('publishCommand', () => {
 
     expect(result.exitCode).toBe(5);
     expect(result.stdout).toContain(
-      '✗ not published     crm-import     differs from n8n: the local file and the n8n draft differ\n' +
-        '                    → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import\n',
+      '✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ\n' +
+        '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import\n',
     );
-    expect(result.stderr).toBe('Not published: crm-import.\nNext: follow the step under each line, then run publish again.\n');
+    expect(result.stderr).toBe('Not published: crm-import.\n\n→ lift publish  once the step under each line is done\n');
     expect(published(n8n)).toEqual(['POST /api/v1/workflows/rep1/activate']);
   });
 
@@ -179,11 +195,12 @@ describe('publishCommand', () => {
       exitCode: 1,
       stdout: '',
       stderr: [
-        'Unknown workflow names. Nothing was published.',
         '✗ invoice-sync  not deployed to this instance: boilerlift.lock.json records no id for it, or n8n no longer has that id',
         '  → lift deploy',
         '✗ nope          no workflow file with this name in ./workflows',
         '  → lift status',
+        '',
+        'Unknown workflow names. Nothing was published.',
         '',
       ].join('\n'),
     });
@@ -226,8 +243,9 @@ describe('publishCommand', () => {
 
     expect(result.exitCode).toBe(5);
     expect(result.stdout).toContain(
-      '✗ failed            other          POST /api/v1/workflows/oth1/activate → HTTP 400: Workflow has no node to start the workflow\n' +
-        '                    → Fix the workflow in the n8n editor, then run lift publish other\n',
+      '✗ other         failed\n' +
+        '  POST /api/v1/workflows/oth1/activate : HTTP 400: Workflow has no node to start the workflow\n' +
+        '  → Fix the workflow in the n8n editor, then run lift publish other\n',
     );
     expect(n8n.workflows.find(({ id }) => id === 'rep1')).toMatchObject({ activeVersionId: 'v2' });
   });
@@ -243,10 +261,13 @@ describe('publishCommand', () => {
 
     expect(result.stdout).toContain(
       [
-        '✗ failed            daily-report   POST /api/v1/workflows/rep1/activate → HTTP 400: Cannot publish workflow: 1 node have configuration issues:',
-        '                    Node "Webhook":',
-        '                      - Missing required credential: httpHeaderAuth',
-        '                    → Fix the workflow in the n8n editor, then run lift publish daily-report',
+        '✗ daily-report  failed',
+        '  POST /api/v1/workflows/rep1/activate : HTTP 400: Cannot publish workflow: 1 node have configuration issues:',
+        '  Node "Webhook":',
+        '    - Missing required credential: httpHeaderAuth',
+        '  → Fix the workflow in the n8n editor, then run lift publish daily-report',
+        '',
+        '0 published, 1 failed.',
         '',
       ].join('\n'),
     );
@@ -277,10 +298,14 @@ describe('publishCommand targets', () => {
 
     expect(stdin.prompts).toEqual([
       [
-        `lift publish → dev (${FAKE_DEV_URL})`,
-        '  ^ daily-report  draft not yet published → will be published',
-        `lift publish → prod (${FAKE_PROD_URL})`,
-        '  ^ daily-report  draft not yet published → will be published',
+        `lift publish · dev (${FAKE_DEV_URL})`,
+        '',
+        '^ daily-report  draft not yet published, will be published',
+        '',
+        `lift publish · prod (${FAKE_PROD_URL})`,
+        '',
+        '^ daily-report  draft not yet published, will be published',
+        '',
         'Publish 2 workflows on 2 targets? [Y/n] ',
       ].join('\n'),
     ]);

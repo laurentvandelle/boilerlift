@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { describe, expect, onTestFinished, test } from 'vitest';
+import { describe, expect, onTestFinished, test, vi } from 'vitest';
 import { nodeContext } from '#src/cli/node-context';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 
@@ -28,6 +28,67 @@ describe('nodeContext', () => {
     const ctx = nodeContext(cwd);
 
     expect(ctx.version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
+
+/** Makes stdout and stderr terminals, or not, for one test, and sets the colour variables (`undefined` unsets one). */
+function output(terminals: boolean, env: { NO_COLOR?: string; FORCE_COLOR?: string }): void {
+  const before = { stdout: process.stdout.isTTY, stderr: process.stderr.isTTY };
+  process.stdout.isTTY = terminals;
+  process.stderr.isTTY = terminals;
+  vi.stubEnv('NO_COLOR', env.NO_COLOR);
+  vi.stubEnv('FORCE_COLOR', env.FORCE_COLOR);
+  onTestFinished(() => {
+    process.stdout.isTTY = before.stdout;
+    process.stderr.isTTY = before.stderr;
+    vi.unstubAllEnvs();
+  });
+}
+
+describe('nodeContext color', () => {
+  test('Should turn colour on when stdout and stderr are terminals', async () => {
+    const cwd = await tempFolder();
+    output(true, {});
+
+    const ctx = nodeContext(cwd);
+
+    expect(ctx.color).toBe(true);
+  });
+
+  test('Should turn colour off when the output is not a terminal', async () => {
+    const cwd = await tempFolder();
+    output(false, {});
+
+    const ctx = nodeContext(cwd);
+
+    expect(ctx.color).toBe(false);
+  });
+
+  test('Should turn colour off when NO_COLOR is set, even on a terminal', async () => {
+    const cwd = await tempFolder();
+    output(true, { NO_COLOR: '1' });
+
+    const ctx = nodeContext(cwd);
+
+    expect(ctx.color).toBe(false);
+  });
+
+  test('Should turn colour on when FORCE_COLOR is set, even without a terminal', async () => {
+    const cwd = await tempFolder();
+    output(false, { FORCE_COLOR: '1' });
+
+    const ctx = nodeContext(cwd);
+
+    expect(ctx.color).toBe(true);
+  });
+
+  test('Should turn colour off when FORCE_COLOR is 0, even on a terminal', async () => {
+    const cwd = await tempFolder();
+    output(true, { FORCE_COLOR: '0' });
+
+    const ctx = nodeContext(cwd);
+
+    expect(ctx.color).toBe(false);
   });
 });
 

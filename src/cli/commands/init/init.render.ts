@@ -1,5 +1,6 @@
 import { CliResult } from '#src/cli/cli.model';
 import { InitFile } from '#src/cli/commands/init/init.model';
+import { Row, SYMBOLS, next, rows, sections } from '#src/cli/output.render';
 import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
 
 /** Printed before the next steps: the project is not usable until they are run. */
@@ -13,27 +14,26 @@ const HOOK_ENTRY =
   '{ "matcher": "Bash|Read|Grep", "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.ts\\"" }] }';
 
 /**
- * The files of the project, one line each (`✓` created, `–` skipped, `✗` failed), then the next steps. A failed write
+ * The files of the project, one row each (`✓` created, `–` skipped, `✗` failed), then the next steps. A failed write
  * exits EXIT_INIT_WRITE_FAILED, with the count on stderr. The --json payload holds the folder, the files, the next
  * steps and the exit code.
  */
 export function renderInit(files: InitFile[], folder: string, format: { json: boolean }): CliResult {
   const failed = files.filter((file) => file.status === 'failed');
   const exitCode: ExitCode = failed.length === 0 ? EXIT_OK : EXIT_INIT_WRITE_FAILED;
-  const next = nextSteps(folder, files);
+  const steps = nextSteps(folder, files);
   const stderr =
-    failed.length === 0 ? '' : `${failed.length} of ${files.length} files could not be written. Run lift init again to write them.\n`;
+    failed.length === 0 ? '' : sections([`${failed.length} of ${files.length} files could not be written.`], [next('lift init', 'writes them')]);
   if (format.json) {
     const payload = {
       folder,
       files: files.map(filePayload),
-      next,
+      next: steps,
       exitCode,
     };
     return { exitCode, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr };
   }
-  const lines = [...files.map(fileLine), '', NEXT_STEPS_HEADING, ...next.map((step) => `→ ${step}`)];
-  return { exitCode, stdout: `${lines.join('\n')}\n`, stderr };
+  return { exitCode, stdout: sections(rows(files.map(fileRow)), [NEXT_STEPS_HEADING, ...steps.map((step) => next(step))]), stderr };
 }
 
 /** More than one folder given: exit 1, nothing written. */
@@ -47,7 +47,7 @@ export function renderFolderIsFile(folder: string, format: { json: boolean }): C
 }
 
 function usageError(kind: string, message: string, format: { json: boolean }): CliResult {
-  const text = `${message}\n  → Name a new or existing folder, for example lift init my-workflows.\n`;
+  const text = sections([message, `  ${next('Name a new or existing folder, for example lift init my-workflows.')}`]);
   if (!format.json) {
     return { exitCode: EXIT_USAGE, stdout: '', stderr: text };
   }
@@ -67,14 +67,14 @@ function filePayload(file: InitFile): Record<string, string> {
   }
 }
 
-function fileLine(file: InitFile): string {
+function fileRow(file: InitFile): Row {
   switch (file.status) {
   case 'created':
-    return `✓ ${file.path}`;
+    return { symbol: SYMBOLS.ok, name: file.path, state: '' };
   case 'exists':
-    return `– ${file.path} (already there, left as it is)`;
+    return { symbol: SYMBOLS.skipped, name: file.path, state: 'already there, left as it is' };
   case 'failed':
-    return `✗ ${file.path}: ${file.reason}`;
+    return { symbol: SYMBOLS.failed, name: file.path, state: file.reason };
   }
 }
 

@@ -35,9 +35,11 @@ Your workflows are found by the ids of `boilerlift.lock.json` only, never by nam
 In a terminal, clean lists the removed workflows of every selected target on stderr, then asks once:
 
 ```text
-lift clean → dev (https://n8n.example.com)
-  - legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json
-  - old-report  Old report (old1): will be archived
+lift clean · dev (https://n8n.example.com)
+
+= legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json
+- old-report  Old report (old1): will be archived
+
 Clean 2 removed workflows? They are archived in n8n and dropped from boilerlift.lock.json. [y/N]
 ```
 
@@ -46,16 +48,22 @@ Clean 2 removed workflows? They are archived in n8n and dropped from boilerlift.
 Without a terminal (stdin is not a TTY), or with `--json`, clean never asks. Unless `--yes` or `--force` is given, it lists the three groups, archives nothing, and exits 11, with `lift clean --yes` as the next step:
 
 ```text
-lift clean → dev (https://n8n.example.com)
+lift clean · dev (https://n8n.example.com)
+
 Removed from the project:
-  - legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json
-  - old-report  Old report (old1): will be archived
+= legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json
+- old-report  Old report (old1): will be archived
+
 Not deployed yet:
-  + invoice-sync  workflows/invoice-sync.json
-    → lift deploy
++ invoice-sync  workflows/invoice-sync.json
+
 Not in my project (clean never touches them):
-  · Hand made (h1)
-Confirmation needed: nothing was archived. lift clean --yes archives the 2 removed workflows.
+· Hand made (h1)
+
+Confirmation needed: nothing was archived.
+
+→ lift clean --yes  archives the 2 removed workflows
+→ lift deploy  deploys the files not deployed yet
 ```
 
 `--dry-run` prints the same listing, ends with `Dry run: nothing was archived.`, asks nothing and exits 0.
@@ -63,11 +71,14 @@ Confirmation needed: nothing was archived. lift clean --yes archives the 2 remov
 ## Result
 
 ```text
-lift clean → dev (https://n8n.example.com)
-= already archived legacy      Legacy (leg1), entry dropped from boilerlift.lock.json
-- archived         old-report  Old report (old1)
+lift clean · dev (https://n8n.example.com)
+
+= legacy      already archived  Legacy (leg1), entry dropped from boilerlift.lock.json
+- old-report  archived  Old report (old1)
+
 1 archived, 1 already archived, 0 not found, 0 failed.
-boilerlift.lock.json updated — commit it.
+
+→ commit boilerlift.lock.json  it was updated
 ```
 
 A workflow n8n refuses to archive (a key without the `workflow:delete` scope answers 403, or a network error) fails on its own: it keeps its entry, the step to take is printed under it, and the others are still cleaned. Run `lift clean` again once it is fixed.
@@ -77,9 +88,11 @@ A workflow n8n refuses to archive (a key without the `workflow:delete` scope ans
 `lift clean --delete` deletes the removed workflows for good: no id of them is left on the instance, and they cannot be brought back. It takes `--yes`, `--force`, `--dry-run` and `--json` as clean does. Each removed workflow still on the instance is planned as `will be deleted for good`, archived or not: a workflow archived by hand in the editor is deleted too. The question says the deletion is permanent:
 
 ```text
-lift clean → dev (https://n8n.example.com)
-  - legacy      Legacy (leg1): will be deleted for good
-  - old-report  Old report (old1): will be deleted for good
+lift clean · dev (https://n8n.example.com)
+
+- legacy      Legacy (leg1): will be deleted for good
+- old-report  Old report (old1): will be deleted for good
+
 Delete these 2 workflows for good? This cannot be undone. [y/N]
 ```
 
@@ -88,11 +101,14 @@ Any answer but `y` or `yes` prints `Nothing deleted.`: nothing is archived or de
 Each workflow not archived yet is archived first, then deleted (`DELETE /api/v1/workflows/{id}`), so a failed delete leaves it archived and recoverable. Such a workflow fails as `delete-failed`, keeps its entry, and the run exits 5: run `lift clean --delete` again, and it deletes it. A key without the `workflow:delete` scope answers 403. Workflows that an earlier `lift clean` archived have no entry left: `--delete` cannot find them. See [ADR 0017](../adr/0017-clean-can-delete-removed-workflows.md).
 
 ```text
-lift clean → dev (https://n8n.example.com)
-- deleted          legacy      Legacy (leg1)
-- deleted          old-report  Old report (old1)
+lift clean · dev (https://n8n.example.com)
+
+- legacy      deleted  Legacy (leg1)
+- old-report  deleted  Old report (old1)
+
 2 deleted, 0 not found, 0 failed.
-boilerlift.lock.json updated — commit it.
+
+→ commit boilerlift.lock.json  it was updated
 ```
 
 With `--all`, every target is read first. If one has a problem (an invalid `boilerlift.lock.json`, a failed read), nothing is archived or deleted on any target.

@@ -11,6 +11,7 @@ import {
   OptionValues,
   TargetSelection,
 } from '#src/cli/cli.model';
+import { paint, paintText } from '#src/cli/output.render';
 import { resolveTargets } from '#src/cli/targets-need';
 import { Result, ok } from '#src/core/common/result';
 
@@ -42,23 +43,35 @@ export function defineCommand(spec: ErasedSpec): CommandDefinition {
     modes,
     run: async (raw, ctx): Promise<CliResult> => {
       const input = typedInput(raw, spec.options, modes, needsTargets);
-      const deps = await needSources(ctx, needsTargets, input);
-      if (!deps.ok) {
-        return deps.error;
-      }
-      const prepared = spec.prepare === undefined ? ok(undefined) : await spec.prepare(input, deps.value);
-      if (!prepared.ok) {
-        return prepared.error;
-      }
-      const handler = input.mode === 'default' ? spec.default : spec.modes?.[input.mode];
-      if (handler === undefined) {
-        throw new Error(`The mode option --${input.mode} of ${spec.name} has no handler in modes`);
-      }
-      const output = await handler(prepared.value, deps.value, input);
-      const { format, mode, target } = input;
-      return spec.render(output, { format, mode, target, prepared: prepared.value, deps: deps.value });
+      const view = { color: ctx.color, json: input.format.json === true };
+      return paint(await runCommand(spec, input, painted(ctx)), view);
     },
   };
+}
+
+/** The context with its questions coloured like the results, when colour is on. */
+function painted(ctx: CommandContext): CommandContext {
+  return ctx.color ? { ...ctx, ask: (prompt) => ctx.ask(paintText(prompt)) } : ctx;
+}
+
+/** Resolves the needs, then runs `prepare`, the handler of the mode, and `render`. */
+async function runCommand(spec: ErasedSpec, input: ErasedInput, ctx: CommandContext): Promise<CliResult> {
+  const needsTargets = spec.needs.some((need) => need === 'targets');
+  const deps = await needSources(ctx, needsTargets, input);
+  if (!deps.ok) {
+    return deps.error;
+  }
+  const prepared = spec.prepare === undefined ? ok(undefined) : await spec.prepare(input, deps.value);
+  if (!prepared.ok) {
+    return prepared.error;
+  }
+  const handler = input.mode === 'default' ? spec.default : spec.modes?.[input.mode];
+  if (handler === undefined) {
+    throw new Error(`The mode option --${input.mode} of ${spec.name} has no handler in modes`);
+  }
+  const output = await handler(prepared.value, deps.value, input);
+  const { format, mode, target } = input;
+  return spec.render(output, { format, mode, target, prepared: prepared.value, deps: deps.value });
 }
 
 /** The spec as the implementation sees it, its types erased. The overload above keeps them for each command. */

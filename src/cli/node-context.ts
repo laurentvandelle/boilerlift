@@ -30,10 +30,23 @@ export function nodeContext(cwd: string): CommandContext {
     writeCredentialsFile: (path, text) => writeTextFileInFolder(resolve(cwd, path), text),
     ask,
     isInteractive: process.stdin.isTTY === true,
+    color: outputColor(process.env, process.stdout.isTTY === true && process.stderr.isTTY === true),
     isFile: (path) => isFile(resolve(cwd, path)),
     loadProjectTemplate,
     createFile: (path, text) => createFile(resolve(cwd, path), text),
   };
+}
+
+/** `CommandContext.color`: `FORCE_COLOR` first (`0` or `false` turn colour off), then `NO_COLOR`, then the terminals. */
+function outputColor(env: NodeJS.ProcessEnv, terminals: boolean): boolean {
+  const force = env['FORCE_COLOR'];
+  if (force !== undefined) {
+    return force !== '0' && force !== 'false';
+  }
+  if ((env['NO_COLOR'] ?? '') !== '') {
+    return false;
+  }
+  return terminals;
 }
 
 /** `CommandContext.ask`: the prompt on stderr, then the first line of stdin, or `undefined` when stdin closes first. */

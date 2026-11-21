@@ -62,9 +62,11 @@ describe('cleanCommand', () => {
 
     expect(stdin.prompts).toEqual([
       [
-        'lift clean → dev (https://n8n.example.com)',
-        '  - legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json',
-        '  - old-report  Old report (old1): will be archived',
+        'lift clean · dev (https://n8n.example.com)',
+        '',
+        '= legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json',
+        '- old-report  Old report (old1): will be archived',
+        '',
         'Clean 2 removed workflows? They are archived in n8n and dropped from boilerlift.lock.json. [y/N] ',
       ].join('\n'),
     ]);
@@ -79,16 +81,21 @@ describe('cleanCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
-        'lift clean → dev (https://n8n.example.com)',
-        '= already archived legacy      Legacy (leg1), entry dropped from boilerlift.lock.json',
-        '- archived         old-report  Old report (old1)',
-        '1 archived, 1 already archived, 0 not found, 0 failed.',
-        'boilerlift.lock.json updated — commit it.',
+        'lift clean · dev (https://n8n.example.com)',
+        '',
+        '= legacy      already archived  Legacy (leg1), entry dropped from boilerlift.lock.json',
+        '- old-report  archived  Old report (old1)',
+        '',
         'Not deployed yet:',
-        '  + invoice-sync  workflows/invoice-sync.json',
-        '    → lift deploy',
+        '+ invoice-sync  workflows/invoice-sync.json',
+        '',
         'Not in my project (clean never touches them):',
-        '  · Hand made (h1)',
+        '· Hand made (h1)',
+        '',
+        '1 archived, 1 already archived, 0 not found, 0 failed.',
+        '',
+        '→ commit boilerlift.lock.json  it was updated',
+        '→ lift deploy  deploys the files not deployed yet',
         '',
       ].join('\n'),
       stderr: '',
@@ -126,19 +133,25 @@ describe('cleanCommand', () => {
     expect(result).toEqual({
       exitCode: 11,
       stdout: [
-        'lift clean → dev (https://n8n.example.com)',
+        'lift clean · dev (https://n8n.example.com)',
+        '',
         'Removed from the project:',
-        '  - legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json',
-        '  - old-report  Old report (old1): will be archived',
+        '= legacy      Legacy (leg1): already archived in n8n: its entry will be dropped from boilerlift.lock.json',
+        '- old-report  Old report (old1): will be archived',
+        '',
         'Not deployed yet:',
-        '  + invoice-sync  workflows/invoice-sync.json',
-        '    → lift deploy',
+        '+ invoice-sync  workflows/invoice-sync.json',
+        '',
         'Not in my project (clean never touches them):',
-        '  · Hand made (h1)',
-        'Confirmation needed: nothing was archived. lift clean --yes archives the 2 removed workflows.',
+        '· Hand made (h1)',
+        '',
+        'Confirmation needed: nothing was archived.',
+        '',
+        '→ lift clean --yes  archives the 2 removed workflows',
+        '→ lift deploy  deploys the files not deployed yet',
         '',
       ].join('\n'),
-      stderr: 'Confirmation needed: nothing was archived.\nNext: lift clean --yes\n',
+      stderr: 'Confirmation needed: nothing was archived.\n\n→ lift clean --yes\n',
     });
     expect(archives(n8n)).toEqual([]);
     expect(lock.writes).toEqual([]);
@@ -189,7 +202,7 @@ describe('cleanCommand', () => {
     const result = await cleanCommand.run({ positionals: [], values: { 'dry-run': true } }, context(n8n, lock));
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('Dry run: nothing was archived. lift clean archives the 2 removed workflows.\n');
+    expect(result.stdout).toContain('Dry run: nothing was archived.\n\n→ lift clean  archives the 2 removed workflows\n');
     expect(archives(n8n)).toEqual([]);
     expect(lock.writes).toEqual([]);
   });
@@ -232,12 +245,13 @@ describe('cleanCommand', () => {
 
     expect(result).toMatchObject({
       exitCode: 5,
-      stderr: 'Not cleaned: legacy.\nNext: follow the step under each line, then run lift clean again.\n',
+      stderr: 'Not cleaned: legacy.\n\n→ lift clean  once the step under each line is done\n',
     });
     expect(result.stdout).toContain(
       [
-        '✗ failed           legacy      POST /api/v1/workflows/leg1/archive → HTTP 403: Forbidden',
-        '                   → Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift clean again',
+        '✗ legacy      failed',
+        '  POST /api/v1/workflows/leg1/archive : HTTP 403: Forbidden',
+        '  → Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift clean again',
       ].join('\n'),
     );
     expect(lock.text()).toBe(fakeLockText({ 'crm-import': 'crm1', legacy: 'leg1' }));
@@ -251,7 +265,7 @@ describe('cleanCommand', () => {
     expect(result).toEqual({
       exitCode: 3,
       stdout: '',
-      stderr: '✗ GET /api/v1/workflows/leg1 → unreachable: connection refused\n  → lift ping\nNothing was archived.\n',
+      stderr: '✗ GET /api/v1/workflows/leg1 : unreachable: connection refused\n  → lift ping\n\nNothing was archived.\n',
     });
   });
 
@@ -272,9 +286,11 @@ describe('cleanCommand', () => {
 
     expect(stdin.prompts).toEqual([
       [
-        'lift clean → dev (https://n8n.example.com)',
-        '  - legacy      Legacy (leg1): will be deleted for good',
-        '  - old-report  Old report (old1): will be deleted for good',
+        'lift clean · dev (https://n8n.example.com)',
+        '',
+        '- legacy      Legacy (leg1): will be deleted for good',
+        '- old-report  Old report (old1): will be deleted for good',
+        '',
         'Delete these 2 workflows for good? This cannot be undone. [y/N] ',
       ].join('\n'),
     ]);
@@ -300,10 +316,18 @@ describe('cleanCommand', () => {
     expect(result).toMatchObject({ exitCode: 0, stderr: '' });
     expect(result.stdout).toContain(
       [
-        '- deleted          legacy      Legacy (leg1)',
-        '- deleted          old-report  Old report (old1)',
+        '- legacy      deleted  Legacy (leg1)',
+        '- old-report  deleted  Old report (old1)',
+        '',
+        'Not deployed yet:',
+        '+ invoice-sync  workflows/invoice-sync.json',
+        '',
+        'Not in my project (clean never touches them):',
+        '· Hand made (h1)',
+        '',
         '2 deleted, 0 not found, 0 failed.',
-        'boilerlift.lock.json updated — commit it.',
+        '',
+        '→ commit boilerlift.lock.json  it was updated',
       ].join('\n'),
     );
     expect(archives(n8n)).toEqual(['POST /api/v1/workflows/old1/archive']);
@@ -317,8 +341,8 @@ describe('cleanCommand', () => {
 
     const result = await cleanCommand.run(DELETE, context(n8n, lock));
 
-    expect(result).toMatchObject({ exitCode: 11, stderr: 'Confirmation needed: nothing was deleted.\nNext: lift clean --delete --yes\n' });
-    expect(result.stdout).toContain('Confirmation needed: nothing was deleted. lift clean --delete --yes deletes the 2 removed workflows for good.\n');
+    expect(result).toMatchObject({ exitCode: 11, stderr: 'Confirmation needed: nothing was deleted.\n\n→ lift clean --delete --yes\n' });
+    expect(result.stdout).toContain('Confirmation needed: nothing was deleted.\n\n→ lift clean --delete --yes  deletes the 2 removed workflows for good\n');
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
     expect(lock.writes).toEqual([]);
   });
@@ -362,8 +386,8 @@ describe('cleanCommand', () => {
     const result = await cleanCommand.run({ positionals: [], values: { delete: true, 'dry-run': true } }, context(n8n, lock));
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('  - old-report  Old report (old1): will be deleted for good\n');
-    expect(result.stdout).toContain('Dry run: nothing was deleted. lift clean --delete --yes deletes the 2 removed workflows for good.\n');
+    expect(result.stdout).toContain('- old-report  Old report (old1): will be deleted for good\n');
+    expect(result.stdout).toContain('Dry run: nothing was deleted.\n\n→ lift clean --delete --yes  deletes the 2 removed workflows for good\n');
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
     expect(lock.writes).toEqual([]);
   });
@@ -396,11 +420,12 @@ describe('cleanCommand', () => {
 
     const result = await cleanCommand.run(DELETE_YES, context(n8n));
 
-    expect(result).toMatchObject({ exitCode: 5, stderr: 'Not cleaned: old-report.\nNext: follow the step under each line, then run lift clean --delete again.\n' });
+    expect(result).toMatchObject({ exitCode: 5, stderr: 'Not cleaned: old-report.\n\n→ lift clean --delete  once the step under each line is done\n' });
     expect(result.stdout).toContain(
       [
-        '✗ failed           old-report  DELETE /api/v1/workflows/old1 → HTTP 403: Forbidden',
-        '                   → The workflow stays archived. Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift clean --delete again',
+        '✗ old-report  failed',
+        '  DELETE /api/v1/workflows/old1 : HTTP 403: Forbidden',
+        '  → The workflow stays archived. Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift clean --delete again',
       ].join('\n'),
     );
   });

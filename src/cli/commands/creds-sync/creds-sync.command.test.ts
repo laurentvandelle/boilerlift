@@ -33,7 +33,7 @@ describe('credsSyncCommand', () => {
 
     const result = await credsSyncCommand.run(INPUT, ctx);
 
-    expect(result).toEqual({ exitCode: 0, stdout: 'Synced 2 credentials from dev.\nWrote credentials/dev.ts.\n', stderr: '' });
+    expect(result).toEqual({ exitCode: 0, stdout: 'lift creds sync · dev (https://n8n.example.com)\n\nSynced 2 credentials from dev.\nWrote credentials/dev.ts.\n', stderr: '' });
   });
 
   test('Should write the list of the target to credentials/<target>.ts when it syncs', async () => {
@@ -61,7 +61,7 @@ describe('credsSyncCommand', () => {
     expect(result).toEqual({
       exitCode: 8,
       stdout:
-        'Synced 1 credentials from dev.\nWrote credentials/dev.ts.\n' +
+        'lift creds sync · dev (https://n8n.example.com)\n\nSynced 1 credentials from dev.\nWrote credentials/dev.ts.\n' +
         'Missing on dev: gmail-sales (gmailOAuth2), used by: crm-import, invoice-sync\n',
       stderr: '1 missing on dev. Exit code 8.\n',
     });
@@ -89,7 +89,7 @@ describe('credsSyncCommand', () => {
 
     expect(result).toEqual({
       exitCode: 0,
-      stdout: 'Synced 0 credentials from dev.\nThe instance of dev has no credentials.\nWrote credentials/dev.ts.\n',
+      stdout: 'lift creds sync · dev (https://n8n.example.com)\n\nSynced 0 credentials from dev.\nThe instance of dev has no credentials.\nWrote credentials/dev.ts.\n',
       stderr: '',
     });
   });
@@ -134,7 +134,7 @@ describe('credsSyncCommand', () => {
       exitCode: 9,
       stdout: '',
       stderr:
-        'Cannot sync the credentials of dev: GET /api/v1/credentials → HTTP 403: the API key lacks the credential:list scope\n' +
+        'Cannot sync the credentials of dev: GET /api/v1/credentials : HTTP 403: the API key lacks the credential:list scope\n' +
         '  → Give the API key of the target the credential:list scope in n8n → Settings → n8n API, or create a key that has it, then run lift creds sync again\n',
     });
     expect(folder.writes).toEqual([]);
@@ -167,7 +167,7 @@ describe('credsSyncCommand', () => {
     const result = await credsSyncCommand.run(INPUT, ctx);
 
     expect(result.exitCode).toBe(10);
-    expect(result.stderr).toContain('credentials/dev.ts → EACCES: permission denied');
+    expect(result.stderr).toContain('credentials/dev.ts : EACCES: permission denied');
   });
 
   test('Should sync every target into its own file and exit with the worst code when --all is set', async () => {

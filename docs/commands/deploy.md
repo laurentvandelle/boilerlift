@@ -37,11 +37,13 @@ Before writing anything to a target, `deploy` lists the credentials of its insta
 A credential renamed in n8n keeps its id, so it still resolves, under its current name. A missing credential stops that target before any write, and exits 8:
 
 ```text
-lift deploy → prod (https://your-n8n.example.com)
-✗ GET /api/v1/credentials → 2 credentials missing on target prod: gmail-sales, slack
-✗ gmail-sales (gmailOAuth2)  not in credentials/prod.ts; used by crm-import, invoice-sync
-✗ slack (slackApi)  id 7Fk2 in credentials/prod.ts, gone from the instance; used by daily-report
+lift deploy · prod (https://your-n8n.example.com)
+
+✗ GET /api/v1/credentials : 2 credentials missing on target prod: gmail-sales, slack
+  gmail-sales (gmailOAuth2)  not in credentials/prod.ts; used by crm-import, invoice-sync
+  slack (slackApi)  id 7Fk2 in credentials/prod.ts, gone from the instance; used by daily-report
   → Run lift creds sync --target prod to update credentials/prod.ts, or create the missing credentials in n8n first, then run deploy again
+
 Nothing was written to n8n.
 ```
 
@@ -57,15 +59,19 @@ With `--json`, the `error` carries `"kind": "credentials-missing"` and a `missin
 An example report:
 
 ```text
-lift deploy → prod (https://your-n8n.example.com)
-~ updated        crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= skipped        daily-report   unchanged
-+ created        invoice-sync   workflows/invoice-sync.workflow.ts
-! restored       lead-scoring   workflows/lead-scoring.json (unpublished draft)
-⚠ lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
-1 created, 1 updated, 1 restored, 1 skipped, 0 failed. Run lift publish to publish the drafts.
+lift deploy · prod (https://your-n8n.example.com)
+
+~ crm-import    updated  workflows/crm/crm-import.json (draft; published version still running)
+= daily-report  skipped  unchanged
++ invoice-sync  created  workflows/invoice-sync.workflow.ts
+↺ lead-scoring  restored  workflows/lead-scoring.json (unpublished draft)
+! lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
+
+1 created, 1 updated, 1 restored, 1 skipped, 0 failed.
 Tag boilerlift:prod added to 4 workflows
-boilerlift.lock.json updated — commit it
+
+→ lift publish  publishes the drafts
+→ commit boilerlift.lock.json  it was updated
 ```
 
 - New workflows are created and never published, and their ids recorded in `boilerlift.lock.json`.
@@ -73,8 +79,8 @@ boilerlift.lock.json updated — commit it
 - Workflows whose current draft already matches the file are skipped, so a rerun changes nothing.
 - A workflow deleted in the n8n editor is only archived. `deploy` unarchives it and updates it as a draft (`restored`), with a warning: it stays unpublished until you publish it. This needs the `workflow:delete` scope on the API key.
 - A recorded workflow that n8n no longer has (deleted for good, so its id answers 404) is created again (`* recreated`), and its new id replaces the old one in the lock file.
-- A failure on one workflow marks it `✗ failed`, with the failed call and the next step below its line, and the others are still delivered.
-- An unreachable instance or a rejected key stops the run: the workflows not yet processed are listed as `not-processed`.
+- A failure on one workflow marks it `✗ … failed`, with the failed call and the next step below its name, and the others are still delivered.
+- An unreachable instance or a rejected key stops the run: the workflows not yet processed are listed as `– … not processed`.
 - After the summary, stderr recaps the failed and not-processed workflows and the next step.
 
 ## The target tag
@@ -109,7 +115,7 @@ When `deploy` creates a workflow, it records its n8n id in **`boilerlift.lock.js
 
 `deploy` finds your workflows by these ids only, never by name or tag. Renaming the workflow in n8n keeps the link (the name in the file wins on the next update); renaming the file makes a new workflow. A workflow on the instance that the lock file does not list is never touched, so several projects can share one instance.
 
-**Commit `boilerlift.lock.json`** after each deploy that changes it (the report then says `boilerlift.lock.json updated — commit it`): a deploy from another machine or from CI without it would create the workflows again.
+**Commit `boilerlift.lock.json`** after each deploy that changes it (the report then ends with `→ commit boilerlift.lock.json  it was updated`): a deploy from another machine or from CI without it would create the workflows again.
 
 - Updates, skips, restores and dry runs never write it.
 - If it cannot be written after a create, the run stops (exit 7): the error names the created id, and the hint says what to add to the file by hand.
@@ -123,15 +129,19 @@ Why ids and not names: [ADR 0009](../adr/0009-lock-file-identity.md).
 `lift deploy --dry-run` reads the instance and shows what `deploy` would do, without writing anything: each workflow is listed as `would create`, `would recreate`, `would update`, `would restore`, `would skip` or `would fail`, and blockers (unreachable instance, rejected key, n8n too old, missing credentials) show as they would on a real deploy. The exit codes are the same. A real deploy does the same reads first, so the preview is what it would do right after.
 
 ```text
-lift deploy --dry-run → prod (https://your-n8n.example.com)
-~ would update   crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= would skip     daily-report   unchanged
-+ would create   invoice-sync   workflows/invoice-sync.workflow.ts
+lift deploy --dry-run · prod (https://your-n8n.example.com)
+
+~ crm-import    would update  workflows/crm/crm-import.json (draft; published version still running)
+= daily-report  would skip  unchanged
++ invoice-sync  would create  workflows/invoice-sync.workflow.ts
+
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
 Tag boilerlift:prod would be added to 3 workflows
-Dry run: nothing was written. Run lift deploy to apply.
+Dry run: nothing was written.
 n8n can still reject a write; this preview covers what reads can show.
-boilerlift.lock.json would update — commit it after lift deploy
+
+→ lift deploy  applies it
+→ commit boilerlift.lock.json after lift deploy  it would update
 ```
 
 With `--json`, the report carries `"dryRun": true`.

@@ -18,9 +18,12 @@ lift publish --json --yes          # the result as JSON, for scripts and AI agen
 Before publishing, `publish` lists the workflows of every selected target on stderr, then asks once:
 
 ```text
-lift publish → dev (https://n8n.example.com)
-  ^ daily-report  draft not yet published → will be published
-  ✗ crm-import    differs from n8n → not published: run lift deploy first
+lift publish · dev (https://n8n.example.com)
+
+^ daily-report  draft not yet published, will be published
+✗ crm-import    differs from n8n, not published
+  → lift deploy  first
+
 Publish 1 workflow? [Y/n]
 ```
 
@@ -42,10 +45,12 @@ Your workflows are found by the ids of `boilerlift.lock.json` only, never by nam
 With `--all`, every target is read first. If one has a problem (an unknown name, an invalid file, a failed read), nothing is published on any target.
 
 ```text
-lift publish → dev (https://n8n.example.com)
-✗ not published     crm-import     differs from n8n: the local file and the n8n draft differ
-                    → Run lift deploy first, then lift publish crm-import
-^ published         daily-report   workflows/daily-report.json (the workflow now runs this version)
+lift publish · dev (https://n8n.example.com)
+
+✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ
+  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import
+^ daily-report  published  workflows/daily-report.json (the workflow now runs this version)
+
 1 published, 0 already published, 1 to deploy first, 0 failed.
 ```
 

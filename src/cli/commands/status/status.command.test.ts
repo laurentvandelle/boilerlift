@@ -62,16 +62,18 @@ describe('statusCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
-        'lift status → dev (https://n8n.example.com)',
+        'lift status · dev (https://n8n.example.com)',
+        '',
         '~ crm-import    differs from n8n — next deploy overwrites the n8n draft',
         '  → lift deploy',
         '^ daily-report  draft not yet published',
         '  → lift publish daily-report',
         '+ invoice-sync  missing on the instance (workflows/invoice-sync.workflow.ts)',
         '  → lift deploy',
-        '! weekly        archived in n8n — next deploy restores it',
+        '↺ weekly        archived in n8n — next deploy restores it',
         '  → lift deploy',
         '· Hand made     not in my project (h1)',
+        '',
         '1 missing, 1 archived, 1 differ, 1 draft not yet published, 0 up to date, 0 removed, 1 not in my project.',
         '',
       ].join('\n'),
@@ -87,10 +89,12 @@ describe('statusCommand', () => {
 
     expect(result.stdout).toBe(
       [
-        'lift status → dev (https://n8n.example.com)',
+        'lift status · dev (https://n8n.example.com)',
+        '',
         '= weekly      up to date',
         '- old-report  removed from the project — lift clean archives it (old1)',
         '  → lift clean',
+        '',
         '0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 1 removed, 0 not in my project.',
         '',
       ].join('\n'),
@@ -158,7 +162,7 @@ describe('statusCommand', () => {
     const result = await statusCommand.run(TEXT, ctx);
 
     expect(result.stdout).toBe(
-      'lift status → dev (https://n8n.example.com)\n= crm-import  up to date\n0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 0 removed, 0 not in my project.\n',
+      'lift status · dev (https://n8n.example.com)\n\n= crm-import  up to date\n\n0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 0 removed, 0 not in my project.\n',
     );
   });
 
@@ -205,9 +209,11 @@ describe('statusCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
-        'lift status → dev (https://n8n.example.com)',
-        'No workflow yet in ./workflows. Add a workflow file there, then run lift deploy.',
+        'lift status · dev (https://n8n.example.com)',
+        '',
         '· Hand made  not in my project (h1)',
+        '',
+        'No workflow yet in ./workflows. Add a workflow file there, then run lift deploy.',
         '0 missing, 0 archived, 0 differ, 0 draft not yet published, 0 up to date, 0 removed, 1 not in my project.',
         '',
       ].join('\n'),
@@ -223,8 +229,8 @@ describe('statusCommand', () => {
 
     expect(result).toEqual({
       exitCode: 3,
-      stdout: 'lift status → dev (https://n8n.example.com)\n',
-      stderr: '✗ GET /api/v1/workflows/crm1 → unreachable: connection refused\n  → lift ping\n',
+      stdout: 'lift status · dev (https://n8n.example.com)\n',
+      stderr: '✗ GET /api/v1/workflows/crm1 : unreachable: connection refused\n  → lift ping\n',
     });
   });
 
@@ -283,7 +289,7 @@ describe('statusCommand', () => {
     const result = await statusCommand.run({ positionals: [], values: { all: true } }, ctx);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('── dev (https://dev.example.com)\nlift status → dev (https://dev.example.com)\n+ crm-import');
+    expect(result.stdout).toContain('── dev (https://dev.example.com)\nlift status · dev (https://dev.example.com)\n\n+ crm-import');
     expect(result.stdout).toContain('  → lift deploy --target dev');
     expect(result.stdout).toContain('No workflow yet in ./prod. Add a workflow file there, then run lift deploy.');
   });

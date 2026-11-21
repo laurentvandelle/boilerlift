@@ -1,3 +1,4 @@
+import { header, next, sections } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { SyncReport } from '#src/core/credentials/credentials.model';
 
@@ -8,14 +9,14 @@ export interface SyncTarget {
 }
 
 /**
- * The sync of one target: the success line, then one line per missing key, or the failure and its next step. The
+ * The sync of one target: its header, then the success lines and one line per missing key, or the failure and its next step. The
  * --json payload holds the list written and `missing`, or the error.
  */
 export function renderSync(target: SyncTarget, report: SyncReport): TargetRun {
   if (report.status === 'failed') {
     const { error } = report;
     const where = error.kind === 'write-failed' ? error.path : error.call;
-    const message = `Cannot sync the credentials of ${target.name}: ${where} → ${error.detail}\n  → ${error.hint}\n`;
+    const message = sections([`Cannot sync the credentials of ${target.name}: ${where} : ${error.detail}`, `  ${next(error.hint)}`]);
     return {
       target: target.name,
       url: target.instance,
@@ -40,8 +41,8 @@ export function renderSync(target: SyncTarget, report: SyncReport): TargetRun {
     url: target.instance,
     text: {
       exitCode: report.exitCode,
-      stdout: `${lines.join('\n')}\n`,
-      stderr: report.missing.length === 0 ? '' : `${summary}\n`,
+      stdout: sections([header('lift creds sync', target.name, target.instance)], lines),
+      stderr: report.missing.length === 0 ? '' : sections([summary]),
     },
     payload: {
       url: target.instance,

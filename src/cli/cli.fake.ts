@@ -18,6 +18,7 @@ export function fakeContext(overrides: Partial<CommandContext> = {}): CommandCon
     writeLockFile: () => Promise.reject(new Error('writeLockFile was called, but this test does not expect a lock file write')),
     ask: () => Promise.reject(new Error('ask was called, but this test does not expect a question')),
     isInteractive: false,
+    color: false,
     loadCredentialsFiles: () => Promise.resolve([]),
     writeCredentialsFile: () =>
       Promise.reject(new Error('writeCredentialsFile was called, but this test does not expect a credentials file write')),

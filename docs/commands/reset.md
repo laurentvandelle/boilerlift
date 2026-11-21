@@ -33,10 +33,13 @@ After a reset, `lift status` shows the project's workflows as not deployed yet, 
 In a terminal, reset lists the workflows on stderr, then asks for the target name:
 
 ```text
-lift reset → dev (https://n8n.example.com)
-  - crm-import  CRM import (crm1): will be archived
-  - old-report  Old report (old1): already archived in n8n: its entry will be dropped from boilerlift.lock.json
+lift reset · dev (https://n8n.example.com)
+
+- crm-import  CRM import (crm1): will be archived
+= old-report  Old report (old1): already archived in n8n: its entry will be dropped from boilerlift.lock.json
+
 1 workflows of target staging kept
+
 Reset dev? The 2 workflows are archived in n8n and dropped from boilerlift.lock.json.
 Type the target name (dev) to confirm:
 ```
@@ -48,12 +51,15 @@ Without a terminal (stdin is not a TTY), or with `--json`, reset never asks. Unl
 ## Result
 
 ```text
-lift reset → dev (https://n8n.example.com)
-- archived         crm-import  CRM import (crm1)
-= already archived old-report  Old report (old1), entry dropped from boilerlift.lock.json
+lift reset · dev (https://n8n.example.com)
+
+- crm-import  archived  CRM import (crm1)
+= old-report  already archived  Old report (old1), entry dropped from boilerlift.lock.json
+
 1 archived, 1 already archived, 0 not found, 0 failed.
-boilerlift.lock.json updated — commit it.
 1 workflows of target staging kept
+
+→ commit boilerlift.lock.json  it was updated
 ```
 
 A workflow n8n refuses to archive (a key without the `workflow:delete` scope answers 403, or a network error) fails on its own: it keeps its entry, the step to take is printed under it, the others are still removed, and the run exits 5. Run `lift reset --target dev` again once it is fixed.
