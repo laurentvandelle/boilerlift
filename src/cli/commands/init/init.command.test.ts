@@ -8,6 +8,11 @@ const TEMPLATE = [
   { path: 'README.md', text: '# Project\n' },
 ];
 
+const AGENT_TEMPLATE = [
+  { path: '.claude/hooks/guard.ts', text: '// hook\n' },
+  { path: '.claude/settings.json', text: '{}\n' },
+];
+
 describe('initCommand', () => {
   test('Should create every file of the template, then print the next steps, when the folder is empty', async () => {
     const folder = fakeProjectFolder({ template: TEMPLATE });
@@ -65,6 +70,32 @@ describe('initCommand', () => {
       undefined,
       '– README.md (already there, left as it is)',
     ]);
+  });
+
+  test('Should keep the existing Claude Code settings, still create the hook, and say how to add the hook when .claude/settings.json is already there', async () => {
+    const folder = fakeProjectFolder({ template: AGENT_TEMPLATE, existing: ['.claude/settings.json'] });
+
+    const result = await initCommand.run({ positionals: [], values: { json: true } }, fakeContext(folder.context));
+
+    expect([folder.text('.claude/settings.json'), folder.text('.claude/hooks/guard.ts'), JSON.parse(result.stdout)]).toEqual([
+      undefined,
+      '// hook\n',
+      expect.objectContaining({ next: [
+        'npm install',
+        'cp .env.example .env, then fill in N8N_URL and N8N_API_KEY',
+        '.claude/settings.json was already there: to guard the agent, add this entry to its "hooks" → "PreToolUse" list: ' +
+          '{ "matcher": "Bash|Read|Grep", "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.ts\\"" }] }',
+        'npx lift ping',
+      ] }),
+    ]);
+  });
+
+  test('Should print no hook step when init creates .claude/settings.json itself', async () => {
+    const folder = fakeProjectFolder({ template: AGENT_TEMPLATE });
+
+    const result = await initCommand.run({ positionals: [], values: {} }, fakeContext(folder.context));
+
+    expect(result.stdout.includes('PreToolUse')).toBe(false);
   });
 
   test('Should keep writing the other files, mark the failed one and exit 12 when a write fails', async () => {

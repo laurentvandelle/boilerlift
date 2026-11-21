@@ -53,3 +53,8 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Credential key**: the name of one credential in a credential list: the kebab-case slug of its n8n name, with `-2`, `-3`… when names collide, in the order of the n8n ids. Unique within a list.
 - **Credential marker**: what `credential('key')` stores in a node, under the type of the key, in place of the n8n `{ id, name }`. `deploy` resolves it to the `{ id, name }` of the key in the credential list of the target it deploys to, under the type of that list, after checking the id on the instance.
 - **Missing credential**: a key that the workflows of a target use and that the target does not provide: its credential list does not have it, or, for `deploy`, the instance no longer has its id or has it under another type.
+
+### Project setup
+
+- **Agent kit**: the agent instructions, skills and Claude Code guardrails that `lift init` writes into a project: `AGENTS.md` and its routed docs, the `BOILERLIFT:` skills under `.claude/skills/`, which take a workflow request from interview to a deployed draft on `dev`, the Claude Code `PreToolUse` hook in `.claude/hooks/` and the `.claude/settings.json` that wires it and denies reading `.env`. _Avoid_: AI kit, Boilerlift skill.
+- **Guarded command**: a command the agent runs only after the user's yes in the chat: publish, a real clean or reset, a deploy that isn't `-t dev`, or an n8n API write. In Claude Code, the hook of the Agent kit asks the user to approve it once more. _Avoid_: dangerous command, protected action.
