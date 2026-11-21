@@ -46,6 +46,13 @@ function archives(n8n: FakeN8n): string[] {
   return n8n.calls.filter((call) => call.endsWith('/archive'));
 }
 
+function deletes(n8n: FakeN8n): string[] {
+  return n8n.calls.filter((call) => call.startsWith('DELETE '));
+}
+
+const DELETE: CommandInput = { positionals: [], values: { delete: true } };
+const DELETE_YES: CommandInput = { positionals: [], values: { delete: true, yes: true } };
+
 describe('cleanCommand', () => {
   test('Should list the three groups and ask once before archiving when a person runs it in a terminal', async () => {
     const n8n = instance();
@@ -255,5 +262,146 @@ describe('cleanCommand', () => {
 
     expect(result.exitCode).toBe(1);
     expect(n8n.calls).toEqual([]);
+  });
+
+  test('Should ask once, saying the deletion is permanent, before deleting when --delete is given in a terminal', async () => {
+    const n8n = instance();
+    const stdin = fakeAnswer('n');
+
+    await cleanCommand.run(DELETE, context(n8n, lockFile(), { isInteractive: true, ask: stdin.ask }));
+
+    expect(stdin.prompts).toEqual([
+      [
+        'lift clean → dev (https://n8n.example.com)',
+        '  - legacy      Legacy (leg1): will be deleted for good',
+        '  - old-report  Old report (old1): will be deleted for good',
+        'Delete these 2 workflows for good? This cannot be undone. [y/N] ',
+      ].join('\n'),
+    ]);
+  });
+
+  test('Should delete nothing, archive nothing and exit 0 with "Nothing deleted." when the --delete answer is not yes', async () => {
+    const n8n = instance();
+    const lock = lockFile();
+
+    const result = await cleanCommand.run(DELETE, context(n8n, lock, { isInteractive: true, ask: fakeAnswer('no').ask }));
+
+    expect(result).toEqual({ exitCode: 0, stdout: 'Nothing deleted.\n', stderr: '' });
+    expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(lock.writes).toEqual([]);
+  });
+
+  test('Should archive then delete each removed workflow, already archived ones too, and drop their entries when --delete --yes is given', async () => {
+    const n8n = instance();
+    const lock = lockFile();
+
+    const result = await cleanCommand.run(DELETE_YES, context(n8n, lock));
+
+    expect(result).toMatchObject({ exitCode: 0, stderr: '' });
+    expect(result.stdout).toContain(
+      [
+        '- deleted          legacy      Legacy (leg1)',
+        '- deleted          old-report  Old report (old1)',
+        '2 deleted, 0 not found, 0 failed.',
+        'boilerlift.lock.json updated — commit it.',
+      ].join('\n'),
+    );
+    expect(archives(n8n)).toEqual(['POST /api/v1/workflows/old1/archive']);
+    expect(deletes(n8n)).toEqual(['DELETE /api/v1/workflows/leg1', 'DELETE /api/v1/workflows/old1']);
+    expect(lock.text()).toBe(fakeLockText({ 'crm-import': 'crm1' }));
+  });
+
+  test('Should list, delete nothing and exit 11 with lift clean --delete --yes next when --delete is given without a terminal', async () => {
+    const n8n = instance();
+    const lock = lockFile();
+
+    const result = await cleanCommand.run(DELETE, context(n8n, lock));
+
+    expect(result).toMatchObject({ exitCode: 11, stderr: 'Confirmation needed: nothing was deleted.\nNext: lift clean --delete --yes\n' });
+    expect(result.stdout).toContain('Confirmation needed: nothing was deleted. lift clean --delete --yes deletes the 2 removed workflows for good.\n');
+    expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(lock.writes).toEqual([]);
+  });
+
+  test('Should plan each removed workflow as to-delete with lift clean --delete --yes next when --delete --json is given', async () => {
+    const n8n = instance();
+
+    const result = await cleanCommand.run({ positionals: [], values: { delete: true, json: true } }, context(n8n, lockFile(), { isInteractive: true }));
+
+    expect(result.exitCode).toBe(11);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      stage: 'confirmation-needed',
+      removed: [
+        { stableName: 'legacy', state: 'to-delete', next: 'lift clean --delete --yes' },
+        { stableName: 'old-report', state: 'to-delete', next: 'lift clean --delete --yes' },
+      ],
+    });
+  });
+
+  test('Should give each result the deleted action and a summary with deleted when --delete --json --yes is given', async () => {
+    const n8n = instance();
+
+    const result = await cleanCommand.run({ positionals: [], values: { delete: true, json: true, yes: true } }, context(n8n));
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      stage: 'cleaned',
+      results: [
+        { stableName: 'legacy', action: 'deleted', next: null },
+        { stableName: 'old-report', action: 'deleted', next: null },
+      ],
+      summary: { deleted: 2, notFound: 0, failed: 0 },
+      lockFileUpdated: true,
+      exitCode: 0,
+    });
+  });
+
+  test('Should list what it would delete and change nothing on the instance when --dry-run --delete is given', async () => {
+    const n8n = instance();
+    const lock = lockFile();
+
+    const result = await cleanCommand.run({ positionals: [], values: { delete: true, 'dry-run': true } }, context(n8n, lock));
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('  - old-report  Old report (old1): will be deleted for good\n');
+    expect(result.stdout).toContain('Dry run: nothing was deleted. lift clean --delete --yes deletes the 2 removed workflows for good.\n');
+    expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(lock.writes).toEqual([]);
+  });
+
+  test('Should keep the entry, exit 5 and give lift clean --delete next when the delete fails after the archive', async () => {
+    const n8n = fakeN8n({
+      workflows: [fakeN8nWorkflow(OLD, { id: 'old1' }), fakeN8nWorkflow(LEGACY, { id: 'leg1', isArchived: true })],
+      failures: [httpError('DELETE /api/v1/workflows/old1', 500, 'Internal error')],
+    });
+    const lock = lockFile();
+
+    const result = await cleanCommand.run({ positionals: [], values: { delete: true, yes: true, json: true } }, context(n8n, lock));
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      results: [
+        { stableName: 'legacy', action: 'deleted' },
+        { stableName: 'old-report', action: 'failed', error: { kind: 'delete-failed', cause: 'rejected' }, next: 'lift clean --delete' },
+      ],
+      exitCode: 5,
+    });
+    expect(n8n.workflows.find(({ id }) => id === 'old1')).toMatchObject({ isArchived: true });
+    expect(lock.text()).toBe(fakeLockText({ 'crm-import': 'crm1', 'old-report': 'old1' }));
+  });
+
+  test('Should name the workflow:delete scope under the line when a delete is refused with 403', async () => {
+    const n8n = fakeN8n({
+      workflows: [fakeN8nWorkflow(OLD, { id: 'old1', isArchived: true })],
+      failures: [httpError('DELETE /api/v1/workflows/old1', 403, 'Forbidden')],
+    });
+
+    const result = await cleanCommand.run(DELETE_YES, context(n8n));
+
+    expect(result).toMatchObject({ exitCode: 5, stderr: 'Not cleaned: old-report.\nNext: follow the step under each line, then run lift clean --delete again.\n' });
+    expect(result.stdout).toContain(
+      [
+        '✗ failed           old-report  DELETE /api/v1/workflows/old1 → HTTP 403: Forbidden',
+        '                   → The workflow stays archived. Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift clean --delete again',
+      ].join('\n'),
+    );
   });
 });
