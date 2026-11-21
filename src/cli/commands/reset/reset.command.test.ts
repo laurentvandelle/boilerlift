@@ -84,10 +84,13 @@ describe('resetCommand', () => {
 
     expect(stdin.prompts).toEqual([
       [
-        'lift reset → dev (https://n8n.example.com)',
-        '  - crm-import  CRM import (crm1): will be archived',
-        '  - old-report  Old report (old1): already archived in n8n: its entry will be dropped from boilerlift.lock.json',
+        'lift reset · dev (https://n8n.example.com)',
+        '',
+        '- crm-import  CRM import (crm1): will be archived',
+        '= old-report  Old report (old1): already archived in n8n: its entry will be dropped from boilerlift.lock.json',
+        '',
         '1 workflows of target staging kept',
+        '',
         'Reset dev? The 2 workflows are archived in n8n and dropped from boilerlift.lock.json.',
         'Type the target name (dev) to confirm: ',
       ].join('\n'),
@@ -103,12 +106,15 @@ describe('resetCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: [
-        'lift reset → dev (https://n8n.example.com)',
-        '- archived         crm-import  CRM import (crm1)',
-        '= already archived old-report  Old report (old1), entry dropped from boilerlift.lock.json',
+        'lift reset · dev (https://n8n.example.com)',
+        '',
+        '- crm-import  archived  CRM import (crm1)',
+        '= old-report  already archived  Old report (old1), entry dropped from boilerlift.lock.json',
+        '',
         '1 archived, 1 already archived, 0 not found, 0 failed.',
-        'boilerlift.lock.json updated — commit it.',
         '1 workflows of target staging kept',
+        '',
+        '→ commit boilerlift.lock.json  it was updated',
         '',
       ].join('\n'),
       stderr: '',
@@ -151,7 +157,7 @@ describe('resetCommand', () => {
 
     const result = await resetCommand.run(DEV, context(n8n));
 
-    expect(result).toMatchObject({ exitCode: 11, stderr: 'Confirmation needed: nothing was archived.\nNext: lift reset --target dev --yes\n' });
+    expect(result).toMatchObject({ exitCode: 11, stderr: 'Confirmation needed: nothing was archived.\n\n→ lift reset --target dev --yes\n' });
     expect(writes(n8n)).toEqual([]);
   });
 
@@ -180,7 +186,7 @@ describe('resetCommand', () => {
 
     expect(result).toEqual({
       exitCode: 0,
-      stdout: 'lift reset → dev (https://n8n.example.com)\nNothing to remove on dev.\n1 workflows of target staging kept\n',
+      stdout: 'lift reset · dev (https://n8n.example.com)\n\nNothing to remove on dev.\n1 workflows of target staging kept\n',
       stderr: '',
     });
   });
@@ -199,7 +205,7 @@ describe('resetCommand', () => {
     const result = await resetCommand.run({ positionals: [], values: { target: 'dev', 'dry-run': true } }, context(n8n));
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('Dry run: nothing was archived. lift reset --target dev archives the 2 workflows.\n');
+    expect(result.stdout).toContain('Dry run: nothing was archived.\n\n→ lift reset --target dev  archives the 2 workflows\n');
     expect(writes(n8n)).toEqual([]);
   });
 
@@ -229,7 +235,7 @@ describe('resetCommand', () => {
 
     const result = await resetCommand.run(DEV_YES, context(n8n, lock));
 
-    expect(result.stdout).toContain('? not found        crm-import  crm1 is not in n8n, entry dropped from boilerlift.lock.json\n');
+    expect(result.stdout).toContain('? crm-import  not found  crm1 is not in n8n, entry dropped from boilerlift.lock.json\n');
     expect(JSON.parse(lock.text() ?? '')).toEqual({ version: 1, instances: {} });
   });
 
@@ -244,10 +250,10 @@ describe('resetCommand', () => {
 
     expect(result).toMatchObject({
       exitCode: 5,
-      stderr: 'Not reset: crm-import.\nNext: follow the step under each line, then run lift reset --target dev again.\n',
+      stderr: 'Not reset: crm-import.\n\n→ lift reset --target dev  once the step under each line is done\n',
     });
     expect(result.stdout).toContain(
-      '                   → Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift reset --target dev again',
+      '  → Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run lift reset --target dev again',
     );
     expect(lock.text()).toBe(fakeLockText({ 'crm-import': 'crm1' }));
   });
@@ -260,7 +266,7 @@ describe('resetCommand', () => {
     expect(result).toEqual({
       exitCode: 3,
       stdout: '',
-      stderr: '✗ GET /api/v1/workflows/crm1 → unreachable: connection refused\n  → lift ping --target dev\nNothing was archived.\n',
+      stderr: '✗ GET /api/v1/workflows/crm1 : unreachable: connection refused\n  → lift ping --target dev\n\nNothing was archived.\n',
     });
   });
 

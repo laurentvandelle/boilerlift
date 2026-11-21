@@ -55,7 +55,7 @@ describe('pingCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift ping → dev
+      stdout: `lift ping · dev
   URL      https://n8n.example.com (from boilerlift.config.ts)
   API key  •••• (set, from boilerlift.config.ts)
 
@@ -116,7 +116,7 @@ All checks passed.
 
     expect(result.exitCode).toBe(3);
     expect(result.stdout).toContain('✗ URL      unreachable: connection refused');
-    expect(result.stdout).toContain('           → Check the url of the target in boilerlift.config.ts');
+    expect(result.stdout).toContain('  → Check the url of the target in boilerlift.config.ts');
     expect(result.stderr).toBe('1 check failed. Exit code 3.\n');
   });
 
@@ -147,7 +147,7 @@ All checks passed.
     expect(result.exitCode).toBe(4);
     expect(result.stdout).toContain('✗ API key  rejected (GET /api/v1/workflows → 401)');
     expect(result.stdout).toContain(
-      '           → Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads',
+      '  → Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads',
     );
     expect(result.stderr).toBe('1 check failed. Exit code 4.\n');
   });
@@ -202,7 +202,7 @@ All checks passed.
 
     const result = await pingCommand.run({ positionals: [], values: { target: 'prod' } }, ctx);
 
-    expect(result.stdout).toContain('lift ping → prod\n  URL      https://prod.example.com');
+    expect(result.stdout).toContain('lift ping · prod\n  URL      https://prod.example.com');
     expect(dev.requests).toEqual([]);
   });
 

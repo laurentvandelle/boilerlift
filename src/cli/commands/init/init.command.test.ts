@@ -68,7 +68,7 @@ describe('initCommand', () => {
     expect([result.exitCode, folder.text('README.md'), result.stdout.split('\n')[2]]).toEqual([
       0,
       undefined,
-      '– README.md (already there, left as it is)',
+      '– README.md     already there, left as it is',
     ]);
   });
 
@@ -105,8 +105,8 @@ describe('initCommand', () => {
 
     expect([result.exitCode, result.stdout.split('\n')[1], result.stderr, folder.text('README.md')]).toEqual([
       12,
-      '✗ package.json: EACCES: permission denied',
-      '1 of 3 files could not be written. Run lift init again to write them.\n',
+      '✗ package.json  EACCES: permission denied',
+      '1 of 3 files could not be written.\n\n→ lift init  writes them\n',
       '# Project\n',
     ]);
   });

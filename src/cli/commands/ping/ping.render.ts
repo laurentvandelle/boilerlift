@@ -1,24 +1,28 @@
+import { Row, SYMBOLS, header, next, rows, sections, warning } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { Target } from '#src/core/config/config.model';
 import { CHECK_LABELS } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
 
-const STATUS_MARKS: Record<Check['status'], string> = { ok: '✓', failed: '✗', skipped: '–' };
+const STATUS_SYMBOLS: Record<Check['status'], Row['symbol']> = { ok: SYMBOLS.ok, failed: SYMBOLS.failed, skipped: SYMBOLS.skipped };
 
 /** The ping of one target: the configuration it read, one line per check, then the summary. The API key never shows. */
 export function renderTargetReport(target: Target, report: ConnectionReport): TargetRun {
   const { url, apiKey } = target.connection;
-  const header = [
-    `lift ping → ${target.name}`,
+  const top = [
+    header('lift ping', target.name),
     `  URL      ${url.value} (from ${url.source})`,
     `  API key  •••• (set, from ${apiKey.source})`,
-    ...report.warnings.map((warning) => `  ! ${warning}`),
+    ...report.warnings.map((text) => `  ${warning(text)}`),
   ];
-  const width = Math.max(...Object.values(CHECK_LABELS).map((label) => label.length)) + 2;
-  const checks = report.checks.flatMap((check) => {
-    const line = `${STATUS_MARKS[check.status]} ${CHECK_LABELS[check.name].padEnd(width)}${check.detail}`;
-    return check.status === 'failed' ? [line, `${' '.repeat(width + 2)}→ ${check.hint}`] : [line];
-  });
+  const checks = rows(
+    report.checks.map((check) => ({
+      symbol: STATUS_SYMBOLS[check.status],
+      name: CHECK_LABELS[check.name],
+      state: check.detail,
+      followUps: check.status === 'failed' ? [next(check.hint)] : [],
+    })),
+  );
   const failures = report.checks.filter((check) => check.status === 'failed').length;
   const summary =
     failures === 0
@@ -29,8 +33,8 @@ export function renderTargetReport(target: Target, report: ConnectionReport): Ta
     url: url.value,
     text: {
       exitCode: report.exitCode,
-      stdout: `${header.join('\n')}\n\n${checks.join('\n')}\n\n${summary}\n`,
-      stderr: failures === 0 ? '' : `${summary}\n`,
+      stdout: sections(top, checks, [summary]),
+      stderr: failures === 0 ? '' : sections([summary]),
     },
     payload: {
       url: url.value,

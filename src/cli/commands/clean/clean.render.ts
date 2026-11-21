@@ -1,4 +1,5 @@
 import { CliResult } from '#src/cli/cli.model';
+import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { CleanGroups, CleanPlan } from '#src/core/clean/clean.model';
 import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
@@ -50,12 +51,19 @@ const STATE_LABELS: Record<WorkflowToRemove['state'], string> = {
   'not-found': `not found in n8n: its entry will be dropped from ${LOCK_FILE}`,
 };
 
-const MARKS: Record<RemovalResult['action'], string> = {
-  archived: '-',
-  'already-archived': '=',
-  deleted: '-',
-  'not-found': '?',
-  failed: '✗',
+const STATE_SYMBOLS: Record<WorkflowToRemove['state'], Row['symbol']> = {
+  'to-archive': SYMBOLS.removed,
+  'to-delete': SYMBOLS.removed,
+  'already-archived': SYMBOLS.unchanged,
+  'not-found': SYMBOLS.notFound,
+};
+
+const SYMBOL_OF: Record<RemovalResult['action'], Row['symbol']> = {
+  archived: SYMBOLS.removed,
+  'already-archived': SYMBOLS.unchanged,
+  deleted: SYMBOLS.removed,
+  'not-found': SYMBOLS.notFound,
+  failed: SYMBOLS.failed,
 };
 
 const LABELS: Record<RemovalResult['action'], string> = {
@@ -65,9 +73,6 @@ const LABELS: Record<RemovalResult['action'], string> = {
   'not-found': 'not found',
   failed: 'failed',
 };
-
-const ACTION_WIDTH = 1 + Math.max(...Object.values(LABELS).map((label) => label.length));
-const INDENT = ' '.repeat(2 + ACTION_WIDTH);
 
 /** `command`, with `--target <name>` when the command line named targets. */
 function withTarget(command: string, target: CleanTarget, format: CleanFormat): string {
@@ -79,8 +84,8 @@ function cleanAgain(target: CleanTarget, format: CleanFormat): string {
   return withTarget(format.mode === 'delete' ? 'lift clean --delete' : 'lift clean', target, format);
 }
 
-function header(target: CleanTarget): string {
-  return `lift clean → ${target.name} (${target.instance})`;
+function heading(target: CleanTarget): string {
+  return header('lift clean', target.name, target.instance);
 }
 
 /** A lock file that cannot be read: exit 1, nothing was archived, the problem and the fix on stderr. */
@@ -92,7 +97,10 @@ export function renderInvalidLockFile(target: CleanTarget, error: LockFileError)
     text: {
       exitCode: EXIT_USAGE,
       stdout: '',
-      stderr: `${message}\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run lift clean again.\n`,
+      stderr: sections(
+        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run lift clean again.')] }]),
+        [message],
+      ),
     },
     payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
     outcome: `invalid ${LOCK_FILE}, nothing archived`,
@@ -106,9 +114,9 @@ export function renderStopped(target: CleanTarget, plan: Extract<CleanPlan, { ki
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: plan.exitCode, stdout: '', stderr: `✗ ${error.call} → ${error.detail}\n  → ${ping}\nNothing was ${DONE[format.mode]}.\n` },
+    text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), [`Nothing was ${DONE[format.mode]}.`]) },
     payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
-    outcome: `stopped: ${error.call} → ${error.detail}`,
+    outcome: `stopped: ${error.call} : ${error.detail}`,
   };
 }
 
@@ -118,7 +126,7 @@ export function renderHeldBack(target: CleanTarget, format: CleanFormat): Target
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_OK, stdout: `${header(target)}\n${message}\n`, stderr: '' },
+    text: { exitCode: EXIT_OK, stdout: sections([heading(target)], [message]), stderr: '' },
     payload: { instance: target.instance, stage: 'held-back', message, exitCode: EXIT_OK },
     outcome: `nothing ${DONE[format.mode]}, another target has a problem`,
   };
@@ -129,27 +137,29 @@ function nameOf(workflow: { id: string; name: string | null }): string {
 }
 
 function removedLines(removed: WorkflowToRemove[]): string[] {
-  const width = Math.max(0, ...removed.map(({ stableName }) => stableName.length)) + 2;
-  return removed.map((workflow) => {
-    const name = nameOf({ id: workflow.id, name: workflow.state === 'not-found' ? null : workflow.name });
-    return `  - ${workflow.stableName.padEnd(width)}${name}: ${STATE_LABELS[workflow.state]}`;
-  });
+  return rows(
+    removed.map((workflow) => {
+      const name = nameOf({ id: workflow.id, name: workflow.state === 'not-found' ? null : workflow.name });
+      return { symbol: STATE_SYMBOLS[workflow.state], name: workflow.stableName, state: `${name}: ${STATE_LABELS[workflow.state]}` };
+    }),
+  );
 }
 
-/** The two groups clean never touches: the files not deployed yet, with `lift deploy` next, and the unmanaged workflows. */
-function otherGroupLines({ notDeployed, unmanaged }: CleanGroups, target: CleanTarget, format: CleanFormat): string[] {
-  const lines: string[] = [];
-  if (notDeployed.length > 0) {
-    const width = Math.max(...notDeployed.map(({ stableName }) => stableName.length)) + 2;
-    lines.push('Not deployed yet:');
-    lines.push(...notDeployed.map(({ stableName, path }) => `  + ${stableName.padEnd(width)}${path}`));
-    lines.push(`    → ${withTarget('lift deploy', target, format)}`);
-  }
-  if (unmanaged.length > 0) {
-    lines.push('Not in my project (clean never touches them):');
-    lines.push(...unmanaged.map((workflow) => `  · ${nameOf(workflow)}`));
-  }
-  return lines;
+/** The two groups clean never touches, one section each: the files not deployed yet, and the unmanaged workflows. */
+function otherGroups({ notDeployed, unmanaged }: CleanGroups): string[][] {
+  return [
+    notDeployed.length === 0
+      ? []
+      : ['Not deployed yet:', ...rows(notDeployed.map(({ stableName, path }) => ({ symbol: SYMBOLS.created, name: stableName, state: path })))],
+    unmanaged.length === 0
+      ? []
+      : ['Not in my project (clean never touches them):', ...rows(unmanaged.map((workflow) => ({ symbol: SYMBOLS.unmanaged, name: nameOf(workflow), state: '' })))],
+  ];
+}
+
+/** `lift deploy` as a next step, when some files are not deployed yet. */
+function deployStep({ notDeployed }: CleanGroups, target: CleanTarget, format: CleanFormat): string[] {
+  return notDeployed.length === 0 ? [] : [next(withTarget('lift deploy', target, format), 'deploys the files not deployed yet')];
 }
 
 function otherGroupsPayload({ notDeployed, unmanaged }: CleanGroups, target: CleanTarget, format: CleanFormat): Record<string, unknown> {
@@ -175,30 +185,20 @@ export function renderListing({ target, groups }: PlannedTarget, stage: ListingS
   const yes = withTarget(deleting ? 'lift clean --delete --yes' : 'lift clean --yes', target, format);
   const exitCode = nothing || stage === 'dry-run' ? EXIT_OK : EXIT_CONFIRMATION_NEEDED;
   const done = DONE[format.mode];
-  const does = (command: string): string => (deleting ? `${command} deletes the ${count(removed)} for good` : `${command} archives the ${count(removed)}`);
-  const message = nothing
-    ? `Nothing to clean: every workflow ${LOCK_FILE} records still has its file.`
-    : stage === 'dry-run'
-      ? `Dry run: nothing was ${done}. ${does(deleting ? yes : withTarget('lift clean', target, format))}.`
-      : `Confirmation needed: nothing was ${done}. ${does(yes)}.`;
-  const stdout = [header(target)];
-  if (nothing) {
-    stdout.push(message);
-  } else {
-    stdout.push('Removed from the project:', ...removedLines(removed));
-  }
-  stdout.push(...otherGroupLines(groups, target, format));
-  if (!nothing) {
-    stdout.push(message);
-  }
-  const next = stage === 'dry-run' && !deleting ? withTarget('lift clean', target, format) : yes;
+  const purpose = deleting ? `deletes the ${count(removed)} for good` : `archives the ${count(removed)}`;
+  const command = stage === 'dry-run' && !deleting ? withTarget('lift clean', target, format) : yes;
+  const stageLine = stage === 'dry-run' ? `Dry run: nothing was ${done}.` : `Confirmation needed: nothing was ${done}.`;
+  // The --json message keeps its sentence; the text puts the command in the next-step section.
+  const message = nothing ? `Nothing to clean: every workflow ${LOCK_FILE} records still has its file.` : `${stageLine} ${command} ${purpose}.`;
+  const list = nothing ? [] : ['Removed from the project:', ...removedLines(removed)];
+  const steps = [...(nothing ? [] : [next(command, purpose)]), ...deployStep(groups, target, format)];
   return {
     target: target.name,
     url: target.instance,
     text: {
       exitCode,
-      stdout: `${stdout.join('\n')}\n`,
-      stderr: exitCode === EXIT_CONFIRMATION_NEEDED ? `Confirmation needed: nothing was ${done}.\nNext: ${yes}\n` : '',
+      stdout: sections([heading(target)], list, ...otherGroups(groups), [nothing ? message : stageLine], steps),
+      stderr: exitCode === EXIT_CONFIRMATION_NEEDED ? sections([`Confirmation needed: nothing was ${done}.`], [next(yes)]) : '',
     },
     payload: {
       instance: target.instance,
@@ -209,7 +209,7 @@ export function renderListing({ target, groups }: PlannedTarget, stage: ListingS
         id: workflow.id,
         name: workflow.state === 'not-found' ? null : workflow.name,
         state: workflow.state,
-        next,
+        next: command,
       })),
       ...otherGroupsPayload(groups, target, format),
       exitCode,
@@ -223,11 +223,8 @@ export function renderListing({ target, groups }: PlannedTarget, stage: ListingS
  * deleting.
  */
 export function renderConfirmation(planned: PlannedTarget[], mode: RemovalMode): string {
-  const lines: string[] = [];
   const withRemoved = planned.filter(({ groups }) => groups.removed.length > 0);
-  for (const { target, groups } of withRemoved) {
-    lines.push(header(target), ...removedLines(groups.removed));
-  }
+  const lines = withRemoved.map(({ target, groups }) => [heading(target), '', ...removedLines(groups.removed)].join('\n'));
   const removed = withRemoved.flatMap(({ groups }) => groups.removed);
   const where = withRemoved.length > 1 ? ` on ${withRemoved.length} targets` : '';
   switch (mode) {
@@ -240,7 +237,7 @@ export function renderConfirmation(planned: PlannedTarget[], mode: RemovalMode):
     break;
   }
   }
-  return lines.join('\n');
+  return lines.join('\n\n');
 }
 
 /** The answer was not yes (or stdin closed): exit 0, nothing was archived or deleted. */
@@ -318,7 +315,7 @@ function detailOf(result: RemovalResult): string {
   case 'not-found':
     return `${result.id} is not in n8n, entry dropped from ${LOCK_FILE}`;
   case 'failed':
-    return `${result.error.call} → ${result.error.detail}`;
+    return '';
   }
 }
 
@@ -348,26 +345,26 @@ export function renderReport({ target, groups }: PlannedTarget, report: RemovalR
   }
   const summary = summarize(report.results, format.mode);
   const dropped = report.results.some(({ action }) => action !== 'failed');
-  const stdout = [header(target)];
-  const width = Math.max(...report.results.map(({ stableName }) => stableName.length)) + 2;
-  for (const result of report.results) {
-    stdout.push(`${MARKS[result.action]} ${LABELS[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${detailOf(result)}`);
-    const hint = hintOf(result, target, format);
-    if (hint !== undefined) {
-      stdout.push(`${INDENT}→ ${hint}`);
-    }
-  }
-  stdout.push(summaryLine(summary));
-  if (dropped) {
-    stdout.push(`${LOCK_FILE} updated — commit it.`);
-  }
-  stdout.push(...otherGroupLines(groups, target, format));
+  const list = rows(
+    report.results.map((result) => {
+      const hint = hintOf(result, target, format);
+      return {
+        symbol: SYMBOL_OF[result.action],
+        name: result.stableName,
+        state: result.action === 'failed' ? LABELS.failed : `${LABELS[result.action]}  ${detailOf(result)}`,
+        followUps: [...(result.action === 'failed' ? cause(result.error.call, result.error.detail) : []), ...(hint === undefined ? [] : [next(hint)])],
+      };
+    }),
+  );
+  const steps = [...(dropped ? [next(`commit ${LOCK_FILE}`, 'it was updated')] : []), ...deployStep(groups, target, format)];
+  const stdout = sections([heading(target)], list, ...otherGroups(groups), [summaryLine(summary)], steps);
   const failed = report.results.filter(({ action }) => action === 'failed').map(({ stableName }) => stableName);
-  const stderr = failed.length === 0 ? '' : `Not cleaned: ${failed.join(', ')}.\nNext: follow the step under each line, then run ${format.mode === 'delete' ? 'lift clean --delete' : 'lift clean'} again.\n`;
+  const again = format.mode === 'delete' ? 'lift clean --delete' : 'lift clean';
+  const stderr = failed.length === 0 ? '' : sections([`Not cleaned: ${failed.join(', ')}.`], [next(again, 'once the step under each line is done')]);
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr },
+    text: { exitCode: report.exitCode, stdout, stderr },
     payload: {
       instance: target.instance,
       stage: 'cleaned',

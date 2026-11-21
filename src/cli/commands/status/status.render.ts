@@ -1,4 +1,5 @@
 import { CliResult } from '#src/cli/cli.model';
+import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { EXIT_USAGE } from '#src/core/common/exit-codes';
@@ -20,14 +21,14 @@ export interface StatusFormat {
   managed: boolean;
 }
 
-const MARKS: Record<WorkflowState, string> = {
-  missing: '+',
-  archived: '!',
-  differs: '~',
-  'draft-pending': '^',
-  'up-to-date': '=',
-  removed: '-',
-  unmanaged: '·',
+const SYMBOL_OF: Record<WorkflowState, Row['symbol']> = {
+  missing: SYMBOLS.created,
+  archived: SYMBOLS.restored,
+  differs: SYMBOLS.updated,
+  'draft-pending': SYMBOLS.published,
+  'up-to-date': SYMBOLS.unchanged,
+  removed: SYMBOLS.removed,
+  unmanaged: SYMBOLS.unmanaged,
 };
 
 const LABELS: Record<WorkflowState, string> = {
@@ -65,11 +66,11 @@ function nextCommand(status: WorkflowStatus, target: StatusTarget, format: Statu
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
 export function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]): TargetRun {
   const message = 'Invalid workflow files. Status cannot compare them.';
-  const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
+  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n${lines.join('\n')}\n` },
+    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
     payload: {
       instance: target.instance,
       error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
@@ -88,7 +89,10 @@ export function renderInvalidLockFile(target: StatusTarget, error: LockFileError
     text: {
       exitCode: EXIT_USAGE,
       stdout: '',
-      stderr: `${message}\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run status again.\n`,
+      stderr: sections(
+        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run status again.')] }]),
+        [message],
+      ),
     },
     payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
     outcome: `invalid ${LOCK_FILE}`,
@@ -123,7 +127,7 @@ export function renderStatus(target: StatusTarget, report: StatusReport, format:
       error: error === undefined ? null : { kind: error.kind, call: error.call, detail: error.detail, next: ping },
       exitCode: report.exitCode,
     },
-    outcome: error === undefined ? summaryLine(summary) : `stopped: ${error.call} → ${error.detail}`,
+    outcome: error === undefined ? summaryLine(summary) : `stopped: ${error.call} : ${error.detail}`,
   };
 }
 
@@ -147,24 +151,20 @@ function workflowPayload(status: WorkflowStatus, target: StatusTarget, format: S
 }
 
 function renderText(target: StatusTarget, report: StatusReport, format: StatusFormat, message: string | undefined): CliResult {
-  const stdout = [`lift status → ${target.name} (${target.instance})`];
-  if (message !== undefined) {
-    stdout.push(message);
-  }
+  const top = [header('lift status', target.name, target.instance)];
+  const lead = message === undefined ? [] : [message];
   const { error } = report;
   if (error !== undefined) {
-    const stderr = `✗ ${error.call} → ${error.detail}\n  → ${withTarget('lift ping', target, format)}\n`;
-    return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr };
+    const stop = stopped(error.call, error.detail, [next(withTarget('lift ping', target, format))]);
+    return { exitCode: report.exitCode, stdout: sections(top, lead), stderr: sections(stop) };
   }
-  const titles = report.workflows.map(titleOf);
-  const width = Math.max(0, ...titles.map((title) => title.length)) + 2;
-  report.workflows.forEach((status, index) => {
-    const line = `${MARKS[status.state]} ${(titles[index] ?? '').padEnd(width)}${detailOf(status)}`;
-    const next = nextCommand(status, target, format);
-    stdout.push(line, ...(next === null ? [] : [`  → ${next}`]));
-  });
-  stdout.push(summaryLine(summarize(report.workflows)));
-  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: '' };
+  const list = rows(
+    report.workflows.map((status) => {
+      const command = nextCommand(status, target, format);
+      return { symbol: SYMBOL_OF[status.state], name: titleOf(status), state: detailOf(status), followUps: command === null ? [] : [next(command)] };
+    }),
+  );
+  return { exitCode: report.exitCode, stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
 }
 
 /** A project workflow by its stable name; another one by its name in n8n. */

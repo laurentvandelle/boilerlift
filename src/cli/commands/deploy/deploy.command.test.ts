@@ -98,13 +98,17 @@ describe('deployCommand', () => {
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy → dev (https://n8n.example.com)
-~ updated        crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= skipped        daily-report   unchanged
-+ created        invoice-sync   workflows/invoice-sync.workflow.ts
-1 created, 1 updated, 0 restored, 1 skipped, 0 failed. Run lift publish to publish the drafts.
+      stdout: `lift deploy · dev (https://n8n.example.com)
+
+~ crm-import    updated  workflows/crm/crm-import.json (draft; published version still running)
+= daily-report  skipped  unchanged
++ invoice-sync  created  workflows/invoice-sync.workflow.ts
+
+1 created, 1 updated, 0 restored, 1 skipped, 0 failed.
 Tag boilerlift:dev added to 3 workflows
-boilerlift.lock.json updated — commit it
+
+→ lift publish  publishes the drafts
+→ commit boilerlift.lock.json  it was updated
 `,
     });
   });
@@ -205,15 +209,51 @@ boilerlift.lock.json updated — commit it
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(5);
-    expect(result.stdout).toBe(`lift deploy → dev (https://n8n.example.com)
-✗ failed         crm-import     PUT /api/v1/workflows/crm1 → HTTP 500: boom
-                 → ${RETRY_HINT}
-+ created        daily-report   workflows/daily-report.json
-+ created        invoice-sync   workflows/invoice-sync.workflow.ts
-2 created, 0 updated, 0 restored, 0 skipped, 1 failed. Run lift publish to publish the drafts.
+    expect(result.stdout).toBe(`lift deploy · dev (https://n8n.example.com)
+
+✗ crm-import    failed
+  PUT /api/v1/workflows/crm1 : HTTP 500: boom
+  → ${RETRY_HINT}
++ daily-report  created  workflows/daily-report.json
++ invoice-sync  created  workflows/invoice-sync.workflow.ts
+
+2 created, 0 updated, 0 restored, 0 skipped, 1 failed.
 Tag boilerlift:dev added to 2 workflows
-boilerlift.lock.json updated — commit it
+
+→ lift publish  publishes the drafts
+→ commit boilerlift.lock.json  it was updated
 `);
+  });
+
+  test('Should colour the failure red, the new workflows green and the next steps cyan when colour is on', async () => {
+    const n8n = failingUpdateInstance();
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES), color: true }, crmLock());
+
+    const result = await deployCommand.run(TEXT, ctx);
+
+    expect(result.stdout).toBe(`lift deploy · dev \u001b[2m(https://n8n.example.com)\u001b[22m
+
+\u001b[31m✗\u001b[39m crm-import    failed
+  \u001b[31mPUT /api/v1/workflows/crm1 : HTTP 500: boom\u001b[39m
+  \u001b[36m→ ${RETRY_HINT}\u001b[39m
+\u001b[32m+\u001b[39m daily-report  created  workflows/daily-report.json
+\u001b[32m+\u001b[39m invoice-sync  created  workflows/invoice-sync.workflow.ts
+
+2 created, 0 updated, 0 restored, 0 skipped, 1 failed.
+Tag boilerlift:dev added to 2 workflows
+
+\u001b[36m→ lift publish\u001b[39m  publishes the drafts
+\u001b[36m→ commit boilerlift.lock.json\u001b[39m  it was updated
+`);
+  });
+
+  test('Should print the JSON report without colour when colour is on', async () => {
+    const n8n = failingUpdateInstance();
+    const ctx = context({ fetch: n8n.fetch, loadWorkflowFiles: () => Promise.resolve(FILES), color: true }, crmLock());
+
+    const result = await deployCommand.run(JSON_INPUT, ctx);
+
+    expect(result.stdout).not.toContain('\u001b[');
   });
 
   test('Should recap the failed workflow on stderr when one workflow fails', async () => {
@@ -223,7 +263,8 @@ boilerlift.lock.json updated — commit it
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.stderr).toBe(`Failed: crm-import.
-Next: fix each failure with the hint under its line, then run deploy again.
+
+→ lift deploy  once each failure is fixed with the step under its line
 `);
   });
 
@@ -258,11 +299,14 @@ Next: fix each failure with the hint under its line, then run deploy again.
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(4);
-    expect(result.stdout).toBe(`lift deploy → dev (https://n8n.example.com)
-✗ failed         crm-import     POST /api/v1/workflows → HTTP 401: boom
-                 → ${KEY_HINT}
-- not-processed  daily-report   not processed
-- not-processed  invoice-sync   not processed
+    expect(result.stdout).toBe(`lift deploy · dev (https://n8n.example.com)
+
+✗ crm-import    failed
+  POST /api/v1/workflows : HTTP 401: boom
+  → ${KEY_HINT}
+– daily-report  not processed
+– invoice-sync  not processed
+
 0 created, 0 updated, 0 restored, 0 skipped, 1 failed.
 `);
   });
@@ -274,9 +318,10 @@ Next: fix each failure with the hint under its line, then run deploy again.
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.stderr).toBe(`Failed: crm-import.
-Stopped: POST /api/v1/workflows → HTTP 401: boom
+Stopped: POST /api/v1/workflows : HTTP 401: boom
 Not processed: daily-report, invoice-sync.
-Next: ${KEY_HINT}.
+
+→ ${KEY_HINT}
 `);
   });
 
@@ -301,9 +346,10 @@ Next: ${KEY_HINT}.
 
     expect(result).toEqual({
       exitCode: 6,
-      stdout: 'lift deploy → dev (https://n8n.example.com)\n',
-      stderr: `✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required
+      stdout: 'lift deploy · dev (https://n8n.example.com)\n',
+      stderr: `✗ GET /api/v1/openapi.yml : HTTP 404: n8n 2.35.0 or later is required
   → Upgrade the instance to n8n 2.35.0 or later, then run deploy again
+
 Nothing was written to n8n.
 `,
     });
@@ -352,11 +398,15 @@ Nothing was written to n8n.
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy → dev (https://n8n.example.com)
-! restored       daily-report   workflows/daily-report.json (unpublished draft)
-⚠ daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
-0 created, 0 updated, 1 restored, 0 skipped, 0 failed. Run lift publish to publish the drafts.
+      stdout: `lift deploy · dev (https://n8n.example.com)
+
+↺ daily-report  restored  workflows/daily-report.json (unpublished draft)
+! daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
+
+0 created, 0 updated, 1 restored, 0 skipped, 0 failed.
 Tag boilerlift:dev added to 1 workflows
+
+→ lift publish  publishes the drafts
 `,
     });
   });
@@ -379,8 +429,8 @@ Tag boilerlift:dev added to 1 workflows
     const result = await deployCommand.run(TEXT, ctx);
 
     expect(result.exitCode).toBe(4);
-    expect(result.stderr).toContain('Stopped: GET /api/v1/workflows/crm1 → HTTP 401: boom');
-    expect(result.stderr).toContain('Next: Create a key in n8n → Settings → n8n API');
+    expect(result.stderr).toContain('Stopped: GET /api/v1/workflows/crm1 : HTTP 401: boom');
+    expect(result.stderr).toContain('→ Create a key in n8n → Settings → n8n API');
   });
 
   test('Should make no other call when the first keyed call is rejected', async () => {
@@ -397,7 +447,11 @@ Tag boilerlift:dev added to 1 workflows
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result).toEqual({ exitCode: 0, stdout: 'Nothing to deploy: no workflow in ./workflows.\n', stderr: '' });
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: 'lift deploy · dev (https://n8n.example.com)\n\nNothing to deploy: no workflow in ./workflows.\n',
+      stderr: '',
+    });
   });
 
   test('Should exit 1 and send nothing when a stable name is invalid or duplicated', async () => {
@@ -413,7 +467,7 @@ Tag boilerlift:dev added to 1 workflows
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('Invalid workflow files. Nothing was sent to n8n.');
-    expect(result.stderr).toContain('✗ workflows/Bad_Name.json  stable name "Bad_Name"');
+    expect(result.stderr).toContain('✗ workflows/Bad_Name.json     stable name "Bad_Name"');
     expect(result.stderr).toContain(
       '✗ workflows/sync.workflow.ts  stable name "sync" is also used by workflows/a/sync.json',
     );
@@ -437,15 +491,19 @@ Tag boilerlift:dev added to 1 workflows
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy --dry-run → dev (https://n8n.example.com)
-~ would update   crm-import     workflows/crm/crm-import.json (draft; published version still running)
-= would skip     daily-report   unchanged
-+ would create   invoice-sync   workflows/invoice-sync.workflow.ts
+      stdout: `lift deploy --dry-run · dev (https://n8n.example.com)
+
+~ crm-import    would update  workflows/crm/crm-import.json (draft; published version still running)
+= daily-report  would skip  unchanged
++ invoice-sync  would create  workflows/invoice-sync.workflow.ts
+
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
 Tag boilerlift:dev would be added to 3 workflows
-Dry run: nothing was written. Run lift deploy to apply.
+Dry run: nothing was written.
 n8n can still reject a write; this preview covers what reads can show.
-boilerlift.lock.json would update — commit it after lift deploy
+
+→ lift deploy  applies it
+→ commit boilerlift.lock.json after lift deploy  it would update
 `,
     });
   });
@@ -503,8 +561,8 @@ boilerlift.lock.json would update — commit it after lift deploy
     const result = await deployCommand.run(DRY_RUN, ctx);
 
     expect(result.exitCode).toBe(6);
-    expect(result.stdout).toBe('lift deploy --dry-run → dev (https://n8n.example.com)\n');
-    expect(result.stderr).toContain('✗ GET /api/v1/openapi.yml → HTTP 404: n8n 2.35.0 or later is required');
+    expect(result.stdout).toBe('lift deploy --dry-run · dev (https://n8n.example.com)\n');
+    expect(result.stderr).toContain('✗ GET /api/v1/openapi.yml : HTTP 404: n8n 2.35.0 or later is required');
     expect(result.stderr).toContain('Nothing was written to n8n.');
   });
 
@@ -513,7 +571,11 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     const result = await deployCommand.run(DRY_RUN, ctx);
 
-    expect(result).toEqual({ exitCode: 0, stdout: 'Nothing to deploy: no workflow in ./workflows.\n', stderr: '' });
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: 'lift deploy --dry-run · dev (https://n8n.example.com)\n\nNothing to deploy: no workflow in ./workflows.\n',
+      stderr: '',
+    });
   });
 
   test('Should print an empty JSON report with dryRun true when --dry-run --json finds ./workflows empty', async () => {
@@ -561,9 +623,10 @@ boilerlift.lock.json would update — commit it after lift deploy
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toBe(
       'Failed: crm-import.\n' +
-        'Stopped: GET /api/v1/workflows/crm1 → unexpected answer (HTTP 200): the body is not JSON\n' +
+        'Stopped: GET /api/v1/workflows/crm1 : unexpected answer (HTTP 200): the body is not JSON\n' +
         'Not processed: daily-report, invoice-sync.\n' +
-        'Next: Check that the url of the target points to an n8n instance (n8n 2.35.0 or later), then run deploy again.\n',
+        '\n' +
+        '→ Check that the url of the target points to an n8n instance (n8n 2.35.0 or later), then run deploy again\n',
     );
   });
   test('Should update a recorded workflow by its id when it was renamed in n8n', async () => {
@@ -572,7 +635,7 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result.stdout).toContain('~ updated        crm-import   workflows/crm/crm-import.json (draft; published version still running)\n');
+    expect(result.stdout).toContain('~ crm-import  updated  workflows/crm/crm-import.json (draft; published version still running)\n');
     expect(n8n.workflows).toEqual([expect.objectContaining({ id: 'crm1', name: 'CRM import' })]);
   });
 
@@ -605,7 +668,7 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result.stdout).toMatch(/\nboilerlift\.lock\.json updated — commit it\n$/);
+    expect(result.stdout).toMatch(/\n→ commit boilerlift\.lock\.json {2}it was updated\n$/);
   });
 
   test('Should not write the lock file when only recorded workflows changed', async () => {
@@ -636,11 +699,15 @@ boilerlift.lock.json would update — commit it after lift deploy
     const result = await deployCommand.run(TEXT, ctx);
 
     expect({ stdout: result.stdout, lock: lock.text() }).toEqual({
-      stdout: `lift deploy → dev (https://n8n.example.com)
-* recreated      crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
-0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed. Run lift publish to publish the drafts.
+      stdout: `lift deploy · dev (https://n8n.example.com)
+
+* crm-import  recreated  workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
+
+0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed.
 Tag boilerlift:dev added to 1 workflows
-boilerlift.lock.json updated — commit it
+
+→ lift publish  publishes the drafts
+→ commit boilerlift.lock.json  it was updated
 `,
       lock: fakeLockText({ 'crm-import': 'w1' }),
     });
@@ -665,13 +732,17 @@ boilerlift.lock.json updated — commit it
 
     const result = await deployCommand.run(DRY_RUN, ctx);
 
-    expect(result.stdout).toBe(`lift deploy --dry-run → dev (https://n8n.example.com)
-* would recreate crm-import   workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
+    expect(result.stdout).toBe(`lift deploy --dry-run · dev (https://n8n.example.com)
+
+* crm-import  would recreate  workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
+
 Would: 0 create, 1 recreate, 0 update, 0 restore, 0 skip, 0 fail.
 Tag boilerlift:dev would be added to 1 workflows
-Dry run: nothing was written. Run lift deploy to apply.
+Dry run: nothing was written.
 n8n can still reject a write; this preview covers what reads can show.
-boilerlift.lock.json would update — commit it after lift deploy
+
+→ lift deploy  applies it
+→ commit boilerlift.lock.json after lift deploy  it would update
 `);
   });
 
@@ -697,9 +768,11 @@ boilerlift.lock.json would update — commit it after lift deploy
     expect(result).toEqual({
       exitCode: 0,
       stderr: '',
-      stdout: `lift deploy → dev (https://n8n.example.com)
-= skipped        daily-report   unchanged
-⚠ daily-report: tag boilerlift:dev not added (PUT /api/v1/workflows/rep1/tags → HTTP 403: Forbidden); the workflow is deployed without it
+      stdout: `lift deploy · dev (https://n8n.example.com)
+
+= daily-report  skipped  unchanged
+! daily-report: tag boilerlift:dev not added (PUT /api/v1/workflows/rep1/tags : HTTP 403: Forbidden); the workflow is deployed without it
+
 0 created, 0 updated, 0 restored, 1 skipped, 0 failed.
 `,
     });
@@ -752,17 +825,21 @@ boilerlift.lock.json would update — commit it after lift deploy
 
     expect(result).toEqual({
       exitCode: 7,
-      stdout: `lift deploy → dev (https://n8n.example.com)
-✗ failed         crm-import     write boilerlift.lock.json → workflow w1 was created for crm-import, but boilerlift.lock.json could not be written: EACCES: permission denied
-                 → Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boilerlift.lock.json by hand and commit it, then run deploy again
-- not-processed  daily-report   not processed
-- not-processed  invoice-sync   not processed
+      stdout: `lift deploy · dev (https://n8n.example.com)
+
+✗ crm-import    failed
+  write boilerlift.lock.json : workflow w1 was created for crm-import, but boilerlift.lock.json could not be written: EACCES: permission denied
+  → Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boilerlift.lock.json by hand and commit it, then run deploy again
+– daily-report  not processed
+– invoice-sync  not processed
+
 0 created, 0 updated, 0 restored, 0 skipped, 1 failed.
 `,
       stderr: `Failed: crm-import.
-Stopped: write boilerlift.lock.json → workflow w1 was created for crm-import, but boilerlift.lock.json could not be written: EACCES: permission denied
+Stopped: write boilerlift.lock.json : workflow w1 was created for crm-import, but boilerlift.lock.json could not be written: EACCES: permission denied
 Not processed: daily-report, invoice-sync.
-Next: Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boilerlift.lock.json by hand and commit it, then run deploy again.
+
+→ Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boilerlift.lock.json by hand and commit it, then run deploy again
 `,
     });
   });
@@ -784,9 +861,10 @@ Next: Add "crm-import": { "n8nId": "w1" } under "https://n8n.example.com" in boi
     expect(result).toEqual({
       exitCode: 1,
       stdout: '',
-      stderr: `Invalid boilerlift.lock.json. Nothing was sent to n8n.
-✗ boilerlift.lock.json  "version" must be 1, found 2
+      stderr: `✗ boilerlift.lock.json  "version" must be 1, found 2
   → Fix the file, or restore it from version control, then run deploy again.
+
+Invalid boilerlift.lock.json. Nothing was sent to n8n.
 `,
     });
   });
@@ -907,12 +985,12 @@ describe('deployCommand targets', () => {
     const result = await deployCommand.run(ALL, ctx);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('── dev (https://dev.example.com)\nlift deploy → dev (https://dev.example.com)\n+ created');
-    expect(result.stdout).toContain('── prod (https://prod.example.com)\nlift deploy → prod (https://prod.example.com)\n+ created');
+    expect(result.stdout).toContain('── dev (https://dev.example.com)\nlift deploy · dev (https://dev.example.com)\n\n+ invoice-sync  created');
+    expect(result.stdout).toContain('── prod (https://prod.example.com)\nlift deploy · prod (https://prod.example.com)\n\n+ crm-import  created');
     expect(result.stdout).toContain(
       'Targets:\n' +
-        '  ✓ dev   https://dev.example.com   1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Run lift publish --target dev to publish the drafts.\n' +
-        '  ✓ prod  https://prod.example.com  1 created, 0 updated, 0 restored, 0 skipped, 0 failed. Run lift publish --target prod to publish the drafts.\n',
+        '  ✓ dev   https://dev.example.com   1 created, 0 updated, 0 restored, 0 skipped, 0 failed.  → lift publish --target dev\n' +
+        '  ✓ prod  https://prod.example.com  1 created, 0 updated, 0 restored, 0 skipped, 0 failed.  → lift publish --target prod\n',
     );
   });
 
@@ -925,8 +1003,8 @@ describe('deployCommand targets', () => {
 
     expect(result.exitCode).toBe(3);
     expect(prod.workflows.map(({ name }) => name)).toEqual(['Workflow crm-import']);
-    expect(result.stdout).toContain('  ✗ dev   https://dev.example.com   stopped: GET /api/v1/openapi.yml → unreachable: connection refused');
-    expect(result.stderr).toContain('── dev (https://dev.example.com)\n✗ GET /api/v1/openapi.yml → unreachable: connection refused');
+    expect(result.stdout).toContain('  ✗ dev   https://dev.example.com   stopped: GET /api/v1/openapi.yml : unreachable: connection refused');
+    expect(result.stderr).toContain('── dev (https://dev.example.com)\n✗ GET /api/v1/openapi.yml : unreachable: connection refused');
   });
 
   test('Should record each target under its own instance in the lock file when --all deploys both', async () => {
@@ -1000,11 +1078,12 @@ describe('deployCommand targets', () => {
 
     expect(result).toEqual({
       exitCode: 8,
-      stdout: 'lift deploy → dev (https://n8n.example.com)\n',
+      stdout: 'lift deploy · dev (https://n8n.example.com)\n',
       stderr:
-        '✗ GET /api/v1/credentials → 1 credential missing on target dev: gmail-sales\n' +
-        '✗ gmail-sales (httpHeaderAuth)  not in credentials/dev.ts; used by invoice-sync\n' +
+        '✗ GET /api/v1/credentials : 1 credential missing on target dev: gmail-sales\n' +
+        '  gmail-sales (httpHeaderAuth)  not in credentials/dev.ts; used by invoice-sync\n' +
         '  → Run lift creds sync --target dev to update credentials/dev.ts, or create the missing credentials in n8n first, then run deploy again\n' +
+        '\n' +
         'Nothing was written to n8n.\n',
     });
     expect(n8n.requests.filter((request) => !request.startsWith('GET'))).toEqual([]);

@@ -1,4 +1,5 @@
 import { CliResult, TargetSelection } from '#src/cli/cli.model';
+import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
@@ -30,12 +31,12 @@ export type PublishOutput = { kind: 'runs'; runs: TargetRun[] } | { kind: 'decli
 
 const DECLINED = 'Nothing published.';
 
-const MARKS: Record<PublishResult['action'], string> = {
-  published: '^',
-  'already-published': '=',
-  refused: '✗',
-  differs: '✗',
-  failed: '✗',
+const SYMBOL_OF: Record<PublishResult['action'], Row['symbol']> = {
+  published: SYMBOLS.published,
+  'already-published': SYMBOLS.unchanged,
+  refused: SYMBOLS.failed,
+  differs: SYMBOLS.failed,
+  failed: SYMBOLS.failed,
 };
 
 const LABELS: Record<PublishResult['action'], string> = {
@@ -46,9 +47,6 @@ const LABELS: Record<PublishResult['action'], string> = {
   failed: 'failed',
 };
 
-const ACTION_WIDTH = 1 + Math.max(...Object.values(LABELS).map((label) => label.length));
-const INDENT = ' '.repeat(2 + ACTION_WIDTH);
-
 /** `command`, with `--target <name>` when the command line named targets. */
 function withTarget(command: string, target: PublishTarget, format: PublishFormat): string {
   return format.named ? `${command} --target ${target.name}` : command;
@@ -57,11 +55,11 @@ function withTarget(command: string, target: PublishTarget, format: PublishForma
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
 export function renderInvalidFiles(target: PublishTarget, problems: LoadProblem[]): TargetRun {
   const message = 'Invalid workflow files. Nothing was published.';
-  const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
+  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n${lines.join('\n')}\n` },
+    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
     payload: {
       instance: target.instance,
       error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
@@ -80,7 +78,10 @@ export function renderInvalidLockFile(target: PublishTarget, error: LockFileErro
     text: {
       exitCode: EXIT_USAGE,
       stdout: '',
-      stderr: `${message}\n✗ ${LOCK_FILE}  ${error.detail}\n  → Fix the file, or restore it from version control, then run publish again.\n`,
+      stderr: sections(
+        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run publish again.')] }]),
+        [message],
+      ),
     },
     payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
     outcome: `invalid ${LOCK_FILE}, nothing published`,
@@ -98,9 +99,9 @@ export function renderNotReady(target: PublishTarget, plan: Exclude<PublishPlan,
     return {
       target: target.name,
       url: target.instance,
-      text: { exitCode: plan.exitCode, stdout: '', stderr: `✗ ${error.call} → ${error.detail}\n  → ${ping}\nNothing was published.\n` },
+      text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), ['Nothing was published.']) },
       payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
-      outcome: `stopped: ${error.call} → ${error.detail}`,
+      outcome: `stopped: ${error.call} : ${error.detail}`,
     };
   }
   }
@@ -129,15 +130,18 @@ function unknownNext(unknown: UnknownName, target: PublishTarget, format: Publis
 
 function renderUnknownNames(target: PublishTarget, unknown: UnknownName[], format: PublishFormat): TargetRun {
   const message = 'Unknown workflow names. Nothing was published.';
-  const width = Math.max(...unknown.map(({ name }) => name.length)) + 2;
-  const lines = unknown.flatMap((entry) => [
-    `✗ ${entry.name.padEnd(width)}${unknownDetail(entry, target)}`,
-    `  → ${unknownNext(entry, target, format)}`,
-  ]);
+  const lines = rows(
+    unknown.map((entry) => ({
+      symbol: SYMBOLS.failed,
+      name: entry.name,
+      state: unknownDetail(entry, target),
+      followUps: [next(unknownNext(entry, target, format))],
+    })),
+  );
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n${lines.join('\n')}\n` },
+    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
     payload: {
       instance: target.instance,
       error: {
@@ -162,7 +166,7 @@ export function renderHeldBack(target: PublishTarget): TargetRun {
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: EXIT_OK, stdout: `${message}\n`, stderr: '' },
+    text: { exitCode: EXIT_OK, stdout: sections([header('lift publish', target.name, target.instance)], [message]), stderr: '' },
     payload: { instance: target.instance, message, results: [], exitCode: EXIT_OK },
     outcome: 'nothing published, another target has a problem',
   };
@@ -170,31 +174,25 @@ export function renderHeldBack(target: PublishTarget): TargetRun {
 
 /** The listing and the `[Y/n]` question, written to stderr before anything is published. */
 export function renderConfirmation(ready: ReadyTarget[], format: PublishFormat): string {
-  const lines: string[] = [];
-  for (const { target, workflows } of ready.filter(({ workflows }) => workflows.length > 0)) {
-    lines.push(`lift publish → ${target.name} (${target.instance})`);
-    const width = Math.max(...workflows.map(({ stableName }) => stableName.length)) + 2;
-    for (const workflow of workflows) {
-      lines.push(`  ${planLine(workflow, width, target, format)}`);
-    }
-  }
+  const blocks = ready
+    .filter(({ workflows }) => workflows.length > 0)
+    .map(({ target, workflows }) => [header('lift publish', target.name, target.instance), '', ...rows(workflows.map((workflow) => planRow(workflow, target, format)))]);
   const count = ready.reduce((total, { workflows }) => total + workflows.filter(({ action }) => action === 'to-publish').length, 0);
   const targets = ready.filter(({ workflows }) => workflows.some(({ action }) => action === 'to-publish')).length;
   const where = targets > 1 ? ` on ${targets} targets` : '';
-  lines.push(`Publish ${count} ${count === 1 ? 'workflow' : 'workflows'}${where}? [Y/n] `);
-  return lines.join('\n');
+  return [...blocks.map((block) => block.join('\n')), `Publish ${count} ${count === 1 ? 'workflow' : 'workflows'}${where}? [Y/n] `].join('\n\n');
 }
 
-function planLine(workflow: PlannedPublish, width: number, target: PublishTarget, format: PublishFormat): string {
-  const name = workflow.stableName.padEnd(width);
+function planRow(workflow: PlannedPublish, target: PublishTarget, format: PublishFormat): Row {
+  const name = workflow.stableName;
   switch (workflow.action) {
   case 'to-publish':
-    return `^ ${name}draft not yet published → will be published`;
+    return { symbol: SYMBOLS.published, name, state: 'draft not yet published, will be published' };
   case 'already-published':
-    return `= ${name}already published`;
+    return { symbol: SYMBOLS.unchanged, name, state: 'already published' };
   case 'refused':
   case 'differs':
-    return `✗ ${name}differs from n8n → not published: run ${withTarget('lift deploy', target, format)} first`;
+    return { symbol: SYMBOLS.failed, name, state: 'differs from n8n, not published', followUps: [next(withTarget('lift deploy', target, format), 'first')] };
   }
 }
 
@@ -278,6 +276,7 @@ function hintOf(result: PublishResult, target: PublishTarget, format: PublishFor
   }
 }
 
+/** The detail after the label of a result. A failure has its cause under its line instead. */
 function detailOf(result: PublishResult): string {
   switch (result.action) {
   case 'published':
@@ -288,8 +287,21 @@ function detailOf(result: PublishResult): string {
   case 'differs':
     return 'differs from n8n: the local file and the n8n draft differ';
   case 'failed':
-    return `${result.error.call} → ${result.error.detail}`;
+    return '';
   }
+}
+
+/** One result as a row: its label and detail, then the cause of a failure (every line of it) and the next step. */
+function resultRow(result: PublishResult, target: PublishTarget, format: PublishFormat): Row {
+  const detail = detailOf(result);
+  const hint = hintOf(result, target, format);
+  const label = LABELS[result.action];
+  return {
+    symbol: SYMBOL_OF[result.action],
+    name: result.stableName,
+    state: detail === '' ? label : `${label}  ${detail}`,
+    followUps: [...(result.action === 'failed' ? cause(result.error.call, result.error.detail) : []), ...(hint === undefined ? [] : [next(hint)])],
+  };
 }
 
 /**
@@ -324,26 +336,12 @@ export function renderReport(target: PublishTarget, report: PublishReport, forma
 }
 
 function renderText(target: PublishTarget, report: PublishReport, format: PublishFormat, message: string | undefined, named: boolean): CliResult {
-  const stdout = [`lift publish → ${target.name} (${target.instance})`];
-  if (message !== undefined) {
-    stdout.push(message);
-  }
-  const width = Math.max(0, ...report.results.map((result) => result.stableName.length)) + 3;
-  for (const result of report.results) {
-    const [first = '', ...rest] = detailOf(result).split('\n').filter((line) => line.trim() !== '');
-    stdout.push(`${MARKS[result.action]} ${LABELS[result.action].padEnd(ACTION_WIDTH)}${result.stableName.padEnd(width)}${first}`);
-    // A message of several lines (n8n lists the issues of each node) goes under the result, in the step's column.
-    stdout.push(...rest.map((line) => `${INDENT}${line.trimEnd()}`));
-    const hint = hintOf(result, target, format);
-    if (hint !== undefined) {
-      stdout.push(`${INDENT}→ ${hint}`);
-    }
-  }
-  if (message === undefined) {
-    stdout.push(summaryLine(summarize(report.results), named));
-  }
+  const top = [header('lift publish', target.name, target.instance)];
+  // A message of several lines (n8n lists the issues of each node) goes under the result, every line at the name column.
+  const list = rows(report.results.map((result) => resultRow(result, target, format)));
+  const summary = message ?? summaryLine(summarize(report.results), named);
   const notPublished = report.results.filter((result) => result.action === 'refused' || result.action === 'failed').map((result) => result.stableName);
   const stderr =
-    notPublished.length === 0 ? '' : `Not published: ${notPublished.join(', ')}.\nNext: follow the step under each line, then run publish again.\n`;
-  return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr };
+    notPublished.length === 0 ? '' : sections([`Not published: ${notPublished.join(', ')}.`], [next('lift publish', 'once the step under each line is done')]);
+  return { exitCode: report.exitCode, stdout: sections(top, list, [summary]), stderr };
 }
