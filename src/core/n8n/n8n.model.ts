@@ -117,6 +117,12 @@ export interface N8nClient {
   /** `POST /api/v1/workflows/{id}/unarchive`: brings back an archived workflow. Needs the `workflow:delete` scope. */
   unarchiveWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
   /**
+   * `DELETE /api/v1/workflows/{id}`: deletes the workflow for good. No id of it is left on the instance, and it cannot be
+   * brought back. Some n8n versions refuse to delete a workflow that is not archived: archive it first. Needs the
+   * `workflow:delete` scope.
+   */
+  deleteWorkflow(id: WorkflowId): Promise<Result<ApiAnswer<N8nWorkflowSummary>, ApiFailure>>;
+  /**
    * `GET /api/v1/credentials`, every page: the credentials of the instance the API key can see. Needs the
    * `credential:list` scope: a key without it answers 403.
    */

@@ -12,7 +12,7 @@
 ## Shape
 
 - A service implements a port declared in `core/`. The port's types stay in `core/`; only what carries I/O (`fetch`, the options) lives here.
-- `http/http.ts` is the one place that calls `fetch`: `getRequest`, `postRequest` and `putRequest` take the URL, the headers, the JSON body to send, and a `response` reader (`jsonBody(parser)` or `textBody`). They return the read body, an `http-error` with the `message` of a JSON error body, an `invalid-response` when the reader rejects the body, or `unreachable` with a reason a person can act on.
+- `http/http.ts` is the one place that calls `fetch`: `getRequest`, `postRequest`, `putRequest` and `deleteRequest` take the URL, the headers, the JSON body to send, and a `response` reader (`jsonBody(parser)` or `textBody`). They return the read body, an `http-error` with the `message` of a JSON error body, an `invalid-response` when the reader rejects the body, or `unreachable` with a reason a person can act on.
 - `n8n/n8n-client.ts` implements `N8nClient` by calling those methods directly, one per endpoint: the URLs, the API key header, paging, and one parser of `n8n/n8n-response.ts` per body. Add no request wrapper between the client and `http/`. Why: `docs/adr/0007-adapters-live-in-services.md`.
 
 ## Tests

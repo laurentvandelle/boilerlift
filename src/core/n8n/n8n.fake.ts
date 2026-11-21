@@ -220,6 +220,12 @@ export function fakeN8n({
         workflow.isArchived = false;
         return structuredClone(workflow);
       }),
+    deleteWorkflow: (id) =>
+      // Gone for good: the next call on this id answers 404.
+      onWorkflow(`DELETE ${API_PATH}/workflows/${id}`, id, (workflow) => {
+        workflows.splice(workflows.indexOf(workflow), 1);
+        return structuredClone(workflow);
+      }),
     listCredentials: () => answer(`GET ${API_PATH}/credentials`, (call) => answered(call, structuredClone(credentials))),
     listTags: () => answer(`GET ${API_PATH}/tags`, (call) => answered(call, structuredClone(tags))),
     createTag: (name) =>
@@ -276,6 +282,8 @@ export function fakeN8n({
       return respond(await client.archiveWorkflow(id));
     case 'POST workflows/{id}/unarchive':
       return respond(await client.unarchiveWorkflow(id));
+    case 'DELETE workflows/{id}':
+      return respond(await client.deleteWorkflow(id));
     case 'PUT workflows/{id}/tags':
       return isTagIdList(body) ? respond(await client.updateWorkflowTags(id, body.map((tag) => tag.id))) : invalidBody();
     default:

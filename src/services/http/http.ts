@@ -64,6 +64,7 @@ export function createHttp({ fetch, timeoutMs = DEFAULT_TIMEOUT_MS }: HttpOption
     getRequest: (url, options) => send('GET', url, options),
     postRequest: (url, options) => send('POST', url, options),
     putRequest: (url, options) => send('PUT', url, options),
+    deleteRequest: (url, options) => send('DELETE', url, options),
   };
 }
 

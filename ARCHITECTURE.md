@@ -22,7 +22,7 @@ Boilerlift is a command-line tool written in TypeScript and published to npm. It
   - `connection/` is ping: the checks behind `lift ping`.
   - Shared folders: `config/` (checks the targets of `boilerlift.config.ts`, selects the ones a command runs on, and checks each one has an API key), `n8n/` (the `N8nClient` port, the id guards and what Boilerlift relies on in the public API) and `common/` (the exit codes of every command, `isRecord`, and the `Result` type of expected failures).
 - `src/services/` — the adapters that reach the outside world, behind the ports of `core/`. Only `cli/targets-need.ts` uses them, for the commands that need targets:
-  - `http/` is the HTTP transport: `getRequest`, `postRequest` and `putRequest` with headers, a JSON body and a reader for the answer, a timeout, and network errors described for a person. It knows no service.
+  - `http/` is the HTTP transport: `getRequest`, `postRequest`, `putRequest` and `deleteRequest` with headers, a JSON body and a reader for the answer, a timeout, and network errors described for a person. It knows no service.
   - `n8n/` implements the `N8nClient` port by calling `http/` directly for each endpoint: the API key, the URLs and paging of the public API, and the parsers that check every body once.
 - `debug/` — a separate npm package that depends on `file:../dist` and runs the built `dist/bin.js`, used to try the CLI as a user would.
 
