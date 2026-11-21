@@ -107,6 +107,7 @@ Commands:
   deploy      Deliver your workflows to your n8n instance as drafts
   publish     Publish your deployed drafts on your n8n instance
   clean       Archive the workflows you removed from the project
+  reset       Remove every workflow Boilerlift deployed on one target
   creds sync  Write the credentials of your n8n instance to your project
 
 Options:
