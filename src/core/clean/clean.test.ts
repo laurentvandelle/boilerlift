@@ -61,7 +61,7 @@ describe('planClean', () => {
   test('Should list the removed workflows by where they stand on n8n when the lock file records them without a file', async () => {
     const n8n = instance();
 
-    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [] });
+    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [], mode: 'archive' });
 
     expect(removedOf(plan)).toEqual([
       { stableName: 'gone', id: 'gone1', state: 'not-found' },
@@ -74,7 +74,7 @@ describe('planClean', () => {
     const n8n = instance();
     const files = [CRM.path, NEW.path];
 
-    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(), files });
+    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(), files, mode: 'archive' });
 
     expect(plan).toMatchObject({ kind: 'ready', notDeployed: [NEW] });
   });
@@ -82,15 +82,27 @@ describe('planClean', () => {
   test('Should list the workflows the lock file does not record, archived ones left out, when it reads the instance', async () => {
     const n8n = instance();
 
-    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(), files: [] });
+    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(), files: [], mode: 'archive' });
 
     expect(plan).toMatchObject({ kind: 'ready', unmanaged: [{ id: 'h1', name: 'Hand made' }] });
+  });
+
+  test('Should plan every removed workflow still on the instance as to-delete, archived or not, when the mode is delete', async () => {
+    const n8n = instance();
+
+    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [], mode: 'delete' });
+
+    expect(removedOf(plan)).toEqual([
+      { stableName: 'gone', id: 'gone1', state: 'not-found' },
+      { stableName: 'legacy', id: 'leg1', name: 'Legacy', state: 'to-delete', isArchived: true },
+      { stableName: 'old-report', id: 'old1', name: 'Old report', state: 'to-delete', isArchived: false },
+    ]);
   });
 
   test('Should only read when it plans', async () => {
     const n8n = instance();
 
-    await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [] });
+    await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [], mode: 'archive' });
 
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
@@ -98,7 +110,7 @@ describe('planClean', () => {
   test('Should stop with exit 3 when a read cannot reach the instance', async () => {
     const n8n = fakeN8n({ failures: [unreachable('GET /api/v1/workflows/old1', 'connection refused')] });
 
-    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged({ 'old-report': 'old1' }), files: [] });
+    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged({ 'old-report': 'old1' }), files: [], mode: 'archive' });
 
     expect(plan).toEqual({
       kind: 'stopped',
@@ -110,7 +122,7 @@ describe('planClean', () => {
   test('Should stop with exit 4 when the instance rejects the API key', async () => {
     const n8n = fakeN8n({ failures: [httpError('GET /api/v1/workflows', 401)] });
 
-    const plan = await planClean({ client: n8n.client, managed: fakeManaged(), removed: fakeManaged(), files: [] });
+    const plan = await planClean({ client: n8n.client, managed: fakeManaged(), removed: fakeManaged(), files: [], mode: 'archive' });
 
     expect(plan).toMatchObject({ kind: 'stopped', exitCode: 4 });
   });
@@ -120,7 +132,7 @@ describe('applyClean', () => {
   test('Should archive the workflow and drop its lock entry when it is still on the instance', async () => {
     const n8n = instance();
     const lock = memoryLock(MANAGED);
-    const removed = removedOf(await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [] }));
+    const removed = removedOf(await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [], mode: 'archive' }));
 
     const report = await applyClean(removed, n8n.client, FAKE_INSTANCE, lock.remover);
 
@@ -138,7 +150,7 @@ describe('applyClean', () => {
 
   test('Should archive only the workflows still on the instance when some are already archived or gone', async () => {
     const n8n = instance();
-    const removed = removedOf(await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [] }));
+    const removed = removedOf(await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [], mode: 'archive' }));
 
     await applyClean(removed, n8n.client, FAKE_INSTANCE, memoryLock(MANAGED).remover);
 
@@ -207,5 +219,95 @@ describe('applyClean', () => {
       ],
       exitCode: 5,
     });
+  });
+});
+
+describe('applyClean in delete mode', () => {
+  async function plannedDelete(n8n: FakeN8n): Promise<RemovedWorkflow[]> {
+    return removedOf(await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(REMOVED), files: [], mode: 'delete' }));
+  }
+
+  test('Should archive then delete a workflow not archived yet, and drop its lock entry, when the mode is delete', async () => {
+    const n8n = instance();
+    const lock = memoryLock(MANAGED);
+
+    const report = await applyClean(await plannedDelete(n8n), n8n.client, FAKE_INSTANCE, lock.remover);
+
+    expect(report.results).toContainEqual({ stableName: 'old-report', id: 'old1', name: 'Old report', action: 'deleted' });
+    expect(n8n.calls.filter((call) => !call.startsWith('GET ') && call.includes('old1'))).toEqual([
+      'POST /api/v1/workflows/old1/archive',
+      'DELETE /api/v1/workflows/old1',
+    ]);
+    expect(n8n.workflows.some(({ id }) => id === 'old1')).toBe(false);
+    expect(lock.recorded()).toEqual({ 'crm-import': 'crm1' });
+  });
+
+  test('Should delete a workflow already archived on the instance without archiving it again when the mode is delete', async () => {
+    const n8n = instance();
+
+    const report = await applyClean(await plannedDelete(n8n), n8n.client, FAKE_INSTANCE, memoryLock(MANAGED).remover);
+
+    expect(report.results).toContainEqual({ stableName: 'legacy', id: 'leg1', name: 'Legacy', action: 'deleted' });
+    expect(n8n.calls.filter((call) => !call.startsWith('GET ') && call.includes('leg1'))).toEqual(['DELETE /api/v1/workflows/leg1']);
+  });
+
+  test('Should only drop the entry as not found when the recorded id answers 404 in delete mode', async () => {
+    const n8n = instance();
+
+    const report = await applyClean(await plannedDelete(n8n), n8n.client, FAKE_INSTANCE, memoryLock(MANAGED).remover);
+
+    expect(report.results).toContainEqual({ stableName: 'gone', id: 'gone1', name: null, action: 'not-found' });
+    expect(n8n.calls.filter((call) => call.includes('gone1') && !call.startsWith('GET '))).toEqual([]);
+  });
+
+  test('Should fail with delete-failed, keep the workflow archived and its entry, and exit 5 when the delete fails', async () => {
+    const n8n = fakeN8n({
+      workflows: [fakeN8nWorkflow(OLD, { id: 'old1' })],
+      failures: [httpError('DELETE /api/v1/workflows/old1', 403, 'Forbidden')],
+    });
+    const lock = memoryLock({ 'old-report': 'old1' });
+    const removed: RemovedWorkflow[] = [
+      { stableName: fakeStableName('old-report'), id: fakeWorkflowId('old1'), name: 'Old report', state: 'to-delete', isArchived: false },
+    ];
+
+    const report = await applyClean(removed, n8n.client, FAKE_INSTANCE, lock.remover);
+
+    expect(report).toEqual({
+      results: [
+        {
+          stableName: 'old-report',
+          id: 'old1',
+          name: 'Old report',
+          action: 'failed',
+          error: { kind: 'delete-failed', cause: 'scope-missing', call: 'DELETE /api/v1/workflows/old1', detail: 'HTTP 403: Forbidden' },
+        },
+      ],
+      exitCode: 5,
+    });
+    expect(n8n.workflows.find(({ id }) => id === 'old1')).toMatchObject({ isArchived: true });
+    expect(lock.recorded()).toEqual({ 'old-report': 'old1' });
+  });
+
+  test('Should fail with lock-write-failed when the lock file cannot be written after a delete', async () => {
+    const n8n = instance();
+    const removed: RemovedWorkflow[] = [
+      { stableName: fakeStableName('old-report'), id: fakeWorkflowId('old1'), name: 'Old report', state: 'to-delete', isArchived: false },
+    ];
+
+    const report = await applyClean(removed, n8n.client, FAKE_INSTANCE, memoryLock({ 'old-report': 'old1' }, 'disk full').remover);
+
+    expect(report.results).toEqual([
+      {
+        stableName: 'old-report',
+        id: 'old1',
+        name: 'Old report',
+        action: 'failed',
+        error: {
+          kind: 'lock-write-failed',
+          call: 'write boilerlift.lock.json',
+          detail: 'workflow old1 was deleted, but boilerlift.lock.json could not be written: disk full',
+        },
+      },
+    ]);
   });
 });

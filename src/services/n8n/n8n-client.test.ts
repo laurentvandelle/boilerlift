@@ -142,6 +142,19 @@ describe('createN8nClient public API calls', () => {
     expect(calls[0]?.init?.body).toBeUndefined();
   });
 
+  test('Should DELETE with the API key and no body when it deletes a workflow', async () => {
+    const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', isArchived: true })));
+    const client = createN8nClient({ config: CONFIG, fetch });
+
+    const result = await client.deleteWorkflow(ABC);
+
+    expect(result).toMatchObject({ ok: true, value: { call: 'DELETE /api/v1/workflows/abc', body: { id: 'abc', name: 'A' } } });
+    expect(calls[0]?.url).toBe('https://n8n.example.com/api/v1/workflows/abc');
+    expect(calls[0]?.init?.method).toBe('DELETE');
+    expect(calls[0]?.init?.headers).toMatchObject({ 'X-N8N-API-KEY': 'secret' });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
   test('Should POST with the API key and no body to activate when it publishes a workflow', async () => {
     const { fetch, calls } = fakeFetch(() => Promise.resolve(json({ id: 'abc', name: 'A', isArchived: false })));
     const client = createN8nClient({ config: CONFIG, fetch });

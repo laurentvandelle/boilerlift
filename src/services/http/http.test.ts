@@ -65,6 +65,17 @@ describe('createHttp', () => {
     expect(calls[0]?.init?.body).toBeUndefined();
   });
 
+  test('Should send a DELETE without a body and name the call by its path when it deletes a URL', async () => {
+    const { fetch, calls } = answering('');
+
+    const result = await createHttp({ fetch }).deleteRequest('https://example.com/items/1', { headers: { 'x-key': 'k' }, response: textBody });
+
+    expect(result).toEqual({ ok: true, value: { call: 'DELETE /items/1', status: 200, body: '' } });
+    expect(calls[0]?.init?.method).toBe('DELETE');
+    expect(calls[0]?.init?.headers).toEqual({ accept: 'application/json', 'x-key': 'k' });
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
   test('Should return the parsed body when a JSON answer matches its parser', async () => {
     const { fetch } = answering('{"a":1}');
 

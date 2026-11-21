@@ -127,6 +127,7 @@ export function createN8nClient({ config, fetch, timeoutMs }: N8nClientOptions):
       http.postRequest(`${workflowUrl(id)}/archive`, { headers: auth, response: jsonBody(workflowSummaryParser) }),
     unarchiveWorkflow: (id) =>
       http.postRequest(`${workflowUrl(id)}/unarchive`, { headers: auth, response: jsonBody(workflowSummaryParser) }),
+    deleteWorkflow: (id) => http.deleteRequest(workflowUrl(id), { headers: auth, response: jsonBody(workflowSummaryParser) }),
     listCredentials,
     listTags,
     createTag: (name) => http.postRequest(`${api}/tags`, { headers: auth, body: { name }, response: jsonBody(tagParser) }),

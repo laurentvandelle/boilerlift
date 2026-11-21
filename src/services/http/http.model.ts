@@ -1,6 +1,6 @@
 import { Result } from '#src/core/common/result';
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /** Reads the text of a success answer into a value, or says why it cannot (the `invalid-response` detail). */
 export type BodyReader<T> = (text: string) => Result<T, string>;
@@ -51,4 +51,5 @@ export interface Http {
   getRequest: <T>(url: string, options: GetOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
   postRequest: <T>(url: string, options: SendOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
   putRequest: <T>(url: string, options: SendOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
+  deleteRequest: <T>(url: string, options: GetOptions<T>) => Promise<Result<HttpAnswer<T>, HttpFailure>>;
 }

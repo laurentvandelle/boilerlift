@@ -16,6 +16,7 @@ import {
 import { defineCommand } from '#src/cli/define-command';
 import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
 import { applyClean, planClean } from '#src/core/clean/clean';
+import { CleanMode } from '#src/core/clean/clean.model';
 import { stableNamesOf } from '#src/core/compile/load-workflows';
 import {
   EXIT_API_KEY_REJECTED,
@@ -33,8 +34,8 @@ import { LockFile } from '#src/core/deliver/lock-file.model';
 const DESCRIPTION = `Archives, on the n8n instance of a target, the workflows you removed from the project: the
 workflows ./${LOCK_FILE} records for that instance whose file is gone from the folder of every
 target on it. A workflow another target on the same instance still has a file for is kept.
-Archiving is what a delete in the n8n editor does: the workflow can be unarchived. Clean never
-deletes a workflow for good.
+Archiving is what a delete in the n8n editor does: the workflow can be unarchived. Without
+--delete, clean never deletes a workflow for good.
 Clean lists three groups: the removed workflows, which it archives; the files not deployed yet,
 with lift deploy next; and the workflows of the instance that ./${LOCK_FILE} does not record,
 which it never touches. Your workflows are found by the ids of ./${LOCK_FILE} only, never by
@@ -50,7 +51,14 @@ Each archived workflow, and each one already archived or no longer in n8n, loses
 are still cleaned. With --all, every target is read first; if one has a problem, nothing is
 archived.
 
---dry-run lists what clean would archive, asks nothing and archives nothing.`;
+--delete deletes the removed workflows for good instead: it cannot be undone. Each one is
+archived first, when it is not archived yet, then deleted, so a failed delete leaves it archived
+and recoverable; it keeps its entry, and the next lift clean --delete deletes it. A removed
+workflow already archived in n8n is deleted too. The question says the deletion is permanent,
+and the next step without a terminal is lift clean --delete --yes.
+
+--dry-run lists what clean would archive (or delete, with --delete), asks nothing and changes
+nothing.`;
 
 export const cleanCommand: CommandDefinition = defineCommand({
   name: 'clean',
@@ -60,17 +68,18 @@ export const cleanCommand: CommandDefinition = defineCommand({
     exitCodes: [
       [EXIT_OK, 'Every removed workflow cleaned, nothing to clean, a dry run, or the confirmation was not yes'],
       [EXIT_USAGE, `Usage error, missing or invalid ${CONFIG_FILE} or ${LOCK_FILE}, unknown target, missing API key or workflows folder`],
-      [EXIT_UNREACHABLE, 'The n8n instance cannot be reached, or a read failed: nothing was archived'],
-      [EXIT_API_KEY_REJECTED, 'The API key is rejected: nothing was archived'],
+      [EXIT_UNREACHABLE, 'The n8n instance cannot be reached, or a read failed: nothing was archived or deleted'],
+      [EXIT_API_KEY_REJECTED, 'The API key is rejected: nothing was archived or deleted'],
       [EXIT_PARTIAL_FAILURE, 'At least one workflow was not cleaned and keeps its entry; the others were'],
-      [EXIT_CONFIRMATION_NEEDED, 'Workflows to archive, but no terminal (or --json) to confirm, and no --yes: nothing was archived'],
+      [EXIT_CONFIRMATION_NEEDED, 'Workflows to archive or delete, but no terminal (or --json) to confirm, and no --yes: nothing changed'],
     ],
   },
   allowPositionals: false,
   options: {
     yes: { type: 'boolean', short: 'y', description: 'Archive without asking for confirmation' },
     force: { type: 'boolean', short: 'f', description: 'Same as --yes' },
-    'dry-run': { type: 'boolean', description: 'List what clean would archive; change nothing', mode: true },
+    delete: { type: 'boolean', description: 'Delete the removed workflows for good instead of archiving them' },
+    'dry-run': { type: 'boolean', description: 'List what clean would archive or delete; change nothing', mode: true },
     json: { type: 'boolean', description: 'Print the result as JSON', format: true },
   },
   needs: ['targets', 'isDirectory', 'loadWorkflowFiles', 'readLockFile', 'writeLockFile', 'ask', 'isInteractive'],
@@ -89,22 +98,36 @@ export const cleanCommand: CommandDefinition = defineCommand({
     return ok(lock.value);
   },
   modes: {
-    'dry-run': (lock, deps, input) =>
-      run(lock, deps, { dryRun: true, yes: false, json: input.format.json, named: input.target.kind !== 'default' }),
+    'dry-run': (lock, deps, { options, format, target }) =>
+      run(lock, deps, { dryRun: true, yes: false, json: format.json, named: target.kind !== 'default', mode: modeOf(options.flag('delete')) }),
   },
   default: (lock, deps, { options, format, target }) =>
-    run(lock, deps, { dryRun: false, yes: options.flag('yes') || options.flag('force'), json: format.json, named: target.kind !== 'default' }),
+    run(lock, deps, {
+      dryRun: false,
+      yes: options.flag('yes') || options.flag('force'),
+      json: format.json,
+      named: target.kind !== 'default',
+      mode: modeOf(options.flag('delete')),
+    }),
   render: (output, { format, target }) =>
-    output.kind === 'declined' ? renderDeclined() : renderTargets(output.runs, { json: format.json, all: target.kind === 'all' }),
+    output.kind === 'declined' ? renderDeclined(output.mode) : renderTargets(output.runs, { json: format.json, all: target.kind === 'all' }),
 });
 
 type CleanDeps = Deps<'targets' | 'loadWorkflowFiles' | 'writeLockFile' | 'ask' | 'isInteractive'>;
-/** What the command line asks of a run: list only, archive without asking, print JSON, write `--target` in next steps. */
+/**
+ * What the command line asks of a run: list only, clean without asking, print JSON, write `--target` in next steps, and
+ * archive or delete for good.
+ */
 interface RunOptions {
   dryRun: boolean;
   yes: boolean;
   json: boolean;
   named: boolean;
+  mode: CleanMode;
+}
+
+function modeOf(deleteFlag: boolean): CleanMode {
+  return deleteFlag ? 'delete' : 'archive';
 }
 
 /** One target after its reads: ready, with its groups, or the run that says why it is not. */
@@ -114,16 +137,16 @@ function where(target: ConnectedTarget): CleanTarget {
   return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
 }
 
-/** Reads every target, then lists, asks or archives, by the options and whether a person can answer. */
-async function run(lock: LockFile, deps: CleanDeps, { dryRun, yes, json, named }: RunOptions): Promise<CleanOutput> {
-  const format: CleanFormat = { named };
+/** Reads every target, then lists, asks, archives or deletes, by the options and whether a person can answer. */
+async function run(lock: LockFile, deps: CleanDeps, { dryRun, yes, json, named, mode }: RunOptions): Promise<CleanOutput> {
+  const format: CleanFormat = { named, mode };
   const plans: TargetPlan[] = [];
   for (const target of deps.targets.selected) {
     plans.push(await planTarget(target, lock, deps, format));
   }
   const ready = plans.flatMap((plan) => (plan.kind === 'ready' ? [plan] : []));
   if (ready.length < plans.length) {
-    return { kind: 'runs', runs: plans.map((plan) => (plan.kind === 'ready' ? renderHeldBack(plan.target) : plan.run)) };
+    return { kind: 'runs', runs: plans.map((plan) => (plan.kind === 'ready' ? renderHeldBack(plan.target, format) : plan.run)) };
   }
   const listing = (stage: ListingStage): CleanOutput => ({ kind: 'runs', runs: ready.map((plan) => renderListing(plan, stage, format)) });
   if (dryRun || ready.every(({ groups }) => groups.removed.length === 0)) {
@@ -133,8 +156,8 @@ async function run(lock: LockFile, deps: CleanDeps, { dryRun, yes, json, named }
     if (json || !deps.isInteractive) {
       return listing('confirmation-needed');
     }
-    if (!isYes(await deps.ask(renderConfirmation(ready)))) {
-      return { kind: 'declined' };
+    if (!isYes(await deps.ask(renderConfirmation(ready, mode)))) {
+      return { kind: 'declined', mode };
     }
   }
   const remover = lockRemover(lock, (text) => deps.writeLockFile(LOCK_FILE, text));
@@ -158,6 +181,7 @@ async function planTarget(target: ConnectedTarget, lock: LockFile, { targets, lo
     managed: managedIds(lock, place.instance),
     removed: removedEntries(lock, place.instance, present),
     files,
+    mode: format.mode,
   });
   if (plan.kind === 'stopped') {
     return { kind: 'problem', run: renderStopped(place, plan, format) };
@@ -165,7 +189,7 @@ async function planTarget(target: ConnectedTarget, lock: LockFile, { targets, lo
   return { kind: 'ready', target: place, client: target.client, groups: plan };
 }
 
-/** `y` or `yes`, in any case, archives. Enter, any other answer, or a closed stdin, is a no: the default is no. */
+/** `y` or `yes`, in any case, archives (or deletes). Enter, any other answer, or a closed stdin, is a no: the default is no. */
 function isYes(answer: string | undefined): boolean {
   const word = answer?.trim().toLowerCase();
   return word === 'y' || word === 'yes';

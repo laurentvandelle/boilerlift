@@ -4,6 +4,7 @@ import {
   CleanReadError,
   CleanReport,
   CleanResult,
+  CleanWriteCause,
   NotDeployedWorkflow,
   PlanCleanInput,
   RemovedWorkflow,
@@ -19,15 +20,22 @@ import { ApiFailure, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
 /**
  * Works out what clean would do on one target, with GET calls only: one per removed workflow, by the id the lock file
  * records (ADR 0009), then every page of the workflow list for the ones it does not record. It never writes. The first
- * failed call stops the plan.
+ * failed call stops the plan. In `delete` mode, every removed workflow still on the instance is `to-delete`.
  */
-export async function planClean({ client, managed, removed, files }: PlanCleanInput): Promise<CleanPlan> {
+export async function planClean({ client, managed, removed, files, mode }: PlanCleanInput): Promise<CleanPlan> {
   const found: RemovedWorkflow[] = [];
   for (const [stableName, id] of [...removed].sort(([a], [b]) => a.localeCompare(b))) {
     const read = await client.getWorkflow(id);
     if (read.ok) {
       const { name, isArchived } = read.value.body;
-      found.push({ stableName, id, name, state: isArchived ? 'already-archived' : 'to-archive' });
+      switch (mode) {
+      case 'archive':
+        found.push({ stableName, id, name, state: isArchived ? 'already-archived' : 'to-archive' });
+        break;
+      case 'delete':
+        found.push({ stableName, id, name, state: 'to-delete', isArchived });
+        break;
+      }
     } else if (read.error.kind === 'http-error' && classifyHttpError(read.error.status) === 'not-found') {
       found.push({ stableName, id, state: 'not-found' });
     } else {
@@ -52,9 +60,10 @@ export async function planClean({ client, managed, removed, files }: PlanCleanIn
 }
 
 /**
- * Archives each removed workflow of the plan that is still on the instance, in order, and drops the lock entry of each
- * one archived, already archived or not found, through `remover`. A failure fails only that workflow and keeps its
- * entry; the others are still cleaned, and the run exits 5.
+ * Archives each removed workflow of the plan that is still on the instance, in order, or for a `to-delete` one archives
+ * it when it is not archived yet, then deletes it for good. It drops the lock entry of each one archived, already
+ * archived, deleted or not found, through `remover`. A failure fails only that workflow and keeps its entry; the others
+ * are still cleaned, and the run exits 5.
  */
 export async function applyClean(removed: RemovedWorkflow[], client: N8nClient, instance: string, remover: LockRemover): Promise<CleanReport> {
   const results: CleanResult[] = [];
@@ -64,23 +73,19 @@ export async function applyClean(removed: RemovedWorkflow[], client: N8nClient, 
   return { results, exitCode: results.some(({ action }) => action === 'failed') ? EXIT_PARTIAL_FAILURE : EXIT_OK };
 }
 
+/** What the writes on one workflow came to before its lock entry is dropped: an action, or the failure that keeps it. */
+type Written = { action: 'archived' | 'already-archived' | 'deleted' | 'not-found' } | { action: 'failed'; error: CleanFailure };
+
 async function cleanOne(workflow: RemovedWorkflow, client: N8nClient, instance: string, remover: LockRemover): Promise<CleanResult> {
   const { stableName, id } = workflow;
   const name = workflow.state === 'not-found' ? null : workflow.name;
-  let action: 'archived' | 'already-archived' | 'not-found' = workflow.state === 'to-archive' ? 'archived' : workflow.state;
-  if (workflow.state === 'to-archive') {
-    const archived = await client.archiveWorkflow(id);
-    if (!archived.ok) {
-      if (archived.error.kind === 'http-error' && classifyHttpError(archived.error.status) === 'not-found') {
-        action = 'not-found';
-      } else {
-        return { stableName, id, name, action: 'failed', error: describeArchiveFailure(archived.error) };
-      }
-    }
+  const written = await write(workflow, client);
+  if (written.action === 'failed') {
+    return { stableName, id, name, ...written };
   }
+  const { action } = written;
   const dropped = await remover.remove(instance, stableName);
   if (!dropped.ok) {
-    const done = action === 'archived' ? 'was archived' : action === 'already-archived' ? 'is already archived' : 'is not on n8n';
     return {
       stableName,
       id,
@@ -89,11 +94,62 @@ async function cleanOne(workflow: RemovedWorkflow, client: N8nClient, instance: 
       error: {
         kind: 'lock-write-failed',
         call: `write ${LOCK_FILE}`,
-        detail: `workflow ${id} ${done}, but ${LOCK_FILE} could not be written: ${dropped.error.reason}`,
+        detail: `workflow ${id} ${DONE[action]}, but ${LOCK_FILE} could not be written: ${dropped.error.reason}`,
       },
     };
   }
   return { stableName, id, name, action };
+}
+
+const DONE: Record<'archived' | 'already-archived' | 'deleted' | 'not-found', string> = {
+  archived: 'was archived',
+  'already-archived': 'is already archived',
+  deleted: 'was deleted',
+  'not-found': 'is not on n8n',
+};
+
+/** The writes one workflow needs on n8n, by its state. A 404 on any of them means it is gone already: `not-found`. */
+async function write(workflow: RemovedWorkflow, client: N8nClient): Promise<Written> {
+  switch (workflow.state) {
+  case 'already-archived':
+  case 'not-found':
+    return { action: workflow.state };
+  case 'to-archive':
+    return archive(workflow.id, client);
+  case 'to-delete': {
+    if (!workflow.isArchived) {
+      const archived = await archive(workflow.id, client);
+      if (archived.action !== 'archived') {
+        return archived;
+      }
+    }
+    const deleted = await client.deleteWorkflow(workflow.id);
+    if (deleted.ok) {
+      return { action: 'deleted' };
+    }
+    if (isNotFound(deleted.error)) {
+      return { action: 'not-found' };
+    }
+    const { call, detail, cause } = describeWriteFailure(deleted.error);
+    return { action: 'failed', error: { kind: 'delete-failed', cause, call, detail } };
+  }
+  }
+}
+
+async function archive(id: WorkflowId, client: N8nClient): Promise<Written> {
+  const archived = await client.archiveWorkflow(id);
+  if (archived.ok) {
+    return { action: 'archived' };
+  }
+  if (isNotFound(archived.error)) {
+    return { action: 'not-found' };
+  }
+  const { call, detail, cause } = describeWriteFailure(archived.error);
+  return { action: 'failed', error: { kind: cause, call, detail } };
+}
+
+function isNotFound(failure: ApiFailure): boolean {
+  return failure.kind === 'http-error' && classifyHttpError(failure.status) === 'not-found';
 }
 
 function stopped(error: CleanReadError): CleanPlan {
@@ -119,11 +175,14 @@ function describeReadFailure(failure: ApiFailure): CleanReadError {
   }
 }
 
-/** A 403 on archive is a key without the `workflow:delete` scope: it fails that workflow only, as any other refusal. */
-function describeArchiveFailure(failure: ApiFailure): CleanFailure {
+/**
+ * A 403 on an archive or a delete is a key without the `workflow:delete` scope: it fails that workflow only, as any
+ * other refusal.
+ */
+function describeWriteFailure(failure: ApiFailure): { cause: CleanWriteCause; call: string; detail: string } {
   if (failure.kind === 'http-error' && failure.status === 403) {
-    return { kind: 'scope-missing', call: failure.call, detail: httpDetail(failure) };
+    return { cause: 'scope-missing', call: failure.call, detail: httpDetail(failure) };
   }
   const read = describeReadFailure(failure);
-  return { kind: read.kind === 'read-failed' ? 'rejected' : read.kind, call: read.call, detail: read.detail };
+  return { cause: read.kind === 'read-failed' ? 'rejected' : read.kind, call: read.call, detail: read.detail };
 }

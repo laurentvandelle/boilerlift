@@ -26,6 +26,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Draft**: the latest saved version of a workflow on the instance. `deploy` writes only drafts.
 - **Published**: the version of a workflow that runs on its triggers. It changes only when the user publishes, with `lift publish` or in the n8n editor. _Avoid_: live.
 - **Archived**: a workflow deleted in the n8n editor. It stays on the instance, with its id, until it is unarchived. A workflow that is not archived is unarchived. _Avoid_: deleted, live.
+- **Deleted**: a workflow removed from its instance for good; no id of it is left there. Only `lift clean --delete` deletes one, after archiving it.
 - **Restored**: an archived workflow that `deploy` unarchived and brought back as an unpublished draft.
 
 ### Status
@@ -41,7 +42,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 - **Blocker**: a failure that stops the whole run: the instance cannot be reached, it rejects the API key, it cannot save drafts, or the lock file cannot be written after a create. A failure on one workflow is not a blocker. _Avoid_: fatal, stop.
 - **Dry run**: `deploy --dry-run` computes deploy's plan and writes nothing.
 - **Removed**: a workflow removed from the project: the lock file records it for an instance, but no workflow file in the folder of any target on that instance has its stable name any more. `lift status` shows it as `removed`, with `lift clean` next. A workflow another target on the same instance still has a file for is not removed. _Avoid_: deleted, orphan.
-- **Clean**: `lift clean`, archiving the removed workflows of a target after a `[y/N]` confirmation (or `--yes` / `--force`), and dropping their entries from the lock file. It never touches a workflow the lock file does not record, and never deletes one for good. _Avoid_: prune, delete.
+- **Clean**: `lift clean`, archiving the removed workflows of a target after a `[y/N]` confirmation (or `--yes` / `--force`), and dropping their entries from the lock file. With `--delete`, it deletes them for good instead, archiving each one first. It never touches a workflow the lock file does not record. _Avoid_: prune.
 - **Publish**: `lift publish`, making the draft of deployed workflows the published version, after a `[Y/n]` confirmation (or `--yes` / `--force`). Without names, it publishes every `draft-pending` workflow and reports the `differs` ones without publishing them; with names, only those, refusing a `differs` one and skipping an `up-to-date` one.
 - **Target tag**: The n8n tag named after the target, `boilerlift:<target>`, added on deploy, for display only.
 

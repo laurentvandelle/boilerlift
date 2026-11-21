@@ -1,6 +1,6 @@
 import { CliResult } from '#src/cli/cli.model';
 import { TargetRun } from '#src/cli/targets.render';
-import { CleanGroups, CleanPlan, CleanReport, CleanResult, RemovedWorkflow } from '#src/core/clean/clean.model';
+import { CleanGroups, CleanMode, CleanPlan, CleanReport, CleanResult, CleanWriteCause, RemovedWorkflow } from '#src/core/clean/clean.model';
 import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
 import { LockFileError } from '#src/core/deliver/lock-file.model';
@@ -13,9 +13,13 @@ export interface CleanTarget {
   folder: string;
 }
 
-/** How the next steps are written: with `--target <name>` when the command line picked targets (`-t` or `--all`). */
+/**
+ * How the output is written: next steps with `--target <name>` when the command line picked targets (`-t` or `--all`),
+ * and the wording of `mode`: archive, or delete for good (`--delete`, which every next step to clean again keeps).
+ */
 export interface CleanFormat {
   named: boolean;
+  mode: CleanMode;
 }
 
 /** One target whose reads went through, with the groups clean found there. */
@@ -24,8 +28,8 @@ export interface PlannedTarget {
   groups: CleanGroups;
 }
 
-/** What the command prints: the run of each target, or a declined confirmation. */
-export type CleanOutput = { kind: 'runs'; runs: TargetRun[] } | { kind: 'declined' };
+/** What the command prints: the run of each target, or a declined confirmation, in the mode it asked about. */
+export type CleanOutput = { kind: 'runs'; runs: TargetRun[] } | { kind: 'declined'; mode: CleanMode };
 
 /**
  * Why clean lists the removed workflows without archiving them: `dry-run` (`--dry-run`), or `confirmation-needed` (no
@@ -33,10 +37,14 @@ export type CleanOutput = { kind: 'runs'; runs: TargetRun[] } | { kind: 'decline
  */
 export type ListingStage = 'dry-run' | 'confirmation-needed';
 
-const DECLINED = 'Nothing archived.';
+const DECLINED: Record<CleanMode, string> = { archive: 'Nothing archived.', delete: 'Nothing deleted.' };
+
+/** The past participle of what the mode does, for "nothing was …". */
+const DONE: Record<CleanMode, string> = { archive: 'archived', delete: 'deleted' };
 
 const STATE_LABELS: Record<RemovedWorkflow['state'], string> = {
   'to-archive': 'will be archived',
+  'to-delete': 'will be deleted for good',
   'already-archived': `already archived in n8n: its entry will be dropped from ${LOCK_FILE}`,
   'not-found': `not found in n8n: its entry will be dropped from ${LOCK_FILE}`,
 };
@@ -44,6 +52,7 @@ const STATE_LABELS: Record<RemovedWorkflow['state'], string> = {
 const MARKS: Record<CleanResult['action'], string> = {
   archived: '-',
   'already-archived': '=',
+  deleted: '-',
   'not-found': '?',
   failed: '✗',
 };
@@ -51,6 +60,7 @@ const MARKS: Record<CleanResult['action'], string> = {
 const LABELS: Record<CleanResult['action'], string> = {
   archived: 'archived',
   'already-archived': 'already archived',
+  deleted: 'deleted',
   'not-found': 'not found',
   failed: 'failed',
 };
@@ -61,6 +71,11 @@ const INDENT = ' '.repeat(2 + ACTION_WIDTH);
 /** `command`, with `--target <name>` when the command line named targets. */
 function withTarget(command: string, target: CleanTarget, format: CleanFormat): string {
   return format.named ? `${command} --target ${target.name}` : command;
+}
+
+/** `lift clean`, with `--delete` in delete mode and `--target <name>` when the command line named targets. */
+function cleanAgain(target: CleanTarget, format: CleanFormat): string {
+  return withTarget(format.mode === 'delete' ? 'lift clean --delete' : 'lift clean', target, format);
 }
 
 function header(target: CleanTarget): string {
@@ -90,21 +105,21 @@ export function renderStopped(target: CleanTarget, plan: Extract<CleanPlan, { ki
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: plan.exitCode, stdout: '', stderr: `✗ ${error.call} → ${error.detail}\n  → ${ping}\nNothing was archived.\n` },
+    text: { exitCode: plan.exitCode, stdout: '', stderr: `✗ ${error.call} → ${error.detail}\n  → ${ping}\nNothing was ${DONE[format.mode]}.\n` },
     payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
     outcome: `stopped: ${error.call} → ${error.detail}`,
   };
 }
 
-/** A target whose reads went through, while another target's did not: nothing was archived there either. */
-export function renderHeldBack(target: CleanTarget): TargetRun {
-  const message = 'Nothing archived: another target has a problem.';
+/** A target whose reads went through, while another target's did not: nothing was archived (or deleted) there either. */
+export function renderHeldBack(target: CleanTarget, format: CleanFormat): TargetRun {
+  const message = `Nothing ${DONE[format.mode]}: another target has a problem.`;
   return {
     target: target.name,
     url: target.instance,
     text: { exitCode: EXIT_OK, stdout: `${header(target)}\n${message}\n`, stderr: '' },
     payload: { instance: target.instance, stage: 'held-back', message, exitCode: EXIT_OK },
-    outcome: 'nothing archived, another target has a problem',
+    outcome: `nothing ${DONE[format.mode]}, another target has a problem`,
   };
 }
 
@@ -148,20 +163,23 @@ function count(removed: RemovedWorkflow[]): string {
 }
 
 /**
- * The groups of one target before anything is archived. With no removed workflow: "Nothing to clean", exit 0. Otherwise
- * the stage says why nothing was archived: a dry run (exit 0), or a confirmation clean could not ask for (exit 11, with
- * `lift clean --yes` next).
+ * The groups of one target before anything is archived or deleted. With no removed workflow: "Nothing to clean", exit 0.
+ * Otherwise the stage says why nothing was archived: a dry run (exit 0), or a confirmation clean could not ask for
+ * (exit 11, with `lift clean --yes` next). In delete mode, both stages have `lift clean --delete --yes` next.
  */
 export function renderListing({ target, groups }: PlannedTarget, stage: ListingStage, format: CleanFormat): TargetRun {
   const { removed } = groups;
   const nothing = removed.length === 0;
-  const yes = withTarget('lift clean --yes', target, format);
+  const deleting = format.mode === 'delete';
+  const yes = withTarget(deleting ? 'lift clean --delete --yes' : 'lift clean --yes', target, format);
   const exitCode = nothing || stage === 'dry-run' ? EXIT_OK : EXIT_CONFIRMATION_NEEDED;
+  const done = DONE[format.mode];
+  const does = (command: string): string => (deleting ? `${command} deletes the ${count(removed)} for good` : `${command} archives the ${count(removed)}`);
   const message = nothing
     ? `Nothing to clean: every workflow ${LOCK_FILE} records still has its file.`
     : stage === 'dry-run'
-      ? `Dry run: nothing was archived. ${withTarget('lift clean', target, format)} archives the ${count(removed)}.`
-      : `Confirmation needed: nothing was archived. ${yes} archives the ${count(removed)}.`;
+      ? `Dry run: nothing was ${done}. ${does(deleting ? yes : withTarget('lift clean', target, format))}.`
+      : `Confirmation needed: nothing was ${done}. ${does(yes)}.`;
   const stdout = [header(target)];
   if (nothing) {
     stdout.push(message);
@@ -172,14 +190,14 @@ export function renderListing({ target, groups }: PlannedTarget, stage: ListingS
   if (!nothing) {
     stdout.push(message);
   }
-  const next = stage === 'dry-run' ? withTarget('lift clean', target, format) : yes;
+  const next = stage === 'dry-run' && !deleting ? withTarget('lift clean', target, format) : yes;
   return {
     target: target.name,
     url: target.instance,
     text: {
       exitCode,
       stdout: `${stdout.join('\n')}\n`,
-      stderr: exitCode === EXIT_CONFIRMATION_NEEDED ? `Confirmation needed: nothing was archived.\nNext: ${yes}\n` : '',
+      stderr: exitCode === EXIT_CONFIRMATION_NEEDED ? `Confirmation needed: nothing was ${done}.\nNext: ${yes}\n` : '',
     },
     payload: {
       instance: target.instance,
@@ -199,8 +217,11 @@ export function renderListing({ target, groups }: PlannedTarget, stage: ListingS
   };
 }
 
-/** The listing of every target with removed workflows, and the `[y/N]` question, written to stderr before archiving. */
-export function renderConfirmation(planned: PlannedTarget[]): string {
+/**
+ * The listing of every target with removed workflows, and the `[y/N]` question, written to stderr before archiving or
+ * deleting.
+ */
+export function renderConfirmation(planned: PlannedTarget[], mode: CleanMode): string {
   const lines: string[] = [];
   const withRemoved = planned.filter(({ groups }) => groups.removed.length > 0);
   for (const { target, groups } of withRemoved) {
@@ -208,13 +229,22 @@ export function renderConfirmation(planned: PlannedTarget[]): string {
   }
   const removed = withRemoved.flatMap(({ groups }) => groups.removed);
   const where = withRemoved.length > 1 ? ` on ${withRemoved.length} targets` : '';
-  lines.push(`Clean ${count(removed)}${where}? They are archived in n8n and dropped from ${LOCK_FILE}. [y/N] `);
+  switch (mode) {
+  case 'archive':
+    lines.push(`Clean ${count(removed)}${where}? They are archived in n8n and dropped from ${LOCK_FILE}. [y/N] `);
+    break;
+  case 'delete': {
+    const n = removed.length;
+    lines.push(`Delete ${n === 1 ? 'this 1 workflow' : `these ${n} workflows`} for good? This cannot be undone. [y/N] `);
+    break;
+  }
+  }
   return lines.join('\n');
 }
 
-/** The answer was not yes (or stdin closed): exit 0, nothing was archived. */
-export function renderDeclined(): CliResult {
-  return { exitCode: EXIT_OK, stdout: `${DECLINED}\n`, stderr: '' };
+/** The answer was not yes (or stdin closed): exit 0, nothing was archived or deleted. */
+export function renderDeclined(mode: CleanMode): CliResult {
+  return { exitCode: EXIT_OK, stdout: `${DECLINED[mode]}\n`, stderr: '' };
 }
 
 /** The command to run next for one result, or null when there is nothing to run. */
@@ -222,6 +252,7 @@ function nextCommand(result: CleanResult, target: CleanTarget, format: CleanForm
   switch (result.action) {
   case 'archived':
   case 'already-archived':
+  case 'deleted':
   case 'not-found':
     return null;
   case 'failed':
@@ -233,7 +264,9 @@ function nextCommand(result: CleanResult, target: CleanTarget, format: CleanForm
     case 'scope-missing':
     case 'rejected':
     case 'lock-write-failed':
-      return withTarget('lift clean', target, format);
+      return cleanAgain(target, format);
+    case 'delete-failed':
+      return withTarget('lift clean --delete', target, format);
     }
   }
 }
@@ -243,8 +276,24 @@ function hintOf(result: CleanResult, target: CleanTarget, format: CleanFormat): 
   if (result.action !== 'failed') {
     return undefined;
   }
-  const again = withTarget('lift clean', target, format);
-  switch (result.error.kind) {
+  const again = cleanAgain(target, format);
+  const { error } = result;
+  switch (error.kind) {
+  case 'lock-write-failed':
+    return `Fix the problem with ${LOCK_FILE}, then run ${again}: it drops the entry of an archived workflow`;
+  case 'delete-failed':
+    return `The workflow stays archived. ${causeHint(error.cause, withTarget('lift clean --delete', target, format), target, format)}`;
+  case 'unreachable':
+  case 'key-rejected':
+  case 'scope-missing':
+  case 'rejected':
+    return causeHint(error.kind, again, target, format);
+  }
+}
+
+/** The step for a write n8n refused or missed, with `again` the clean to run once it is fixed. */
+function causeHint(cause: CleanWriteCause, again: string, target: CleanTarget, format: CleanFormat): string {
+  switch (cause) {
   case 'unreachable':
     return `Check the instance with ${withTarget('lift ping', target, format)}, then run ${again} again`;
   case 'key-rejected':
@@ -252,15 +301,16 @@ function hintOf(result: CleanResult, target: CleanTarget, format: CleanFormat): 
   case 'scope-missing':
     return `Give the API key the workflow:delete scope (n8n → Settings → n8n API), then run ${again} again`;
   case 'rejected':
-    return `Archive the workflow in the n8n editor, then run ${again}: it drops the entry of an archived workflow`;
-  case 'lock-write-failed':
-    return `Fix the problem with ${LOCK_FILE}, then run ${again}: it drops the entry of an archived workflow`;
+    return format.mode === 'delete'
+      ? `Check the workflow in the n8n editor, then run ${again} again`
+      : `Archive the workflow in the n8n editor, then run ${again}: it drops the entry of an archived workflow`;
   }
 }
 
 function detailOf(result: CleanResult): string {
   switch (result.action) {
   case 'archived':
+  case 'deleted':
     return nameOf(result);
   case 'already-archived':
     return `${nameOf(result)}, entry dropped from ${LOCK_FILE}`;
@@ -273,13 +323,21 @@ function detailOf(result: CleanResult): string {
 
 type Summary = Record<'archived' | 'alreadyArchived' | 'notFound' | 'failed', number>;
 
-function summarize(results: CleanResult[]): Summary {
+/** In delete mode, the summary gains `deleted`. */
+type DeleteSummary = Summary & { deleted: number };
+
+function summarize(results: CleanResult[], mode: CleanMode): Summary | DeleteSummary {
   const of = (action: CleanResult['action']): number => results.filter((result) => result.action === action).length;
-  return { archived: of('archived'), alreadyArchived: of('already-archived'), notFound: of('not-found'), failed: of('failed') };
+  const summary: Summary = { archived: of('archived'), alreadyArchived: of('already-archived'), notFound: of('not-found'), failed: of('failed') };
+  return mode === 'delete' ? { ...summary, deleted: of('deleted') } : summary;
 }
 
-function summaryLine({ archived, alreadyArchived, notFound, failed }: Summary): string {
-  return `${archived} archived, ${alreadyArchived} already archived, ${notFound} not found, ${failed} failed.`;
+function summaryLine(summary: Summary | DeleteSummary): string {
+  const { notFound, failed } = summary;
+  if ('deleted' in summary) {
+    return `${summary.deleted} deleted, ${notFound} not found, ${failed} failed.`;
+  }
+  return `${summary.archived} archived, ${summary.alreadyArchived} already archived, ${notFound} not found, ${failed} failed.`;
 }
 
 /** What clean did on one target: its text, its JSON payload and its recap. */
@@ -287,8 +345,8 @@ export function renderReport({ target, groups }: PlannedTarget, report: CleanRep
   if (report.results.length === 0) {
     return renderListing({ target, groups }, 'dry-run', format);
   }
-  const summary = summarize(report.results);
-  const dropped = summary.archived + summary.alreadyArchived + summary.notFound > 0;
+  const summary = summarize(report.results, format.mode);
+  const dropped = report.results.some(({ action }) => action !== 'failed');
   const stdout = [header(target)];
   const width = Math.max(...report.results.map(({ stableName }) => stableName.length)) + 2;
   for (const result of report.results) {
@@ -304,7 +362,7 @@ export function renderReport({ target, groups }: PlannedTarget, report: CleanRep
   }
   stdout.push(...otherGroupLines(groups, target, format));
   const failed = report.results.filter(({ action }) => action === 'failed').map(({ stableName }) => stableName);
-  const stderr = failed.length === 0 ? '' : `Not cleaned: ${failed.join(', ')}.\nNext: follow the step under each line, then run lift clean again.\n`;
+  const stderr = failed.length === 0 ? '' : `Not cleaned: ${failed.join(', ')}.\nNext: follow the step under each line, then run ${format.mode === 'delete' ? 'lift clean --delete' : 'lift clean'} again.\n`;
   return {
     target: target.name,
     url: target.instance,
