@@ -40,7 +40,9 @@ Without subagents, read the code yourself and keep only those notes.
 
 ## 3. Interview
 
-Read `.claude/skills/boilerlift:interviewing/SKILL.md` and follow its rounds, with the card and the summary as the subject. Ask only about the decisions the code does not settle.
+Call the Skill tool twice, for `boilerlift:interviewing` and `boilerlift:domain-modeling`. If one doesn't load, read its `.claude/skills/<name>/SKILL.md` instead. Follow the interviewing rounds with the card and the summary as the subject, and apply domain modeling throughout. Ask only about the decisions the code does not settle.
+
+Don't write `GLOSSARY.md` or an ADR during the interview: nothing is written before Ship, and the worktree is cut from `origin/HEAD`, so an edit in this checkout would miss the pull request. Settle each term or ADR with the user as a decision, and step 4 lists it under **Scope** (`Add to GLOSSARY.md: **<Term>**: …`, `Record ADR: <title> — <decision and why>`) for the coding session to write.
 
 Replace its ending: `boilerlift:interviewing` replies with the `boilerlift:plan` summary and waits for approval, which would add a second go-ahead before Ship. Here the Ship click is the approval, and step 4 writes that summary as the pull request body instead of the reply. When no questions are left, end the turn with `wrap_up` (`mcp__ccd_turn__wrap_up`): `ask` is `Ship?` and `actions` are two replies:
 
