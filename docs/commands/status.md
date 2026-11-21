@@ -35,7 +35,8 @@ Every other workflow of the instance, one that `boilerlift.lock.json` does not r
 With a target named (`-t`) or `--all`, each next command carries `--target <name>`.
 
 ```text
-lift status → dev (https://n8n.example.com)
+lift status · dev (https://n8n.example.com)
+
 ~ crm-import    differs from n8n — next deploy overwrites the n8n draft
   → lift deploy
 ^ daily-report  draft not yet published
@@ -43,6 +44,7 @@ lift status → dev (https://n8n.example.com)
 + invoice-sync  missing on the instance (workflows/invoice-sync.workflow.ts)
   → lift deploy
 · Hand made     not in my project (h1)
+
 1 missing, 0 archived, 1 differ, 1 draft not yet published, 0 up to date, 0 removed, 1 not in my project.
 ```
 

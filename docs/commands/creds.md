@@ -51,6 +51,8 @@ export default defineWorkflow({
 After writing the list, `creds sync` reads the workflows folder of the target and prints one line per key its workflows use that the list does not have:
 
 ```text
+lift creds sync · prod (https://your-n8n.example.com)
+
 Synced 3 credentials from prod.
 Wrote credentials/prod.ts.
 Missing on prod: gmail-sales-team (gmailOAuth2), used by: invoice-sync, crm-import

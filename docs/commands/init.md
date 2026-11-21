@@ -58,7 +58,7 @@ init never writes `.env`, so no secret is ever written, and never runs `npm inst
 
 ```text
 ✓ .env.example
-– .gitignore (already there, left as it is)
+– .gitignore            already there, left as it is
 ✓ AGENTS.md
 ✓ boilerlift.config.ts
 …

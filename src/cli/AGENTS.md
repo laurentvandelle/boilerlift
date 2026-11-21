@@ -2,7 +2,7 @@
 
 ## Prohibitions
 
-- A command never imports another command. It may import its own folder, `#src/cli/*.model.ts`, `define-command.ts`, `targets.render.ts` and `core/`. Lint enforces this.
+- A command never imports another command. It may import its own folder, `#src/cli/*.model.ts`, `define-command.ts`, `targets.render.ts`, `output.render.ts` and `core/`. Lint enforces this.
 - A command does no I/O of its own (`src/AGENTS.md` lists what lint bans). `run` returns a `Promise<CliResult>`; `bin.ts` writes it. Anything a command needs from the outside world is a field of `CommandContext` (`cli.model.ts`, which documents each field), added by the first command that needs it and filled for the real process in `node-context.ts`.
 - Only `targets-need.ts` imports `src/services/`: it builds the client of each target from `ctx.fetch` with `createN8nClient` (`services/n8n/n8n-client.ts`) for every command that declares the `'targets'` need. Commands and the rest of `cli/` never import it. Lint enforces this.
 
@@ -16,6 +16,7 @@
   - `modes` and `default`: one handler per mode option, and the one that runs without a mode flag. They all return the same type, which `render` takes.
   - `render`: a function of `<name>.render.ts`, given the output and `{ format, mode, target, prepared, deps }`.
 - Every command folder holds `<name>.render.ts`: the functions that turn what `core/` returns into the `CliResult` (marks, columns, wording, the `--json` payload, the stdout/stderr split). `<name>.command.ts` keeps the help, the options and the handlers, which call `core/`; `render` returns what a render function builds. A `stdout` or `stderr` property in a `*.command.ts` fails lint, and `registry.test.ts` fails when a registered command has no render file.
+- Every human output follows `docs/output-style.md`: sections, rows, symbols and colour come from `output.render.ts`. Before writing the output of a new command, read it. No check enforces the style; the pinned output tests show a drift.
 - `core/` may write sentences about the domain (`describeConfigError`, `CHECK_LABELS`, the `detail` and `hint` of an error). The layout, and any wording that depends on a CLI flag, stays in the render file. No check enforces this split.
 - A command that runs on targets of `boilerlift.config.ts` declares the `'targets'` need: it then takes `--target` and `--all` (`TARGET_OPTIONS` in `commands/help/help.options.ts`) and reads the selection as `input.target`. Its handlers loop over `deps.targets.selected` (call `checkWorkflowFolders`, `core/config/project-config.ts`, in `prepare` when it reads the folders), its render file turns each target into a `TargetRun`, and `render` lays them out with `renderTargets` (`targets.render.ts`); any other config error goes through `renderConfigError` there. Example: `commands/ping/`.
 - Register every command in `registry.ts`. It is the only list of commands.
