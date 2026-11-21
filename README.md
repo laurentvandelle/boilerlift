@@ -14,69 +14,24 @@ Build a workflow once, keep it in Git, and lift it to dev, staging, prod or ever
 
 > Status: pre-release (0.x). It works, but expect changes between versions.
 
-## Install
+## Get started
 
-```sh
-npm install -g boilerlift
+No fancy commands. Just a prompt.
+
+```text
+Read https://raw.githubusercontent.com/laurentvandelle/boilerlift/main/docs/get-started.md
+and follow it to set up Boilerlift with me, one step at a time.
 ```
 
-This installs the `lift` command (`boilerlift` is an alias). Requires Node.js 22.18 or later, and n8n 2.35.0 or later.
+Paste it into your AI agent (Claude Code, Cursor, Codex…). It checks Node.js, creates your project, connects it to your n8n instance and deploys an example workflow as a draft, asking you one question at a time.
 
-## Quick start
-
-1. Install Boilerlift in your project, so workflow files can import it:
-
-   ```sh
-   npm install --save-dev boilerlift
-   ```
-
-2. Create `boilerlift.config.ts` at the project root, with one target:
-
-   ```ts
-   import { defineConfig } from 'boilerlift';
-
-   export default defineConfig({
-     targets: {
-       dev: { url: process.env.N8N_URL, apiKey: process.env.N8N_API_KEY, workflows: './workflows' },
-     },
-   });
-   ```
-
-3. Set `N8N_URL` and `N8N_API_KEY` in `.env` (keep it out of Git):
-
-   ```sh
-   N8N_URL=https://your-n8n.example.com
-   N8N_API_KEY=your-api-key
-   ```
-
-4. Check the connection:
-
-   ```sh
-   lift ping
-   ```
-
-5. Add a tiny workflow, `workflows/hello.workflow.ts`:
-
-   ```ts
-   import { defineWorkflow } from 'boilerlift';
-
-   export default defineWorkflow({
-     name: 'Hello',
-     nodes: [{ parameters: {}, name: 'Start', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0] }],
-     connections: {},
-   });
-   ```
-
-6. See what a deploy would do, without writing anything:
-
-   ```sh
-   lift deploy --dry-run
-   ```
-
-   Then run `lift deploy` to deliver it as a draft, and `lift publish` to publish it.
+Developer, or no AI agent? See the [manual install](https://github.com/laurentvandelle/boilerlift/blob/main/docs/manual-install.md).
 
 ## Docs
 
+- [Get started with an AI agent](https://github.com/laurentvandelle/boilerlift/blob/main/docs/get-started.md): the guide your agent follows
+- [Manual install](https://github.com/laurentvandelle/boilerlift/blob/main/docs/manual-install.md): install and set up Boilerlift yourself
+- [`lift init`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/init.md): start a project, with the Agent kit for AI agents
 - [Write a workflow](https://github.com/laurentvandelle/boilerlift/blob/main/docs/workflows.md)
 - [Configure your targets](https://github.com/laurentvandelle/boilerlift/blob/main/docs/configuration.md)
 - [`lift ping`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/ping.md): check the connection to your instance
