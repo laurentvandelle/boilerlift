@@ -26,6 +26,22 @@ describe('guard on lift', () => {
     expect(result).toBe('ask');
   });
 
+  test('should ask when reset runs without --dry-run', () => {
+    const input = bash('npx lift reset --target dev --json --yes');
+
+    const result = decision(input);
+
+    expect(result).toBe('ask');
+  });
+
+  test('should let reset run when it is a dry run', () => {
+    const input = bash('npx lift reset --target dev --dry-run --json');
+
+    const result = decision(input);
+
+    expect(result).toBeUndefined();
+  });
+
   test('should let clean run when it is a dry run', () => {
     const input = bash('npx lift clean --dry-run --json');
 

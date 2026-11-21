@@ -162,6 +162,10 @@ function checkLift(args: string[]): SegmentCheck {
     return args.includes('--dry-run')
       ? undefined
       : { decision: 'ask', reason: 'lift clean without --dry-run is a Guarded command: it archives or deletes workflows on n8n. Run it only after the user says yes in the chat.' };
+  case 'reset':
+    return args.includes('--dry-run')
+      ? undefined
+      : { decision: 'ask', reason: 'lift reset without --dry-run is a Guarded command: it archives or deletes every workflow deployed on the target. Run it only after the user says yes in the chat.' };
   case 'deploy':
     return !all && targets.length > 0 && targets.every((target) => target === 'dev')
       ? undefined

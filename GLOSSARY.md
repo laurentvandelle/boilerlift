@@ -57,4 +57,4 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 ### Project setup
 
 - **Agent kit**: the agent instructions, skills and Claude Code guardrails that `lift init` writes into a project: `AGENTS.md` and its routed docs, the `BOILERLIFT:` skills under `.claude/skills/`, which take a workflow request from interview to a deployed draft on `dev`, the Claude Code `PreToolUse` hook in `.claude/hooks/` and the `.claude/settings.json` that wires it and denies reading `.env`. _Avoid_: AI kit, Boilerlift skill.
-- **Guarded command**: a command the agent runs only after the user's yes in the chat: publish, a real clean, a deploy that isn't `-t dev`, or an n8n API write. In Claude Code, the hook of the Agent kit asks the user to approve it once more. _Avoid_: dangerous command, protected action.
+- **Guarded command**: a command the agent runs only after the user's yes in the chat: publish, a real clean or reset, a deploy that isn't `-t dev`, or an n8n API write. In Claude Code, the hook of the Agent kit asks the user to approve it once more. _Avoid_: dangerous command, protected action.

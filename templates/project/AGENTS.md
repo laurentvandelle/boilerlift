@@ -36,6 +36,7 @@ Run every `lift` command with `--json`: the result is one JSON object on stdout.
 | `npx lift deploy -t dev --json` | Delivers the workflows to dev as drafts; publishes nothing |
 | `npx lift creds sync -t dev --json` | Writes the credentials of the instance to `credentials/dev.ts`, and reports the ones the workflows miss |
 | `npx lift clean -t dev --dry-run --json` | Lists the workflows removed from the project that clean would archive; changes nothing |
+| `npx lift reset -t dev --dry-run --json` | Lists every workflow deployed on the target that reset would archive; changes nothing |
 | `npx lift help [command]` | Prints the help of Boilerlift, or of one command, with its options and exit codes |
 
 ## Guarded commands
@@ -46,10 +47,11 @@ A Guarded command changes what runs on n8n, or reaches an instance other than de
 | --- | --- |
 | `npx lift publish -t dev --json --yes` | Makes the deployed drafts the published version: they run on their triggers |
 | `npx lift clean -t dev --json --yes` (any `lift clean` without `--dry-run`) | Archives, or with `--delete` deletes, the workflows removed from the project |
+| `npx lift reset -t dev --json --yes` (any `lift reset` without `--dry-run`) | Archives, or with `--delete` deletes, every workflow deployed on the target |
 | `lift deploy` without an explicit `-t dev`: no target, another target, or `--all` | Writes drafts to an instance other than dev |
 | `npm run n8n` with a method other than `GET` | Writes to n8n |
 
-In Claude Code, the hook asks the user to approve each Guarded command once more, even after their yes in the chat: that prompt is theirs to answer. Without `--yes`, `publish` and `clean` ask a question in a terminal, which an agent cannot answer: always pass `--yes` once the user has agreed.
+In Claude Code, the hook asks the user to approve each Guarded command once more, even after their yes in the chat: that prompt is theirs to answer. Without `--yes`, `publish`, `clean` and `reset` ask a question in a terminal, which an agent cannot answer: always pass `--yes` once the user has agreed.
 
 ## Exit codes
 
@@ -66,11 +68,11 @@ In Claude Code, the hook asks the user to approve each Guarded command once more
 | 8 | Workflows use credentials the instance does not have | Ask the user to create them in n8n, then `lift creds sync` |
 | 9 | The API key cannot list the credentials | Ask the user for a key with the `credential:list` scope |
 | 10 | `creds sync` could not write the credentials file | Fix the file permissions, then sync again |
-| 11 | `clean` needs a confirmation: nothing was archived | Ask the user in the chat, then rerun with `--yes` once they agree |
+| 11 | `clean` or `reset` needs a confirmation: nothing was archived | Ask the user in the chat, then rerun with `--yes` once they agree |
 
 ## Details
 
-`npx lift help <command>` prints the options and exit codes of one command. Each command is documented on GitHub: `https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/<name>.md`, where `<name>` is `ping`, `status`, `deploy`, `publish`, `clean`, `creds` or `init`.
+`npx lift help <command>` prints the options and exit codes of one command. Each command is documented on GitHub: `https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/<name>.md`, where `<name>` is `ping`, `status`, `deploy`, `publish`, `clean`, `reset`, `creds` or `init`.
 
 ## Skills
 
