@@ -15,8 +15,7 @@ import {
 } from '#src/cli/commands/clean/clean.render';
 import { defineCommand } from '#src/cli/define-command';
 import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { applyClean, planClean } from '#src/core/clean/clean';
-import { CleanMode } from '#src/core/clean/clean.model';
+import { planClean } from '#src/core/clean/clean';
 import { stableNamesOf } from '#src/core/compile/load-workflows';
 import {
   EXIT_API_KEY_REJECTED,
@@ -30,6 +29,8 @@ import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
 import { LOCK_FILE, lockRemover, managedIds, parseLockFile, removedEntries } from '#src/core/deliver/lock-file';
 import { LockFile } from '#src/core/deliver/lock-file.model';
+import { applyRemoval } from '#src/core/removal/removal';
+import { RemovalMode } from '#src/core/removal/removal.model';
 
 const DESCRIPTION = `Archives, on the n8n instance of a target, the workflows you removed from the project: the
 workflows ./${LOCK_FILE} records for that instance whose file is gone from the folder of every
@@ -123,10 +124,10 @@ interface RunOptions {
   yes: boolean;
   json: boolean;
   named: boolean;
-  mode: CleanMode;
+  mode: RemovalMode;
 }
 
-function modeOf(deleteFlag: boolean): CleanMode {
+function modeOf(deleteFlag: boolean): RemovalMode {
   return deleteFlag ? 'delete' : 'archive';
 }
 
@@ -163,7 +164,7 @@ async function run(lock: LockFile, deps: CleanDeps, { dryRun, yes, json, named, 
   const remover = lockRemover(lock, (text) => deps.writeLockFile(LOCK_FILE, text));
   const runs: TargetRun[] = [];
   for (const plan of ready) {
-    runs.push(renderReport(plan, await applyClean(plan.groups.removed, plan.client, plan.target.instance, remover), format));
+    runs.push(renderReport(plan, await applyRemoval(plan.groups.removed, plan.client, plan.target.instance, remover), format));
   }
   return { kind: 'runs', runs };
 }
