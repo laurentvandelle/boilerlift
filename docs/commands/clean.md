@@ -103,7 +103,7 @@ With `--all`, every target is read first. If one has a problem (an invalid `boil
 
 ## JSON
 
-Each target carries its `stage`: `nothing-to-clean`, `dry-run` or `confirmation-needed`, with `removed` (each with its `state`: `to-archive`, `already-archived`, `to-delete` with `--delete`, or `not-found`), or `cleaned`, with `results` (each with its `action`: `archived`, `already-archived`, `deleted`, `not-found` or `failed`, with its `error`), a `summary` (with `deleted` too, with `--delete`) and `lockFileUpdated`. Every item has `next`, the command to run, or `null`; `notDeployed` and `unmanaged` list the two other groups. The types live in [`src/core/clean/clean.model.ts`](../../src/core/clean/clean.model.ts).
+Each target carries its `stage`: `nothing-to-clean`, `dry-run` or `confirmation-needed`, with `removed` (each with its `state`: `to-archive`, `already-archived`, `to-delete` with `--delete`, or `not-found`), or `cleaned`, with `results` (each with its `action`: `archived`, `already-archived`, `deleted`, `not-found` or `failed`, with its `error`), a `summary` (with `deleted` too, with `--delete`) and `lockFileUpdated`. Every item has `next`, the command to run, or `null`; `notDeployed` and `unmanaged` list the two other groups. The types live in [`src/core/clean/clean.model.ts`](../../src/core/clean/clean.model.ts) and [`src/core/removal/removal.model.ts`](../../src/core/removal/removal.model.ts).
 
 ## Calls
 
