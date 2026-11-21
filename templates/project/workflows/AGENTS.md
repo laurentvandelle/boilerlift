@@ -15,7 +15,7 @@
 
 ## Tests
 
-`npx lift deploy --dry-run --json` checks every workflow file and writes nothing. Run it after each change.
+`npx lift deploy -t dev --dry-run --json` checks every workflow file and writes nothing. Run it after each change.
 
 ## Example
 

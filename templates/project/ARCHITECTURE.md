@@ -13,6 +13,8 @@ Keep n8n workflows as typed files under version control, and deliver them to one
 - `code/`: the JavaScript of Code nodes, one function per file, tested with Vitest. `package.json` maps `#code/*` to these files, so Node, TypeScript, ESLint and Vitest all resolve the same specifier.
 - `credentials/<target>.ts`: written by `lift creds sync`, the credentials each target's instance holds.
 - `boilerlift.lock.json`: written by `lift deploy`, the link between each stable name and its n8n id.
+- `scripts/n8n.ts`: `npm run n8n`, one call to the n8n public API of the dev target, tested with Vitest.
+- `.claude/`: the Agent kit for Claude Code. `skills/` holds the `BOILERLIFT:` skills; `hooks/guard.ts`, tested with Vitest and wired by `settings.json`, asks the user before each Guarded command and blocks reading `.env`.
 
 ## Boundaries
 
@@ -21,6 +23,8 @@ Workflow files import from `boilerlift` and from `code/`. A `code/` file imports
 ## Runtime
 
 `lift` reads `.env`, loads `boilerlift.config.ts`, then imports every workflow file of a target with Node's native TypeScript support, which evaluates each `fn.toString()` into a Code node's `jsCode`. `lift deploy` sends them to n8n as drafts; `lift publish` makes the drafts live.
+
+Node.js runs `scripts/n8n.ts` and `.claude/hooks/guard.ts` as they are, with the same native TypeScript support: they need no build step and no extra dependency. Each one imports only Node.js modules.
 
 ## Out of scope
 

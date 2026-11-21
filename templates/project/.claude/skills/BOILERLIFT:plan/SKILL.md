@@ -1,29 +1,40 @@
 ---
 name: "BOILERLIFT:plan"
-description: "Writes the decision summary of an n8n workflow in a strict template (Goal, Scope, Out of scope, Nodes, Edge cases & rules, Open assumptions), from the decisions already settled in the conversation. Lists decisions, not steps. Use when BOILERLIFT:ship or BOILERLIFT:interviewing needs the summary at the end of an interview, or when the user invokes /BOILERLIFT:plan."
+description: "Writes the plan of an n8n workflow in the chat: a mermaid diagram of its nodes, then a short decision summary in a strict template (Goal, Scope, Out of scope, Nodes, Edge cases & rules, Open assumptions), from the decisions already settled in the conversation. Lists decisions, not steps. Use when BOILERLIFT:ship needs the plan at the end of an interview, or when the user invokes /BOILERLIFT:plan."
 ---
 
-Turn the decisions already settled in this conversation into a decision summary, in the chat. Write only: do not open a new round of questions, and write no file.
+Turn the decisions already settled in this conversation into a diagram and a short decision summary, in the chat. Write only: do not open a new round of questions, and write no file.
 
 Rules:
 
 - **Settled decisions only.** Each line comes from the user's answers or from the project files. Anything you would have to guess goes under **Open assumptions**, never in another section.
-- **The template is strict.** `BOILERLIFT:ship` builds from it and `BOILERLIFT:qa` tests against it: keep the headings, their names and their order. Drop a section that would be empty, but never **Goal** or **Nodes**.
-- **Decisions, not steps.** One decision per bullet, concrete enough to check on the deployed workflow.
+- **The template is strict.** `BOILERLIFT:ship` builds from it and `BOILERLIFT:qa` tests against it: keep the headings, their names and their order. Drop a section that would be empty, but never **Diagram**, **Goal** or **Nodes**.
+- **Short.** One decision per bullet, concrete enough to check on the deployed workflow. The whole summary fits on one screen.
+- **The diagram is the nodes.** One mermaid box per node of **Nodes**, with the same name, and one arrow per connection. Label an arrow when the node branches (`true`, `false`, `error`). Quote a label that holds punctuation: `A["Every day at 8:00"]`.
 - **No secret.** Name each credential by its key, never by its value.
 - **Exact text stays exact.** Copy a message, a subject line or a field name the user gave verbatim, in its language.
 
 ## Template
 
-```markdown
+````markdown
+## Diagram
+
+```mermaid
+flowchart LR
+  A["<trigger node>"] --> B["<node>"] --> C["<node>"]
+```
+
 ## Decisions
 
 ### Goal
 <one or two sentences: what the workflow does, for whom>
 
 ### Scope
-- Workflow: `workflows/<name>.workflow.ts`, titled `<title in n8n>`, on target `<target>`
-- <each thing it does>
+- Workflow: `workflows/<name>.workflow.ts`, titled `<title in n8n>`, on target `dev`
+- Trigger: <what starts it>
+- Inputs: <the data it receives>
+- Services & credentials: <each service, with its credential key>
+- Expected result: <what it produces, writes or sends, and where>
 
 ### Out of scope
 - <what was excluded>
@@ -37,13 +48,20 @@ Rules:
 
 ### Open assumptions
 - <anything left to your judgement>
-```
+````
 
 ## Example
 
 For "Every morning, post yesterday's new Stripe customers in Slack":
 
-```markdown
+````markdown
+## Diagram
+
+```mermaid
+flowchart LR
+  A["Every day at 8:00"] --> B["List customers"] --> C["Build message"] --> D["Post to Slack"]
+```
+
 ## Decisions
 
 ### Goal
@@ -51,7 +69,10 @@ Each morning, the sales channel in Slack gets the list of the customers Stripe c
 
 ### Scope
 - Workflow: `workflows/daily-new-customers.workflow.ts`, titled `Daily new customers`, on target `dev`
-- Post one message to `#sales` with each customer's name and email.
+- Trigger: every day at 8:00, Europe/Paris.
+- Inputs: the Stripe customers created the day before.
+- Services & credentials: Stripe (`stripe`), Slack (`slack`).
+- Expected result: one message in `#sales` with each customer's name and email.
 
 ### Out of scope
 - Customers deleted the same day.
@@ -68,4 +89,4 @@ Each morning, the sales channel in Slack gets the list of the customers Stripe c
 
 ### Open assumptions
 - "Yesterday" is the previous calendar day in Europe/Paris.
-```
+````

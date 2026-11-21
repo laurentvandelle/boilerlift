@@ -1,22 +1,17 @@
 ---
 name: "BOILERLIFT:interviewing"
-description: Interviews the user about an n8n workflow, in rounds of multiple-choice questions, until shared understanding of what it does. Use when BOILERLIFT:ship needs the interview, or when the user invokes /BOILERLIFT:interviewing to think a workflow through before building it.
+description: Interviews the user about a plan, a decision or an idea, on any topic, in rounds of multiple-choice questions, until shared understanding. A caller can pass the branches the interview must cover. Use when BOILERLIFT:ship needs the interview, or when the user invokes /BOILERLIFT:interviewing to think something through before acting on it.
 ---
 
-Interview the user until you both understand the workflow the same way. Map it as a **design tree**: every decision branches into the decisions that hang off it.
+Interview the user until you both understand the subject the same way. Map it as a **design tree**: every decision branches into the decisions that hang off it.
 
-## The decisions of a workflow
+## The branches
 
-Walk these branches. Skip one the request or the project files already settle.
+The subject is what the user, or the skill that called this one, asks about. Draw the tree from it.
 
-- **Trigger**: what starts it (a manual click, a schedule, a webhook, an event of a service), and how often.
-- **Input**: the data it receives, and an example of one item.
-- **Steps**: each service it calls or each transformation it makes, in order. Which steps need a Code node.
-- **Services and credentials**: each service it reaches, and the n8n credential it uses. A credential is created in n8n by the user: never ask for the secret itself.
-- **Output**: what it produces, writes or sends, and where. An example of the result.
-- **Failures**: what happens when a service fails, an item is invalid, or there is nothing to do.
-- **Target**: the target of `boilerlift.config.ts` it goes to, when there are several.
-- **Name**: its stable name, the workflow file name (1 to 64 lowercase letters, digits or dashes), and its title in n8n.
+When the caller passes **must-cover branches**, each one is a branch of the tree: visit every one, even when the subject seems to settle it, and confirm it with the user. Skip a branch only when the user's own words or the project files already settle it, and say so in one line.
+
+Add the branches the subject needs beyond those: what it depends on, what it produces, how it fails, what is out of scope.
 
 ## Rounds
 
@@ -36,8 +31,10 @@ Each answer reshapes the tree. Recompute the frontier and ask the next round. A 
 
 ## Facts are yours, decisions are the user's
 
-Look up a fact yourself, never ask the user for it: the targets, the workflows and Code node functions already there, the credentials in `credentials/<target>.ts`. Put every decision to the user and wait.
+Look up a fact yourself, never ask the user for it: what the project files, the tools or the docs can tell. Put every decision to the user and wait.
+
+Never ask for a secret (an API key, a token, a password). Ask which credential or variable holds it.
 
 ## Done
 
-The interview is done when the frontier is empty: every branch visited, nothing silently assumed. Then hand back to the caller. Invoked on its own, write the summary of `.claude/skills/BOILERLIFT:plan/SKILL.md` in the chat, and build nothing until the user says so.
+The interview is done when the frontier is empty: every branch visited, the must-cover ones included, nothing silently assumed. Then hand back to the caller. Invoked on its own, sum up the decisions in the chat in a few bullets, and act on nothing until the user says so.
