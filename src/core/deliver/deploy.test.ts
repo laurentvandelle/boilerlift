@@ -23,7 +23,7 @@ function run(
   managed: Map<StableName, WorkflowId> = fakeManaged(),
   lock = fakeLockWriter(),
 ): Promise<DeployReport> {
-  return deploy({ workflows, client: n8n.client, managed }, lock.writer);
+  return deploy({ workflows, target: 'dev', credentials: [], client: n8n.client, managed }, lock.writer);
 }
 
 describe('deploy', () => {
@@ -442,7 +442,7 @@ describe('planDeploy', () => {
     const { workflows, instance, managed } = mixedSeed();
     const n8n = fakeN8n({ workflows: instance });
 
-    const report = planToReport(await planDeploy({ workflows, client: n8n.client, managed }));
+    const report = planToReport(await planDeploy({ workflows, target: 'dev', credentials: [], client: n8n.client, managed }));
 
     expect(actions(report)).toEqual([
       ['archived', 'restored'],
@@ -458,7 +458,7 @@ describe('planDeploy', () => {
     const { workflows, instance, managed } = mixedSeed();
     const n8n = fakeN8n({ workflows: instance });
 
-    await planDeploy({ workflows, client: n8n.client, managed });
+    await planDeploy({ workflows, target: 'dev', credentials: [], client: n8n.client, managed });
 
     expect(n8n.calls).toEqual([
       'GET /api/v1/openapi.yml',
@@ -473,7 +473,7 @@ describe('planDeploy', () => {
     const { workflows, instance, managed } = mixedSeed();
     const n8n = fakeN8n({ workflows: instance });
 
-    const report = planToReport(await planDeploy({ workflows, client: n8n.client, managed }));
+    const report = planToReport(await planDeploy({ workflows, target: 'dev', credentials: [], client: n8n.client, managed }));
 
     expect(report.lockFile).toEqual({ path: 'boilerlift.lock.json', changed: true });
   });
@@ -482,14 +482,14 @@ describe('planDeploy', () => {
     const workflow = fakeLocalWorkflow('a');
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(workflow, { id: 'ida', name: 'Old name' })] });
 
-    const report = planToReport(await planDeploy({ workflows: [workflow], client: n8n.client, managed: fakeManaged({ a: 'ida' }) }));
+    const report = planToReport(await planDeploy({ workflows: [workflow], target: 'dev', credentials: [], client: n8n.client, managed: fakeManaged({ a: 'ida' }) }));
 
     expect(report.lockFile.changed).toBe(false);
   });
 
   test('Should take exactly the planned actions when deploy runs on the same instance', async () => {
     const { workflows, instance, managed } = mixedSeed();
-    const planned = planToReport(await planDeploy({ workflows, client: fakeN8n({ workflows: instance }).client, managed }));
+    const planned = planToReport(await planDeploy({ workflows, target: 'dev', credentials: [], client: fakeN8n({ workflows: instance }).client, managed }));
 
     const deployed = await run(workflows, fakeN8n({ workflows: instance }), managed);
 
@@ -503,7 +503,7 @@ describe('planDeploy', () => {
   ])('Should stop before planning any workflow when %s', async (_condition, options, exitCode) => {
     const n8n = fakeN8n({ ...options, workflows: [fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'abc' })] });
 
-    const plan = await planDeploy({ workflows: [fakeLocalWorkflow('a'), fakeLocalWorkflow('b')], client: n8n.client, managed: fakeManaged({ a: 'abc' }) });
+    const plan = await planDeploy({ workflows: [fakeLocalWorkflow('a'), fakeLocalWorkflow('b')], target: 'dev', credentials: [], client: n8n.client, managed: fakeManaged({ a: 'abc' }) });
 
     expect(plan.steps).toEqual([]);
     expect(plan.exitCode).toBe(exitCode);

@@ -40,7 +40,8 @@ export function defineCredentials<const List extends readonly CredentialEntry[]>
  * nodes: [{ name: 'Send', type: 'n8n-nodes-base.gmail', …, credentials: credential('gmail-sales') }]
  * ```
  *
- * Deploy does not resolve the marker yet: it refuses a workflow that uses one.
+ * Deploy resolves the marker to the n8n `{ id, name }` of the key in the list of the target it deploys to, under the
+ * type that list gives it, and checks the id on the instance first.
  */
 export function credential<const Key extends CredentialKey>(key: Key): CredentialSlot<Key>;
 export function credential(key: string): Record<string, CredentialMarker> {

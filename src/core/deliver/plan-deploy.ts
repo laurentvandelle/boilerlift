@@ -2,15 +2,19 @@ import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { describeFailure, draftsUnsupported, isFatal, runEnd } from '#src/core/deliver/deploy-failure';
 import { DeployError, DeployInput, DeployPlan, DeployWarning, PlannedStep } from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
+import { resolveCredentials } from '#src/core/deliver/resolve-credentials';
 import { DRAFT_PARAM } from '#src/core/n8n/n8n-api';
 import { N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**
- * Computes what deploy would do, with reads only: the API spec, then one GET per workflow the lock file records
- * (ADR 0009). A workflow with no recorded id is created; a recorded id that answers 404 is recreated. A workflow on
- * the instance that the lock file does not record is never read. It never writes.
+ * Computes what deploy would do, with reads only: the API spec, then the credentials of the instance when workflows
+ * use `credential()` (`resolveCredentials`), then one GET per workflow the lock file records (ADR 0009). A missing
+ * credential stops the plan before any workflow. A workflow with no recorded id is created; a recorded id that
+ * answers 404 is recreated. A workflow on the instance that the lock file does not record is never read. It never
+ * writes.
  */
-export async function planDeploy({ workflows, client, managed }: DeployInput): Promise<DeployPlan> {
+export async function planDeploy(input: DeployInput): Promise<DeployPlan> {
+  const { client, managed } = input;
   const spec = await client.readApiSpec();
   if (!spec.ok) {
     const failure = spec.error;
@@ -19,12 +23,16 @@ export async function planDeploy({ workflows, client, managed }: DeployInput): P
   if (!spec.value.body.includes(DRAFT_PARAM)) {
     return stopped(draftsUnsupported(spec.value.call));
   }
+  const resolved = await resolveCredentials(input);
+  if (!resolved.ok) {
+    return stopped(resolved.error);
+  }
 
   const warnings: DeployWarning[] = [];
   const steps: PlannedStep[] = [];
   const tags = new Map<StableName, N8nTag[]>();
   let fatal: DeployError | undefined;
-  for (const workflow of sortByStableName(workflows)) {
+  for (const workflow of sortByStableName(resolved.value)) {
     if (fatal !== undefined) {
       steps.push({ workflow, action: 'not-processed' });
       continue;

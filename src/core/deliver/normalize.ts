@@ -11,7 +11,7 @@ interface Comparable {
 
 /**
  * The part of a workflow that deploy compares. Node `id` and `webhookId` are dropped, credentials keep
- * only their name per type, nodes are sorted by name, and settings keep only the keys the local file sets,
+ * only their id and name per type (a credential recreated under the same name has a new id, so it counts as a change), nodes are sorted by name, and settings keep only the keys the local file sets,
  * so server defaults (for example `redactionPolicy`) never count as a change.
  */
 function comparable(
@@ -44,7 +44,7 @@ function normalizeNode(node: unknown): unknown {
     return rest;
   }
   const reduced = Object.fromEntries(
-    Object.entries(credentials).map(([type, value]) => [type, { name: isRecord(value) ? value.name : undefined }]),
+    Object.entries(credentials).map(([type, value]) => [type, isRecord(value) ? { id: value.id, name: value.name } : {}]),
   );
   return { ...rest, credentials: reduced };
 }

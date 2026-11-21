@@ -13,7 +13,9 @@ import {
 } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
-import { CREDENTIALS_DIR, CREDENTIAL_LIST_SCOPE, knownCredentialTypes, syncCredentials } from '#src/core/credentials/sync-credentials';
+import { CREDENTIALS_DIR, knownCredentialTypes } from '#src/core/compile/credential-lists';
+import { syncCredentials } from '#src/core/credentials/sync-credentials';
+import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 
 const DESCRIPTION = `Lists the credentials of the n8n instance of each target it runs on, and writes them to
 ./${CREDENTIALS_DIR}/<target>.ts: the key, name, type and n8n id of each one, never a secret. Commit
@@ -27,8 +29,8 @@ leaves the list at the next sync.
 Then it reports each key that the workflows of the target use and that its list does not have,
 with its type and the workflows that use it. The list is written all the same.
 
-creds sync only reads the instance: it never changes a credential there. Deploy does not resolve
-credential() yet: it refuses a workflow that uses it.`;
+creds sync only reads the instance: it never changes a credential there. Deploy resolves each
+credential('key') through the list of the target it deploys to.`;
 
 export const credsSyncCommand: CommandDefinition = defineCommand({
   name: 'creds sync',

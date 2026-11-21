@@ -44,7 +44,7 @@ export default defineWorkflow({
 
 `credential()` takes the keys of every target's list, so the editor offers them and flags a key no list has. It returns the `credentials` entry of the node, under the type of its credential.
 
-`lift deploy` does not resolve `credential()` yet: it refuses a workflow that uses it, before sending anything.
+`lift deploy` resolves each `credential('key')` through the list of the target it deploys to: the node gets the n8n `{ id, name }` of that key in `credentials/<target>.ts`, under its type there, so one workflow folder deploys to `dev` and `prod` with each target's own credentials. Before writing, deploy checks each id on the instance; a key the target lacks stops that target before anything is written (exit 8). See [`lift deploy`](deploy.md#credentials).
 
 ## Missing credentials
 

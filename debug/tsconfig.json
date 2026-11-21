@@ -12,5 +12,5 @@
       "boilerlift": ["../dist/index.d.ts"]
     }
   },
-  "include": ["main.ts", "boilerlift.config.ts", "workflows/**/*.ts", "credentials/*.ts"]
+  "include": ["main.ts", "boilerlift.config.ts", "workflows/**/*.ts", "workflows-prod/**/*.ts", "credentials/*.ts"]
 }

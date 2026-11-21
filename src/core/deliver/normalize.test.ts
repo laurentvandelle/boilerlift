@@ -13,7 +13,7 @@ const LOCAL = fakeLocalWorkflow('crm', {
   connections: { Hook: { main: [[{ node: 'Slack', type: 'main', index: 0 }]] } },
 });
 
-/** The instance's current draft of LOCAL: other ids, nodes and keys in another order, and server-only settings. */
+/** The instance's current draft of LOCAL: other node ids, nodes and keys in another order, and server-only settings. */
 function draftOfLocal(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
   return fakeN8nWorkflow(LOCAL, {
     nodes: [
@@ -25,7 +25,7 @@ function draftOfLocal(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
         id: 's2',
         typeVersion: 1,
         parameters: {},
-        credentials: { slackApi: { id: 'prod-9', name: 'Slack bot' } },
+        credentials: { slackApi: { name: 'Slack bot', id: 'dev-1' } },
       },
     ],
     connections: { Hook: { main: [[{ index: 0, type: 'main', node: 'Slack' }]] } },
@@ -35,7 +35,7 @@ function draftOfLocal(overrides: Partial<N8nWorkflow> = {}): N8nWorkflow {
 }
 
 describe('isSameContent', () => {
-  test('Should find the same content when the draft differs only in ids, node and key order and server-only settings', () => {
+  test('Should find the same content when the draft differs only in node ids, node and key order and server-only settings', () => {
     const draft = draftOfLocal();
 
     const same = isSameContent(LOCAL, draft);
@@ -48,6 +48,15 @@ describe('isSameContent', () => {
     ['a setting the file sets', { settings: { executionOrder: 'v0' } }],
     ['the connections', { connections: {} }],
     ['a credential name', { nodes: [{ name: 'Hook', type: 'webhook' }, { name: 'Slack', type: 'slack', credentials: { slackApi: { name: 'Other' } } }] }],
+    [
+      'a credential id under the same name',
+      {
+        nodes: [
+          { parameters: {}, type: 'webhook', name: 'Hook', typeVersion: 1, position: [0, 0] },
+          { parameters: {}, type: 'slack', name: 'Slack', typeVersion: 1, position: [0, 0], credentials: { slackApi: { id: 'new-1', name: 'Slack bot' } } },
+        ],
+      },
+    ],
   ])('Should see a change when the draft differs in %s', (_difference, overrides) => {
     const draft = draftOfLocal(overrides);
 

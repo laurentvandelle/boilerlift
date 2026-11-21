@@ -1,6 +1,8 @@
 import { DeployError, DeployErrorKind, DeployResult, RunEnd } from '#src/core/deliver/deploy.model';
 import {
   EXIT_API_KEY_REJECTED,
+  EXIT_CREDENTIALS_MISSING,
+  EXIT_CREDENTIAL_SCOPE_MISSING,
   EXIT_DRAFTS_UNSUPPORTED,
   EXIT_LOCK_WRITE_FAILED,
   EXIT_OK,
@@ -16,6 +18,8 @@ const EFFECTS: Record<DeployErrorKind, { stopsRun: boolean; exitCode: FailureExi
   unreachable: { stopsRun: true, exitCode: EXIT_UNREACHABLE },
   'key-rejected': { stopsRun: true, exitCode: EXIT_API_KEY_REJECTED },
   'drafts-unsupported': { stopsRun: true, exitCode: EXIT_DRAFTS_UNSUPPORTED },
+  'credential-scope-missing': { stopsRun: true, exitCode: EXIT_CREDENTIAL_SCOPE_MISSING },
+  'credentials-missing': { stopsRun: true, exitCode: EXIT_CREDENTIALS_MISSING },
   'workflow-failed': { stopsRun: false, exitCode: EXIT_PARTIAL_FAILURE },
   'lock-write-failed': { stopsRun: true, exitCode: EXIT_LOCK_WRITE_FAILED },
 };

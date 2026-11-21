@@ -1,9 +1,9 @@
 import { CliResult } from '#src/cli/cli.model';
 import { TargetRun } from '#src/cli/targets.render';
-import { CredentialUse } from '#src/core/compile/credential.model';
+import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { CONFIG_FILE } from '#src/core/config/project-config';
-import { DeployAction, DeployReport, DeployResult, DeployWarning } from '#src/core/deliver/deploy.model';
+import { DeployAction, DeployError, DeployReport, DeployResult, DeployWarning, UnresolvedCredential } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
 import { LockFileError } from '#src/core/deliver/lock-file.model';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
@@ -143,24 +143,6 @@ export function renderSharedEntries(shared: SharedEntry[], format: { json: boole
   return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: `${message}\n` };
 }
 
-/** Nodes that pick a credential with credential(), which deploy cannot resolve yet: exit 1, nothing sent. */
-export function renderCredentialMarkers(uses: CredentialUse[], format: { json: boolean }): CliResult {
-  const lines = uses.map(({ path, node, key }) => `✗ ${path}  node "${node}" uses credential('${key}')`);
-  const message = [
-    "Workflows pick credentials with credential(), which deploy cannot resolve yet. Nothing was sent to n8n.",
-    ...lines,
-    '  → Until deploy resolves it, set the credentials of these nodes as n8n exports them: { "<type>": { "id": "…", "name": "…" } }.',
-  ].join('\n');
-  if (!format.json) {
-    return { exitCode: EXIT_USAGE, stdout: '', stderr: `${message}\n` };
-  }
-  const payload = {
-    error: { kind: 'credential-not-deployable', message, uses: uses.map(({ path, node, key }) => ({ path, node, key })) },
-    exitCode: EXIT_USAGE,
-  };
-  return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: `${message}\n` };
-}
-
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
 export function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]): TargetRun {
   const lines = problems.map((problem) => `✗ ${problem.path}  ${problem.detail}`);
@@ -286,7 +268,7 @@ function renderText(target: DeployTarget, report: DeployReport, wording: Wording
   stdout.push(...report.warnings.map((warning) => `⚠ ${warningText(warning, wording)}`));
   const { error } = report;
   if (error !== undefined && report.results.length === 0) {
-    const stderr = [`✗ ${error.call} → ${error.detail}`, `  → ${error.hint}`, 'Nothing was written to n8n.'];
+    const stderr = [`✗ ${error.call} → ${error.detail}`, ...missingLines(target, error), `  → ${error.hint}`, 'Nothing was written to n8n.'];
     return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: `${stderr.join('\n')}\n` };
   }
   const [summary = '', ...notes] = wording.summary(summarize(report.results), publishCommand(target, format));
@@ -299,6 +281,40 @@ function renderText(target: DeployTarget, report: DeployReport, wording: Wording
     stdout.push(wording.lockFile);
   }
   return { exitCode: report.exitCode, stdout: `${stdout.join('\n')}\n`, stderr: recap(report, wording) };
+}
+
+/** Why a credential is missing, as the line under the stop says it. */
+function missingReason(target: DeployTarget, credential: UnresolvedCredential): string {
+  const file = credentialsFilePath(target.name);
+  switch (credential.reason) {
+  case 'not-listed':
+    return `not in ${file}`;
+  case 'gone':
+    return `id ${credential.id ?? ''} in ${file}, gone from the instance`;
+  case 'type-changed':
+    return `id ${credential.id ?? ''} in ${file}, of another type on the instance`;
+  }
+}
+
+/** One line per missing credential of a `credentials-missing` stop: its key, type, reason and workflows. */
+function missingLines(target: DeployTarget, error: DeployError): string[] {
+  if (error.kind !== 'credentials-missing') {
+    return [];
+  }
+  return error.missing.map(
+    (credential) =>
+      `✗ ${credential.key} (${credential.type ?? 'type unknown'})  ${missingReason(target, credential)}; used by ${credential.workflows.join(', ')}`,
+  );
+}
+
+/** The `error` of the --json report. A `credentials-missing` stop also lists each missing credential. */
+function errorPayload(error: DeployError): Record<string, unknown> {
+  const { call, detail, hint } = error;
+  if (error.kind !== 'credentials-missing') {
+    return { call, detail, hint };
+  }
+  const missing = error.missing.map(({ key, type, reason, id, workflows }) => ({ key, type: type ?? null, reason, id: id ?? null, workflows }));
+  return { kind: error.kind, call, detail, hint, missing };
 }
 
 /** The stderr recap: which workflows need attention and what to do next. Empty when everything went through. */
@@ -343,7 +359,7 @@ function jsonPayload(target: DeployTarget, report: DeployReport, wording: Wordin
     warnings: report.warnings.map((warning) => warningText(warning, wording)),
     lockFile: report.lockFile,
     tag: report.tag ?? null,
-    error: error === undefined ? null : { call: error.call, detail: error.detail, hint: error.hint },
+    error: error === undefined ? null : errorPayload(error),
     next: !wording.dryRun && deliveredDrafts(summary) ? publishCommand(target, format) : null,
     exitCode: report.exitCode,
   };
