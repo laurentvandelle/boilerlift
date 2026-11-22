@@ -4,6 +4,14 @@
 /** Where the public API lives on the instance. */
 export const API_PATH = '/api/v1';
 
+/**
+ * The workflow link: the url of a workflow in the n8n editor of its instance, `<target url>/workflow/<id>`. `url` is the
+ * target url as the config parser leaves it: no trailing slash, any path prefix (such as `/n8n`) kept.
+ */
+export function workflowLink(url: string, id: string): string {
+  return `${url}/workflow/${id}`;
+}
+
 /** The query parameter that makes an update land as a draft. Its presence in the API spec means drafts are supported. */
 export const DRAFT_PARAM = 'publishIfActive';
 

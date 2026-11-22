@@ -102,7 +102,7 @@ export function sections(...parts: ReadonlyArray<readonly string[]>): string {
 
 /**
  * Colours a finished result on its hotspots, when `color` is on: `✗` and its error lines in red, `!` in yellow, `✓`
- * and `+` in green, `→` next commands in cyan, `=` and `·` rows and the url dimmed. Colour only adds to the text:
+ * and `+` in green, `→` next commands in cyan, `=` and `·` rows, the url and the workflow links in grey (bright black: dim makes some terminals stop opening a link on Ctrl+click). Colour only adds to the text:
  * every symbol, word and indent is there without it. A --json stdout is never coloured.
  */
 export function paint(result: CliResult, view: { color: boolean; json: boolean }): CliResult {
@@ -129,7 +129,7 @@ export function paintText(text: string): string {
     .join('\n');
 }
 
-type Tone = 'red' | 'yellow' | 'green' | 'cyan' | 'dim';
+type Tone = 'red' | 'yellow' | 'green' | 'cyan' | 'gray';
 
 const SYMBOL_TONES: ReadonlyArray<[string, Tone]> = [
   [SYMBOLS.failed, 'red'],
@@ -140,24 +140,32 @@ const SYMBOL_TONES: ReadonlyArray<[string, Tone]> = [
 
 const HEADER_URL = /^(lift .* · .*|── .*) \((\S+)\)$/;
 
+/** A workflow link in a row (`workflowLink`, `core/n8n/n8n-api.ts`): `<target url>/workflow/<id>`. */
+const WORKFLOW_LINK = /\bhttps?:\/\/\S+?\/workflow\/[\w-]+/g;
+
+/** `text` with every workflow link in grey, like the url of the header. */
+function greyLinks(text: string): string {
+  return text.replace(WORKFLOW_LINK, (link) => color('gray', link));
+}
+
 function paintLine(body: string): string {
   if (body.startsWith('→ ')) {
     const end = body.indexOf('  ');
     return end === -1 ? color('cyan', body) : `${color('cyan', body.slice(0, end))}${body.slice(end)}`;
   }
   if (body.startsWith(`${SYMBOLS.unchanged} `) || body.startsWith(`${SYMBOLS.unmanaged} `)) {
-    return color('dim', body);
+    return color('gray', body);
   }
   for (const [symbol, tone] of SYMBOL_TONES) {
     if (body.startsWith(`${symbol} `)) {
-      return `${color(tone, symbol)}${body.slice(symbol.length)}`;
+      return `${color(tone, symbol)}${greyLinks(body.slice(symbol.length))}`;
     }
   }
   const url = HEADER_URL.exec(body);
   if (url !== null) {
-    return `${url[1] ?? ''} ${color('dim', `(${url[2] ?? ''})`)}`;
+    return `${url[1] ?? ''} ${color('gray', `(${url[2] ?? ''})`)}`;
   }
-  return body;
+  return greyLinks(body);
 }
 
 /** `text` in `tone`. The caller decided colour is on: the stream is not checked again. */

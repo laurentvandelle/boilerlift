@@ -47,12 +47,14 @@ With `--all`, every target is read first. If one has a problem (an unknown name,
 ```text
 lift publish · dev (https://n8n.example.com)
 
-✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ
+✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ  https://n8n.example.com/workflow/crm1
   → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import
-^ daily-report  published  workflows/daily-report.json (the workflow now runs this version)
+^ daily-report  published  https://n8n.example.com/workflow/rep1 (the workflow now runs this version)
 
 1 published, 0 already published, 1 to deploy first, 0 failed.
 ```
+
+Each line but a failure shows the workflow link, `<target url>/workflow/<id>`, so a click opens the workflow in the n8n editor. With `--json`, each result carries the same link as `url`, or `null` for a failure.
 
 Without names, the last line counts only `published` and `failed`: workflows already published or to deploy first are not part of the run.
 

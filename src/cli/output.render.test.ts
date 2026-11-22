@@ -54,11 +54,11 @@ describe('stopped', () => {
 describe('paint', () => {
   const result = { exitCode: 0 as const, stdout: '! tag missing\n= weekly  up to date\n· Hand made\n✓ Node  24.1.0\n', stderr: '' };
 
-  test('Should colour the warning yellow, dim the unchanged and unmanaged rows and colour the check green when colour is on', () => {
+  test('Should colour the warning yellow, grey the unchanged and unmanaged rows and colour the check green when colour is on', () => {
     const painted = paint(result, { color: true, json: false });
 
     expect(painted.stdout).toBe(
-      '\u001b[33m!\u001b[39m tag missing\n\u001b[2m= weekly  up to date\u001b[22m\n\u001b[2m· Hand made\u001b[22m\n\u001b[32m✓\u001b[39m Node  24.1.0\n',
+      '\u001b[33m!\u001b[39m tag missing\n\u001b[90m= weekly  up to date\u001b[39m\n\u001b[90m· Hand made\u001b[39m\n\u001b[32m✓\u001b[39m Node  24.1.0\n',
     );
   });
 

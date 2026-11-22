@@ -100,9 +100,9 @@ describe('deployCommand', () => {
       stderr: '',
       stdout: `lift deploy · dev (https://n8n.example.com)
 
-~ crm-import    updated  workflows/crm/crm-import.json (draft; published version still running)
-= daily-report  skipped  unchanged
-+ invoice-sync  created  workflows/invoice-sync.workflow.ts
+~ crm-import    updated  https://n8n.example.com/workflow/crm1 (draft; published version still running)
+= daily-report  skipped  unchanged  https://n8n.example.com/workflow/rep1
++ invoice-sync  created  https://n8n.example.com/workflow/w1
 
 1 created, 1 updated, 0 restored, 1 skipped, 0 failed.
 Tag boilerlift:dev added to 3 workflows
@@ -189,8 +189,8 @@ Tag boilerlift:dev added to 3 workflows
       instance: 'https://n8n.example.com',
       dryRun: false,
       results: [
-        { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'skipped', id: 'rep1', name: 'Daily report' },
-        { stableName: 'new', path: 'workflows/new.json', action: 'created', id: 'w1', name: 'New' },
+        { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'skipped', id: 'rep1', name: 'Daily report', url: 'https://n8n.example.com/workflow/rep1' },
+        { stableName: 'new', path: 'workflows/new.json', action: 'created', id: 'w1', name: 'New', url: 'https://n8n.example.com/workflow/w1' },
       ],
       summary: { created: 1, recreated: 0, updated: 0, restored: 0, skipped: 1, failed: 0, notProcessed: 0 },
       warnings: [],
@@ -214,8 +214,8 @@ Tag boilerlift:dev added to 3 workflows
 ✗ crm-import    failed
   PUT /api/v1/workflows/crm1 : HTTP 500: boom
   → ${RETRY_HINT}
-+ daily-report  created  workflows/daily-report.json
-+ invoice-sync  created  workflows/invoice-sync.workflow.ts
++ daily-report  created  https://n8n.example.com/workflow/w1
++ invoice-sync  created  https://n8n.example.com/workflow/w2
 
 2 created, 0 updated, 0 restored, 0 skipped, 1 failed.
 Tag boilerlift:dev added to 2 workflows
@@ -231,13 +231,13 @@ Tag boilerlift:dev added to 2 workflows
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result.stdout).toBe(`lift deploy · dev \u001b[2m(https://n8n.example.com)\u001b[22m
+    expect(result.stdout).toBe(`lift deploy · dev \u001b[90m(https://n8n.example.com)\u001b[39m
 
 \u001b[31m✗\u001b[39m crm-import    failed
   \u001b[31mPUT /api/v1/workflows/crm1 : HTTP 500: boom\u001b[39m
   \u001b[36m→ ${RETRY_HINT}\u001b[39m
-\u001b[32m+\u001b[39m daily-report  created  workflows/daily-report.json
-\u001b[32m+\u001b[39m invoice-sync  created  workflows/invoice-sync.workflow.ts
+\u001b[32m+\u001b[39m daily-report  created  \u001b[90mhttps://n8n.example.com/workflow/w1\u001b[39m
+\u001b[32m+\u001b[39m invoice-sync  created  \u001b[90mhttps://n8n.example.com/workflow/w2\u001b[39m
 
 2 created, 0 updated, 0 restored, 0 skipped, 1 failed.
 Tag boilerlift:dev added to 2 workflows
@@ -400,7 +400,7 @@ Nothing was written to n8n.
       stderr: '',
       stdout: `lift deploy · dev (https://n8n.example.com)
 
-↺ daily-report  restored  workflows/daily-report.json (unpublished draft)
+↺ daily-report  restored  https://n8n.example.com/workflow/rep1 (unpublished draft)
 ! daily-report: workflow rep1 was archived in n8n; it is back as an unpublished draft
 
 0 created, 0 updated, 1 restored, 0 skipped, 0 failed.
@@ -493,8 +493,8 @@ Tag boilerlift:dev added to 1 workflows
       stderr: '',
       stdout: `lift deploy --dry-run · dev (https://n8n.example.com)
 
-~ crm-import    would update  workflows/crm/crm-import.json (draft; published version still running)
-= daily-report  would skip  unchanged
+~ crm-import    would update  https://n8n.example.com/workflow/crm1 (draft; published version still running)
+= daily-report  would skip  unchanged  https://n8n.example.com/workflow/rep1
 + invoice-sync  would create  workflows/invoice-sync.workflow.ts
 
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
@@ -541,8 +541,8 @@ n8n can still reject a write; this preview covers what reads can show.
       instance: 'https://n8n.example.com',
       dryRun: true,
       results: [
-        { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'restored', id: 'rep1', name: 'Daily report' },
-        { stableName: 'new', path: 'workflows/new.json', action: 'created', id: null, name: 'New' },
+        { stableName: 'daily-report', path: 'workflows/daily-report.json', action: 'restored', id: 'rep1', name: 'Daily report', url: 'https://n8n.example.com/workflow/rep1' },
+        { stableName: 'new', path: 'workflows/new.json', action: 'created', id: null, name: 'New', url: null },
       ],
       summary: { created: 1, recreated: 0, updated: 0, restored: 1, skipped: 0, failed: 0, notProcessed: 0 },
       warnings: ['daily-report: workflow rep1 was archived in n8n; deploy would bring it back as an unpublished draft'],
@@ -635,7 +635,7 @@ n8n can still reject a write; this preview covers what reads can show.
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result.stdout).toContain('~ crm-import  updated  workflows/crm/crm-import.json (draft; published version still running)\n');
+    expect(result.stdout).toContain('~ crm-import  updated  https://n8n.example.com/workflow/crm1 (draft; published version still running)\n');
     expect(n8n.workflows).toEqual([expect.objectContaining({ id: 'crm1', name: 'CRM import' })]);
   });
 
@@ -701,7 +701,7 @@ n8n can still reject a write; this preview covers what reads can show.
     expect({ stdout: result.stdout, lock: lock.text() }).toEqual({
       stdout: `lift deploy · dev (https://n8n.example.com)
 
-* crm-import  recreated  workflows/crm/crm-import.json (n8n no longer has the recorded workflow gone)
+* crm-import  recreated  https://n8n.example.com/workflow/w1 (n8n no longer has the recorded workflow gone)
 
 0 created, 1 recreated, 0 updated, 0 restored, 0 skipped, 0 failed.
 Tag boilerlift:dev added to 1 workflows
@@ -770,7 +770,7 @@ n8n can still reject a write; this preview covers what reads can show.
       stderr: '',
       stdout: `lift deploy · dev (https://n8n.example.com)
 
-= daily-report  skipped  unchanged
+= daily-report  skipped  unchanged  https://n8n.example.com/workflow/rep1
 ! daily-report: tag boilerlift:dev not added (PUT /api/v1/workflows/rep1/tags : HTTP 403: Forbidden); the workflow is deployed without it
 
 0 created, 0 updated, 0 restored, 1 skipped, 0 failed.

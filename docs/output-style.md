@@ -55,7 +55,7 @@ Each symbol has one meaning in every command (`SYMBOLS`):
 
 ## Colour
 
-Colour marks the hotspots only: `✗` and its error lines in red, `!` in yellow, `✓` and `+` in green, `→` next commands in cyan, the `=` and `·` rows and the url dimmed. Names and states keep the default colour.
+Colour marks the hotspots only: `✗` and its error lines in red, `!` in yellow, `✓` and `+` in green, `→` next commands in cyan, the `=` and `·` rows, the url and the workflow links in grey (bright black, not dim: some terminals stop opening a dimmed link on Ctrl+click). Names and states keep the default colour.
 
 Colour is never the only carrier of meaning: with colour off, every symbol, word and indent is still there. `paint()` adds it to a finished result, from the text alone, so a render function never colours anything itself.
 
