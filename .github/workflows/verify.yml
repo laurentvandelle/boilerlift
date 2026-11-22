@@ -4,10 +4,11 @@ on:
   # On main too, so the CI badge of the README shows the state of main.
   push:
     branches: [main]
+  # `opened` covers a pull request opened on commits already pushed (the release skill).
+  # /boilerlift:ship opens its pull request on an empty commit: the job below skips it, and
+  # Verify runs on the first push of code (`synchronize`).
   pull_request:
-    # Not on `opened`: /LV:to-pr-local opens the pull request on a plan-only commit.
-    # Verify runs once code is pushed (`synchronize`) or the pull request is reopened.
-    types: [synchronize, reopened]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -19,6 +20,9 @@ concurrency:
 jobs:
   verify:
     name: Lint, typecheck, test and build
+    # A pull request that changes no file is main as it is: nothing to verify. A skipped job
+    # still passes the required check of the main ruleset.
+    if: github.event_name == 'push' || github.event.pull_request.changed_files > 0
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
