@@ -61,10 +61,10 @@ An example report:
 ```text
 lift deploy · prod (https://your-n8n.example.com)
 
-~ crm-import    updated  workflows/crm/crm-import.json (draft; published version still running)
-= daily-report  skipped  unchanged
-+ invoice-sync  created  workflows/invoice-sync.workflow.ts
-↺ lead-scoring  restored  workflows/lead-scoring.json (unpublished draft)
+~ crm-import    updated  https://your-n8n.example.com/workflow/3Kd9 (draft; published version still running)
+= daily-report  skipped  unchanged  https://your-n8n.example.com/workflow/9fPz
++ invoice-sync  created  https://your-n8n.example.com/workflow/Qa71
+↺ lead-scoring  restored  https://your-n8n.example.com/workflow/7Hq2 (unpublished draft)
 ! lead-scoring: workflow 7Hq2 was archived in n8n; it is back as an unpublished draft
 
 1 created, 1 updated, 1 restored, 1 skipped, 0 failed.
@@ -122,6 +122,8 @@ When `deploy` creates a workflow, it records its n8n id in **`boilerlift.lock.js
 - An invalid `boilerlift.lock.json` stops `deploy` before any call (exit 1).
 - Workflows tagged `boilerlift:<stable-name>` by earlier versions are not taken over: with no record, `deploy` creates them again. Their tags stay; delete or archive the old copies in the n8n editor.
 
+Each workflow that exists on the instance shows its workflow link, `<target url>/workflow/<id>`, in place of its file path, so a click opens it in the n8n editor. A failed or not processed workflow keeps its file path. With `--json`, each result carries the same link as `url`, or `null` when its line has none.
+
 Why ids and not names: [ADR 0009](../adr/0009-lock-file-identity.md).
 
 ## Dry run
@@ -131,8 +133,8 @@ Why ids and not names: [ADR 0009](../adr/0009-lock-file-identity.md).
 ```text
 lift deploy --dry-run · prod (https://your-n8n.example.com)
 
-~ crm-import    would update  workflows/crm/crm-import.json (draft; published version still running)
-= daily-report  would skip  unchanged
+~ crm-import    would update  https://your-n8n.example.com/workflow/3Kd9 (draft; published version still running)
+= daily-report  would skip  unchanged  https://your-n8n.example.com/workflow/9fPz
 + invoice-sync  would create  workflows/invoice-sync.workflow.ts
 
 Would: 1 create, 1 update, 0 restore, 1 skip, 0 fail.
@@ -144,4 +146,4 @@ n8n can still reject a write; this preview covers what reads can show.
 → commit boilerlift.lock.json after lift deploy  it would update
 ```
 
-With `--json`, the report carries `"dryRun": true`.
+A workflow that would be created or recreated has no id yet, so it shows its file path. With `--json`, the report carries `"dryRun": true`.

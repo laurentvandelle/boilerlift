@@ -15,6 +15,7 @@ It deploys them to the user's own n8n instance as drafts, and the published vers
 ### Workflows
 
 - **Workflow file**: one workflow in the workflows folder of a target: a `.workflow.ts` file whose default export is an n8n export passed to `defineWorkflow`, or a `.json` n8n export. Its base name is its stable name.
+- **Workflow link**: the URL of a workflow in the n8n editor of its instance, `<target url>/workflow/<id>`. `deploy`, `publish` and `status` show it for each workflow that exists on the instance. _Avoid_: n8n URL, editor URL.
 - **Local workflow**: a workflow file that passed every check, ready to deploy: its stable name, path, name, nodes, connections and settings.
 - **Node**: one step of an n8n workflow, as the export lists it under `nodes`. _Avoid_: node for the runtime; write Node.js.
 - **Connection**: a link from the output of one node to another node, as the export lists it under `connections`. _Avoid_: connection for the instance connection.
