@@ -102,7 +102,7 @@ export function sections(...parts: ReadonlyArray<readonly string[]>): string {
 
 /**
  * Colours a finished result on its hotspots, when `color` is on: `✗` and its error lines in red, `!` in yellow, `✓`
- * and `+` in green, `→` next commands in cyan, `=` and `·` rows and the url dimmed. Colour only adds to the text:
+ * and `+` in green, `→` next commands in cyan, `=` and `·` rows, the url and the workflow links dimmed. Colour only adds to the text:
  * every symbol, word and indent is there without it. A --json stdout is never coloured.
  */
 export function paint(result: CliResult, view: { color: boolean; json: boolean }): CliResult {
@@ -140,6 +140,14 @@ const SYMBOL_TONES: ReadonlyArray<[string, Tone]> = [
 
 const HEADER_URL = /^(lift .* · .*|── .*) \((\S+)\)$/;
 
+/** A workflow link in a row (`workflowLink`, `core/n8n/n8n-api.ts`): `<target url>/workflow/<id>`. */
+const WORKFLOW_LINK = /\bhttps?:\/\/\S+?\/workflow\/[\w-]+/g;
+
+/** `text` with every workflow link dimmed, like the url of the header. */
+function dimLinks(text: string): string {
+  return text.replace(WORKFLOW_LINK, (link) => color('dim', link));
+}
+
 function paintLine(body: string): string {
   if (body.startsWith('→ ')) {
     const end = body.indexOf('  ');
@@ -150,14 +158,14 @@ function paintLine(body: string): string {
   }
   for (const [symbol, tone] of SYMBOL_TONES) {
     if (body.startsWith(`${symbol} `)) {
-      return `${color(tone, symbol)}${body.slice(symbol.length)}`;
+      return `${color(tone, symbol)}${dimLinks(body.slice(symbol.length))}`;
     }
   }
   const url = HEADER_URL.exec(body);
   if (url !== null) {
     return `${url[1] ?? ''} ${color('dim', `(${url[2] ?? ''})`)}`;
   }
-  return body;
+  return dimLinks(body);
 }
 
 /** `text` in `tone`. The caller decided colour is on: the stream is not checked again. */

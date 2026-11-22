@@ -5,7 +5,7 @@ import { LoadProblem } from '#src/core/compile/workflow.model';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
 import { LockFileError } from '#src/core/deliver/lock-file.model';
-import { API_KEY_HINT } from '#src/core/n8n/n8n-api';
+import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
 import { PlannedPublish, PublishPlan, PublishReport, PublishResult, UnknownName } from '#src/core/publish/publish.model';
 
 /** The target publish runs on: its name, its url (the instance the lock file records under) and its workflows folder. */
@@ -276,16 +276,22 @@ function hintOf(result: PublishResult, target: PublishTarget, format: PublishFor
   }
 }
 
-/** The detail after the label of a result. A failure has its cause under its line instead. */
-function detailOf(result: PublishResult): string {
+/** The workflow link of a result: every result but a failure. */
+function linkOf(result: PublishResult, target: PublishTarget): string | null {
+  return result.action === 'failed' ? null : workflowLink(target.instance, result.id);
+}
+
+/** The detail after the label of a result, with its workflow link. A failure has its cause under its line instead. */
+function detailOf(result: PublishResult, target: PublishTarget): string {
+  const link = workflowLink(target.instance, result.id);
   switch (result.action) {
   case 'published':
-    return `${result.path} (the workflow now runs this version)`;
+    return `${link} (the workflow now runs this version)`;
   case 'already-published':
-    return 'the published version holds the local file';
+    return `the published version holds the local file  ${link}`;
   case 'refused':
   case 'differs':
-    return 'differs from n8n: the local file and the n8n draft differ';
+    return `differs from n8n: the local file and the n8n draft differ  ${link}`;
   case 'failed':
     return '';
   }
@@ -293,7 +299,7 @@ function detailOf(result: PublishResult): string {
 
 /** One result as a row: its label and detail, then the cause of a failure (every line of it) and the next step. */
 function resultRow(result: PublishResult, target: PublishTarget, format: PublishFormat): Row {
-  const detail = detailOf(result);
+  const detail = detailOf(result, target);
   const hint = hintOf(result, target, format);
   const label = LABELS[result.action];
   return {
@@ -324,6 +330,7 @@ export function renderReport(target: PublishTarget, report: PublishReport, forma
         path: result.path,
         name: result.name,
         id: result.id,
+        url: linkOf(result, target),
         action: result.action,
         ...(result.action === 'failed' ? { error: result.error } : {}),
         next: nextCommand(result, target, format),

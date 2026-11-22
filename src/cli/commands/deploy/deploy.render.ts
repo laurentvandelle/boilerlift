@@ -8,6 +8,7 @@ import { DeployAction, DeployError, DeployReport, DeployResult, DeployWarning, U
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
 import { LockFileError } from '#src/core/deliver/lock-file.model';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
+import { workflowLink } from '#src/core/n8n/n8n-api';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 
 /** How the report is worded: the --dry-run flag, and whether the command line named targets (`-t` or `--all`). */
@@ -228,19 +229,42 @@ function summarize(results: DeployResult[]): Summary {
   };
 }
 
-/** The detail after the label of a result: where it came from, or nothing. A failure has its cause under its line. */
-function detailOf(result: DeployResult): string {
+/**
+ * The workflow link of a result: every workflow that exists on the instance with a known id. A dry-run create or
+ * recreate has no id yet, and a failed or not processed workflow has none.
+ */
+function linkOf(result: DeployResult, target: DeployTarget): string | null {
   switch (result.action) {
   case 'created':
-    return result.path;
   case 'recreated':
-    return `${result.path} (n8n no longer has the recorded workflow ${result.previousId})`;
+    return result.id === undefined ? null : workflowLink(target.instance, result.id);
   case 'updated':
-    return `${result.path} (draft; published version still running)`;
-  case 'restored':
-    return `${result.path} (unpublished draft)`;
   case 'skipped':
-    return 'unchanged';
+  case 'restored':
+    return workflowLink(target.instance, result.id);
+  case 'failed':
+  case 'not-processed':
+    return null;
+  }
+}
+
+/**
+ * The detail after the label of a result: its workflow link in place of its path when it has one, then its note, or
+ * nothing. A failure has its cause under its line.
+ */
+function detailOf(result: DeployResult, target: DeployTarget): string {
+  const where = linkOf(result, target) ?? result.path;
+  switch (result.action) {
+  case 'created':
+    return where;
+  case 'recreated':
+    return `${where} (n8n no longer has the recorded workflow ${result.previousId})`;
+  case 'updated':
+    return `${where} (draft; published version still running)`;
+  case 'restored':
+    return `${where} (unpublished draft)`;
+  case 'skipped':
+    return `unchanged  ${where}`;
   case 'failed':
   case 'not-processed':
     return '';
@@ -248,8 +272,8 @@ function detailOf(result: DeployResult): string {
 }
 
 /** One result as a row: its label and detail, then for a failure its cause and the next step under it. */
-function resultRow(result: DeployResult, wording: Wording): Row {
-  const detail = detailOf(result);
+function resultRow(result: DeployResult, target: DeployTarget, wording: Wording): Row {
+  const detail = detailOf(result, target);
   const label = wording.labels[result.action];
   return {
     symbol: SYMBOL_OF[result.action],
@@ -276,7 +300,7 @@ function warningText(item: DeployWarning, wording: Wording, separator = ' : '): 
 
 function renderText(target: DeployTarget, report: DeployReport, wording: Wording, format: DeployFormat): CliResult {
   const top = [header(wording.command, target.name, target.instance)];
-  const list = [...rows(report.results.map((result) => resultRow(result, wording))), ...report.warnings.map((item) => warning(warningText(item, wording)))];
+  const list = [...rows(report.results.map((result) => resultRow(result, target, wording))), ...report.warnings.map((item) => warning(warningText(item, wording)))];
   const { error } = report;
   if (error !== undefined && report.results.length === 0) {
     const stop = stopped(error.call, error.detail, [...missingLines(target, error), next(error.hint)]);
@@ -360,6 +384,7 @@ function jsonPayload(target: DeployTarget, report: DeployReport, wording: Wordin
       id: 'id' in result ? (result.id ?? null) : null,
       ...(result.action === 'recreated' ? { previousId: result.previousId } : {}),
       name: result.name,
+      url: linkOf(result, target),
       ...(result.action === 'failed' ? { error: result.error } : {}),
     })),
     summary,

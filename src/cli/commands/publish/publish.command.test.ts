@@ -64,9 +64,9 @@ describe('publishCommand', () => {
       stdout: [
         'lift publish · dev (https://n8n.example.com)',
         '',
-        '✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ',
+        '✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ  https://n8n.example.com/workflow/crm1',
         '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
-        '^ daily-report  published  workflows/daily-report.json (the workflow now runs this version)',
+        '^ daily-report  published  https://n8n.example.com/workflow/rep1 (the workflow now runs this version)',
         '',
         '1 published, 1 to deploy first, 0 failed.',
         '',
@@ -151,7 +151,7 @@ describe('publishCommand', () => {
       stdout: [
         'lift publish · dev (https://n8n.example.com)',
         '',
-        '✗ crm-import  not published  differs from n8n: the local file and the n8n draft differ',
+        '✗ crm-import  not published  differs from n8n: the local file and the n8n draft differ  https://n8n.example.com/workflow/crm1',
         '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
         '',
         'Nothing to publish: no draft is waiting to be published.',
@@ -179,7 +179,7 @@ describe('publishCommand', () => {
 
     expect(result.exitCode).toBe(5);
     expect(result.stdout).toContain(
-      '✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ\n' +
+      '✗ crm-import    not published  differs from n8n: the local file and the n8n draft differ  https://n8n.example.com/workflow/crm1\n' +
         '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import\n',
     );
     expect(result.stderr).toBe('Not published: crm-import.\n\n→ lift publish  once the step under each line is done\n');
@@ -217,8 +217,8 @@ describe('publishCommand', () => {
       instance: 'https://n8n.example.com',
       message: null,
       results: [
-        { stableName: 'crm-import', path: 'workflows/crm-import.json', name: 'CRM import', id: 'crm1', action: 'refused', next: 'lift deploy' },
-        { stableName: 'daily-report', path: 'workflows/daily-report.json', name: 'Daily report', id: 'rep1', action: 'published', next: null },
+        { stableName: 'crm-import', path: 'workflows/crm-import.json', name: 'CRM import', id: 'crm1', url: 'https://n8n.example.com/workflow/crm1', action: 'refused', next: 'lift deploy' },
+        { stableName: 'daily-report', path: 'workflows/daily-report.json', name: 'Daily report', id: 'rep1', url: 'https://n8n.example.com/workflow/rep1', action: 'published', next: null },
       ],
       summary: { published: 1, alreadyPublished: 0, refused: 1, differs: 0, failed: 0 },
       exitCode: 5,
@@ -248,6 +248,18 @@ describe('publishCommand', () => {
         '  → Fix the workflow in the n8n editor, then run lift publish other\n',
     );
     expect(n8n.workflows.find(({ id }) => id === 'rep1')).toMatchObject({ activeVersionId: 'v2' });
+  });
+
+  test('Should give a failed workflow no url in the JSON when n8n refuses to publish it', async () => {
+    const n8n = fakeN8n({
+      workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1', versionId: 'v2', activeVersionId: 'v1' })],
+      failures: [httpError('POST /api/v1/workflows/rep1/activate', 400, 'Workflow has no node to start the workflow')],
+    });
+    const ctx = context(n8n, { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(REPORT)]) });
+
+    const result = await publishCommand.run({ positionals: [], values: { yes: true, json: true } }, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({ results: [{ stableName: 'daily-report', action: 'failed', url: null }] });
   });
 
   test('Should indent each line of a multi-line n8n message under the result, above the step, when n8n refuses to publish', async () => {

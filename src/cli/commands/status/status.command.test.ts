@@ -64,15 +64,15 @@ describe('statusCommand', () => {
       stdout: [
         'lift status · dev (https://n8n.example.com)',
         '',
-        '~ crm-import    differs from n8n — next deploy overwrites the n8n draft',
+        '~ crm-import    differs from n8n — next deploy overwrites the n8n draft  https://n8n.example.com/workflow/crm1',
         '  → lift deploy',
-        '^ daily-report  draft not yet published',
+        '^ daily-report  draft not yet published  https://n8n.example.com/workflow/rep1',
         '  → lift publish daily-report',
         '+ invoice-sync  missing on the instance (workflows/invoice-sync.workflow.ts)',
         '  → lift deploy',
-        '↺ weekly        archived in n8n — next deploy restores it',
+        '↺ weekly        archived in n8n — next deploy restores it  https://n8n.example.com/workflow/wk1',
         '  → lift deploy',
-        '· Hand made     not in my project (h1)',
+        '· Hand made     not in my project (h1)  https://n8n.example.com/workflow/h1',
         '',
         '1 missing, 1 archived, 1 differ, 1 draft not yet published, 0 up to date, 0 removed, 1 not in my project.',
         '',
@@ -91,7 +91,7 @@ describe('statusCommand', () => {
       [
         'lift status · dev (https://n8n.example.com)',
         '',
-        '= weekly      up to date',
+        '= weekly      up to date  https://n8n.example.com/workflow/wk1',
         '- old-report  removed from the project — lift clean archives it (old1)',
         '  → lift clean',
         '',
@@ -99,6 +99,28 @@ describe('statusCommand', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  test('Should give a removed workflow no url in the JSON when its file was deleted', async () => {
+    const lock = fakeLockFile({ text: fakeLockText({ weekly: 'wk1', 'old-report': 'old1' }) });
+    const ctx = context(fakeN8n({ workflows: [fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] }), { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(WEEKLY)]) }, lock);
+
+    const result = await statusCommand.run({ positionals: [], values: { managed: 'true', json: true } }, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({ workflows: [{ state: 'up-to-date' }, { state: 'removed', id: 'old1', url: null }] });
+  });
+
+  test('Should build the workflow link without a double slash when the target url ends with a slash', async () => {
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] });
+    const ctx = context(
+      n8n,
+      { loadProjectConfig: fakeSingleTarget('https://n8n.example.com/'), loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(WEEKLY)]) },
+      fakeLockFile({ text: fakeLockText({ weekly: 'wk1' }) }),
+    );
+
+    const result = await statusCommand.run({ positionals: [], values: { managed: 'true' } }, ctx);
+
+    expect(result.stdout).toContain('= weekly  up to date  https://n8n.example.com/workflow/wk1\n');
   });
 
   test('Should not show a workflow as removed when another target on the same instance still has its file', async () => {
@@ -128,11 +150,11 @@ describe('statusCommand', () => {
       instance: 'https://n8n.example.com',
       message: null,
       workflows: [
-        { state: 'differs', stableName: 'crm-import', path: 'workflows/crm-import.json', name: 'CRM import', id: 'crm1', next: 'lift deploy' },
-        { state: 'draft-pending', stableName: 'daily-report', id: 'rep1', next: 'lift publish daily-report' },
-        { state: 'missing', stableName: 'invoice-sync', id: null, next: 'lift deploy' },
-        { state: 'archived', stableName: 'weekly', id: 'wk1', next: 'lift deploy' },
-        { state: 'unmanaged', stableName: null, path: null, name: 'Hand made', id: 'h1', isArchived: false, next: null },
+        { state: 'differs', stableName: 'crm-import', path: 'workflows/crm-import.json', name: 'CRM import', id: 'crm1', url: 'https://n8n.example.com/workflow/crm1', next: 'lift deploy' },
+        { state: 'draft-pending', stableName: 'daily-report', id: 'rep1', url: 'https://n8n.example.com/workflow/rep1', next: 'lift publish daily-report' },
+        { state: 'missing', stableName: 'invoice-sync', id: null, url: null, next: 'lift deploy' },
+        { state: 'archived', stableName: 'weekly', id: 'wk1', url: 'https://n8n.example.com/workflow/wk1', next: 'lift deploy' },
+        { state: 'unmanaged', stableName: null, path: null, name: 'Hand made', id: 'h1', url: 'https://n8n.example.com/workflow/h1', isArchived: false, next: null },
       ],
       error: null,
       exitCode: 0,
@@ -162,7 +184,7 @@ describe('statusCommand', () => {
     const result = await statusCommand.run(TEXT, ctx);
 
     expect(result.stdout).toBe(
-      'lift status · dev (https://n8n.example.com)\n\n= crm-import  up to date\n\n0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 0 removed, 0 not in my project.\n',
+      'lift status · dev (https://n8n.example.com)\n\n= crm-import  up to date  https://n8n.example.com/workflow/crm1\n\n0 missing, 0 archived, 0 differ, 0 draft not yet published, 1 up to date, 0 removed, 0 not in my project.\n',
     );
   });
 
@@ -211,7 +233,7 @@ describe('statusCommand', () => {
       stdout: [
         'lift status · dev (https://n8n.example.com)',
         '',
-        '· Hand made  not in my project (h1)',
+        '· Hand made  not in my project (h1)  https://n8n.example.com/workflow/h1',
         '',
         'No workflow yet in ./workflows. Add a workflow file there, then run lift deploy.',
         '0 missing, 0 archived, 0 differ, 0 draft not yet published, 0 up to date, 0 removed, 1 not in my project.',

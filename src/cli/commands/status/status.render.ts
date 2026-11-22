@@ -5,6 +5,7 @@ import { LoadProblem } from '#src/core/compile/workflow.model';
 import { EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/deliver/lock-file';
 import { LockFileError } from '#src/core/deliver/lock-file.model';
+import { workflowLink } from '#src/core/n8n/n8n-api';
 import { StatusReport, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
 
 /** The target status runs on: its name, its url (the instance the lock file records under) and its workflows folder. */
@@ -134,10 +135,10 @@ export function renderStatus(target: StatusTarget, report: StatusReport, format:
 function workflowPayload(status: WorkflowStatus, target: StatusTarget, format: StatusFormat): Record<string, unknown> {
   const next = nextCommand(status, target, format);
   if (status.state === 'unmanaged') {
-    return { state: status.state, stableName: null, path: null, name: status.name, id: status.id, isArchived: status.isArchived, next };
+    return { state: status.state, stableName: null, path: null, name: status.name, id: status.id, url: linkOf(status, target), isArchived: status.isArchived, next };
   }
   if (status.state === 'removed') {
-    return { state: status.state, stableName: status.stableName, path: null, name: null, id: status.id, next };
+    return { state: status.state, stableName: status.stableName, path: null, name: null, id: status.id, url: null, next };
   }
   return {
     state: status.state,
@@ -145,6 +146,7 @@ function workflowPayload(status: WorkflowStatus, target: StatusTarget, format: S
     path: status.path,
     name: status.name,
     id: status.state === 'missing' ? null : status.id,
+    url: linkOf(status, target),
     ...(status.state === 'missing' && status.previousId !== undefined ? { previousId: status.previousId } : {}),
     next,
   };
@@ -161,7 +163,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
   const list = rows(
     report.workflows.map((status) => {
       const command = nextCommand(status, target, format);
-      return { symbol: SYMBOL_OF[status.state], name: titleOf(status), state: detailOf(status), followUps: command === null ? [] : [next(command)] };
+      return { symbol: SYMBOL_OF[status.state], name: titleOf(status), state: detailOf(status, target), followUps: command === null ? [] : [next(command)] };
     }),
   );
   return { exitCode: report.exitCode, stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
@@ -172,7 +174,30 @@ function titleOf(status: WorkflowStatus): string {
   return status.state === 'unmanaged' ? status.name : status.stableName;
 }
 
-function detailOf(status: WorkflowStatus): string {
+/**
+ * The workflow link of a workflow status reads on the instance. A `missing` one is not there, and a `removed` one is
+ * not read, so it may not be there either.
+ */
+function linkOf(status: WorkflowStatus, target: StatusTarget): string | null {
+  switch (status.state) {
+  case 'missing':
+  case 'removed':
+    return null;
+  case 'archived':
+  case 'differs':
+  case 'draft-pending':
+  case 'up-to-date':
+  case 'unmanaged':
+    return workflowLink(target.instance, status.id);
+  }
+}
+
+function detailOf(status: WorkflowStatus, target: StatusTarget): string {
+  const link = linkOf(status, target);
+  return link === null ? labelOf(status) : `${labelOf(status)}  ${link}`;
+}
+
+function labelOf(status: WorkflowStatus): string {
   switch (status.state) {
   case 'unmanaged':
     return `${LABELS.unmanaged} (${status.id}${status.isArchived ? ', archived' : ''})`;
