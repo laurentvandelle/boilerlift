@@ -231,13 +231,13 @@ Tag boilerlift:dev added to 2 workflows
 
     const result = await deployCommand.run(TEXT, ctx);
 
-    expect(result.stdout).toBe(`lift deploy · dev \u001b[2m(https://n8n.example.com)\u001b[22m
+    expect(result.stdout).toBe(`lift deploy · dev \u001b[90m(https://n8n.example.com)\u001b[39m
 
 \u001b[31m✗\u001b[39m crm-import    failed
   \u001b[31mPUT /api/v1/workflows/crm1 : HTTP 500: boom\u001b[39m
   \u001b[36m→ ${RETRY_HINT}\u001b[39m
-\u001b[32m+\u001b[39m daily-report  created  \u001b[2mhttps://n8n.example.com/workflow/w1\u001b[22m
-\u001b[32m+\u001b[39m invoice-sync  created  \u001b[2mhttps://n8n.example.com/workflow/w2\u001b[22m
+\u001b[32m+\u001b[39m daily-report  created  \u001b[90mhttps://n8n.example.com/workflow/w1\u001b[39m
+\u001b[32m+\u001b[39m invoice-sync  created  \u001b[90mhttps://n8n.example.com/workflow/w2\u001b[39m
 
 2 created, 0 updated, 0 restored, 0 skipped, 1 failed.
 Tag boilerlift:dev added to 2 workflows
