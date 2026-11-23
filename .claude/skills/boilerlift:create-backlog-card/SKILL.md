@@ -1,0 +1,135 @@
+---
+name: "boilerlift:create-backlog-card"
+description: "Turns a free-text request or an existing GitHub issue into ready-to-code boilerlift backlog cards (story, tech story, bug or investigation) in GitHub project 3 (laurentvandelle/projects/3). Deduces the card type, runs a product interview grounded in the code, proposes a split into cards and waits for approval, writes each card from its strict template, checks it against a Definition of Ready, then creates or rewrites the issues in laurentvandelle/boilerlift with Card type set and Status Backlog. Use when the user invokes /boilerlift:create-backlog-card, or asks to create, write, add or refine a backlog card, ticket, issue, user story, bug report or spike for boilerlift, even if they only describe an idea, paste notes or give an issue number. To take a ready card to a pull request, use /boilerlift:ship; to stress-test a plan with no card to create, use /boilerlift:interviewing."
+allowed-tools: "Bash(${CLAUDE_SKILL_DIR}/scripts/backlog.py *)"
+---
+
+# Create a backlog card
+
+Turn a request into one or more boilerlift backlog cards that a developer or a coding agent can start without asking anything. A card says what and why, never how: the solution belongs to the plan made later with `/boilerlift:ship`. The run ends with issues in `laurentvandelle/boilerlift`, each in project 3 with `Card type` set and `Status` = `Backlog`.
+
+Rules for the whole run:
+
+- **Everything is in English**: questions, previews, cards, because the repository, its issues and the coding agents that read them work in English.
+- **The split approval is the only go-ahead.** Nothing is created or edited on GitHub before the user explicitly approves the split, because issues are visible to others. After that, create the cards without asking again, then offer adjustments.
+- **`scripts/backlog.py` owns every GitHub call.** On a non-zero exit, report its `error:` line and stop: hand-written `gh` calls skip its duplicate and field checks.
+- **A card carries only its body, its title, `Card type` and `Status`.** Estimates, assignees and links to other tools are decided when someone picks the card up, not at creation.
+- **Facts come from the user or the code.** A coding agent takes every line of a card as true, so an unknown value stays `unknown` (rules in [card-templates.md](card-templates.md)), and any other gap becomes a question.
+- **With no one to answer** (an unattended run), go through step 4 and stop: write the drafted split and cards to the scratch folder, report their paths and the open questions, and create nothing, because a card built on guesses costs more than a late one.
+
+Read [card-templates.md](card-templates.md) before step 3: it holds the type rule, the four templates and the Definition of Ready.
+
+## Workflow
+
+### 1. Read the input and the project
+
+Run `${CLAUDE_SKILL_DIR}/scripts/backlog.py context`. Exit 3 (missing `project` scope): tell the user to run `gh auth refresh -s project` and stop. Exit 4 with no `Card type` field: ask whether to create it (`Create field (Recommended)` / `Stop`), stop and wait, and on yes run `backlog.py setup-type-field`, then `context` again. Exit 4 with no `Backlog` status, or a `Card type` field missing one of the four options: tell the user to add that option in the project settings, and stop.
+
+The input is either:
+- **An issue** (number, `#12`, or URL): run `backlog.py read --issue N`. Its title and body are the request. Save that JSON to the scratch folder: the issue is rewritten in place in step 8, and the copy is the only way back if a write fails halfway. Exit 4: the issue does not exist; say so and stop.
+- **Free text**: the request is the user's words.
+
+List what the request already settles, so the interview never asks it again. Done when: the project check passed and the request is known.
+
+### 2. Map the code (subagent)
+
+Have an `Explore` subagent read the code the request touches, so the interview asks only what the code can't answer. Brief it with the request text and the repository root, and ask for, under 30 lines:
+
+```text
+Current behaviour: what boilerlift does today in this area (commands, flags, output, errors)
+Already specified: docs, README, tests or GLOSSARY.md lines that define the expected behaviour
+Related cards: open issues in laurentvandelle/boilerlift on the same topic (gh issue list --search)
+Facts the code does not settle: one line each
+```
+
+Without subagents, read the code yourself and keep only those notes. Use them to ask better questions and to spot a bug (expected behaviour already specified) versus a story. Never copy file paths or a solution into a card. Continue in the same response.
+
+### 3. Find the subjects and their types
+
+List the independent subjects in the request first: a malfunction and a change request are two subjects even in one sentence. For each, apply the type rule in [card-templates.md](card-templates.md) and announce the type and its reason in one or two lines, without asking for confirmation. Continue in the same response.
+
+When the user reports a bug but the code map shows the case is handled and tested, say so: the card may be an investigation ("Reproduce [symptom]", with a timebox) rather than a bug. Put that choice to the user in the first interview round.
+
+### 4. Interview
+
+Run a product interview with the `boilerlift:interviewing` method: a design tree, the frontier in rounds of at most 4 multiple-choice questions with AskUserQuestion, the recommended option first, in English. Stop and wait after each round. Ask only what the request and the code map don't already answer. With several subjects, finish one subject's questions before the next, so a round never mixes cards.
+
+Decisions (scope, rules, output format) get a recommended option. Facts only the user holds (version, error output, frequency) get none, because a recommended fact is an invented one: offer plausible values plus `Don't know`.
+
+Cover the fields of the type:
+- **story**: which user (a workflow author running `lift`, a CI pipeline, a library user), the value, what is included and excluded, the rules (validation, flags, exit codes, error messages).
+- **tech story**: the current situation and the cost of leaving it, the target behaviour, what is touched and explicitly untouched, what must not break.
+- **bug**: version or branch, where it ran (local or CI), OS and Node version, n8n version and API key role, frequency, severity, exact reproduction steps, expected result, actual result, evidence (command output, stack trace).
+- **investigation**: the single closed question, what is blocked until it is answered, the timebox, the options, the evaluation criteria.
+
+Dig acceptance criteria during the interview, not after: for each expected behaviour, settle the context, the action and the observable result, plus at least one edge case (error, missing input, n8n unreachable). A criterion that no test or observation could check is reworded with the user.
+
+Done when the frontier is empty and every section of the template can be filled. Close the interview with a decision summary per subject (type, user, scope in and out, rules, criteria, unknowns), and write steps 5 and 6 from that summary, not from the whole conversation.
+
+### 5. Propose the split
+
+List the independent subjects and split by deliverable value, not by technical layer:
+- one card = one goal, checked by one set of acceptance criteria;
+- a malfunction and a change request never share a card, nor do a user need and its technical debt;
+- a blocking technical unknown becomes its own investigation card, ordered before the cards it unblocks;
+- one subject gives "one card", with the reason: never split artificially.
+
+Show this table, then the split logic in one line:
+
+| Order | Title | Type | Covers | Depends on |
+| --- | --- | --- | --- | --- |
+| 1 | [title] | [story / tech story / bug / investigation] | [what the card covers] | [card or none] |
+
+When the input was an issue, card 1 is that issue (rewritten); the others are new issues. Ask with AskUserQuestion: `Approve split (Recommended)` / `Change it`. Stop and wait. On a change, apply it, show the revised table and ask again.
+
+### 6. Write each card
+
+For each card, fill its type's template from [card-templates.md](card-templates.md), section by section, in order, into a scratch file (one per card). Title: an action verb and an object, short, plain ASCII with no punctuation, because a branch name is derived from it (`Add lift diff command`, `Fix deploy crash on untagged workflow`).
+
+In chat, preview only each card's title, type and acceptance criteria, not the full body. Continue in the same response.
+
+### 7. Check the Definition of Ready (subagent)
+
+Have a fresh subagent check each card file against the Definition of Ready in [card-templates.md](card-templates.md), because an agent rereads its own draft poorly. Give it only the card files and that file's path, and ask for one line per check: `PASS` or `FAIL: [what is missing]`. Without subagents, run the checklist yourself, line by line.
+
+On a `FAIL` caused by missing information, go back to step 4 with a targeted round on that point only, once. If the user still doesn't know, the value stays `unknown` and the card goes ahead: a bug report with honest gaps is still worth tracking. On a wording `FAIL`, fix the card and re-check. A card that still fails waits, with its reason; the ready cards of the split go ahead.
+
+### 8. Create the cards and report
+
+For each card, in split order:
+- new card: `backlog.py create --type "[type]" --title "[title]" --body-file [file]`
+- the input issue: `backlog.py update --issue N --type "[type]" --title "[title]" --body-file [file]` (keeps its Status if it has one, sets Backlog when it is empty or `Inbox`)
+
+An exit 6 after the issue was created names its URL: finish that card with `update --issue N`, never a second `create`. Exit 5 means an open issue already has that title: show its URL and ask whether to rewrite that one instead or rename the card. Stop and wait.
+
+Then report, per card: the issue link and title, the type, and any `-> owner:` question left. Ask whether to adjust anything now that the cards exist.
+
+## Gotchas
+
+- The code map is for questions, not content. A card that names `src/core/deploy.ts` or "add a flag in `cli/deploy.ts`" has turned into a plan: describe the behaviour the user sees instead. What the user touches is fine to name: commands, flags, `--json` fields, exit codes, files they edit such as `boilerlift.config.ts`.
+- Then report, per card, every `unknown` left in it, so the reporter can fill it in on the issue.
+- "lift deploy doesn't do X" is a bug only if X is specified somewhere (README, docs, a test, a past card). Otherwise it is a story, even when the user says "bug".
+- A story's `Open questions` is `None` at creation. If a question is still open, the interview is not finished.
+- `gh project` needs the `project` token scope, which `repo` does not include.
+- The project field is `Card type`, not `Type`: GitHub reserves `Type` for its own issue types and refuses to create a field with that name.
+- The issue body starts with the template's `#` heading (`# 📗 Story`); the card name goes in the issue title only.
+
+## Example
+
+Input: "lift deploy should tell me what changed before pushing, like a diff"
+
+Type: story. A workflow author wants a new capability; nothing in the README specifies a diff today.
+
+After the interview, the split is one card, `Show workflow diff before deploy`, story, with acceptance criteria such as:
+- Given a workflow changed locally, when I run `lift deploy --dry-run`, then each changed workflow lists its added, removed and modified nodes.
+- Given no workflow changed, when I run `lift deploy --dry-run`, then the output says nothing would change and the exit code is 0.
+- Given n8n is unreachable, when I run `lift deploy --dry-run`, then the command fails with the instance URL in the error and a non-zero exit code.
+
+## Edge cases
+
+- **Several unrelated subjects in one sentence**: split them in step 5, one card each.
+- **Issue already well written**: still run steps 2 to 7; if nothing is missing, the interview is one round confirming the criteria.
+- **Issue labelled `inbox`** (a raw idea from `/boilerlift:inbox`): its body is the user's idea in a few English sentences; treat it as free text. `update` removes the label, so `inbox` always means "not yet a card".
+- **Issue closed, or not in project 3**: say so; a closed issue is rewritten only if the user confirms, and `update` adds a missing issue to the project.
+- **Request about n8n itself, not boilerlift**: say it is out of the backlog's scope and stop.
+- **Huge request (a whole feature area)**: propose the split first, then interview card by card, so each round stays short.
