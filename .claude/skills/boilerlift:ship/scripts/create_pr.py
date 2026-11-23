@@ -7,8 +7,8 @@ Branch and pull request rules:
 - stop if the local branch, origin branch, sibling directory, or worktree exists,
   unless it is a resume: an OPEN pull request for the branch and the sibling
   worktree already on it (then nothing is created and the PR is reused)
-- with --type/--id/--name, build the branch: prefix by Type, then a slug of
-  "ID-Nom" with accents stripped, every other character run turned into "-",
+- with --type/--id/--name, build the branch: prefix by Card type, then a slug of
+  "issue number-title" with accents stripped, every other character run turned into "-",
   capped at SLUG_MAX characters on a "-" boundary
 - replace {{BRANCH}} in the body with the branch
 - never delete a branch, worktree, or env file
@@ -16,7 +16,7 @@ Branch and pull request rules:
 - gh pr create --title --base --body-file
 
 Local-only additions: trust the worktree in ~/.claude.json and symlink untracked
-.env* files. boilerlift:ship updates the Notion card itself through the Notion MCP.
+.env* files. boilerlift:ship sets the card's Status in project 3 itself, with backlog.py.
 
 stdout: one JSON object (no secrets)
 stderr: warnings and a single "error:" line on failure
@@ -49,7 +49,7 @@ exit 7  git push failed; worktree left in place; no pull request
 exit 8  gh pr create failed; worktree left in place
 exit 9  env linker failed; worktree left in place; no commit"""
 
-PREFIXES = {"story": "feature/", "bug": "fix/", "tech story": "tech/"}
+PREFIXES = {"story": "feature/", "bug": "fix/", "tech story": "tech/", "investigation": "spike/"}
 SLUG_MAX = 50
 BRANCH_TOKEN = "{{BRANCH}}"
 
@@ -60,12 +60,12 @@ def slugify(text: str) -> str:
 
 
 def build_branch(kind: str, card_id: str, name: str) -> str:
-    """Branch from the card's Type, ID and Nom: 'feature/', 'fix/', 'tech/' or no prefix."""
+    """Branch from the card's Card type, issue number and title: 'feature/', 'fix/', 'tech/', 'spike/' or no prefix."""
     id_slug, name_slug = slugify(card_id), slugify(name)
     if not id_slug:
-        raise Fail(2, f"card ID has no letter or digit: {card_id!r}")
+        raise Fail(2, f"card id has no letter or digit: {card_id!r}")
     if not name_slug:
-        raise Fail(2, f"card Nom has no letter or digit: {name!r}")
+        raise Fail(2, f"card title has no letter or digit: {name!r}")
     slug = f"{id_slug}-{name_slug}"
     if len(slug) > SLUG_MAX:
         cut = slug[:SLUG_MAX + 1].rsplit("-", 1)[0]
@@ -308,14 +308,14 @@ def main(argv=None) -> int:
         description="Create a sibling worktree, push an empty commit, and open a pull request. "
                     "Symlink untracked .env* files into the worktree; never print their contents.",
         epilog=EXIT_CODES + "\n\n"
-        "example: create_pr.py --title 'feat(x): y' --type story --id APP-12 --name 'Do y' --body-file - <<'EOF'",
+        "example: create_pr.py --title 'feat(x): y' --type story --id 12 --name 'Do y' --body-file - <<'EOF'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--title", help="Conventional Commits subject (not with --resume)")
     parser.add_argument("--branch", help="exact branch to create, e.g. feature/12-name")
-    parser.add_argument("--type", help="card Type: story, bug, tech story (picks the branch prefix)")
-    parser.add_argument("--id", help="card ID, e.g. BOILERLIFT-14")
-    parser.add_argument("--name", help="card Nom; slugged and capped with the ID")
+    parser.add_argument("--type", help="Card type: story, bug, tech story, investigation (picks the branch prefix)")
+    parser.add_argument("--id", help="card issue number, e.g. 14")
+    parser.add_argument("--name", help="card title; slugged and capped with the issue number")
     parser.add_argument("--body-file", help="pull request body; - reads stdin (not with --resume)")
     parser.add_argument("--resume", action="store_true",
                         help="reuse the open pull request and worktree of --branch; never create")

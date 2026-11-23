@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Capture a boilerlift idea as a GitHub issue labelled "inbox".
+"""Capture a boilerlift idea as a GitHub issue.
 
 Usage:
   inbox.py --title "Short English title" <<'EOF'
   the idea, in English
   EOF
 
-The body is read from stdin. The issue is not added to any project and gets no other field:
-/boilerlift:create-backlog-card refines it into a card later.
+The body is read from stdin. The issue gets no label and no field: project 3's own automations
+put it in the board's Inbox column, and /boilerlift:create-backlog-card triages it later.
 
 stdout: one JSON object {"url", "number", "title"}.  stderr: a single "error:" line on failure.
 """
@@ -20,9 +20,6 @@ import subprocess
 import sys
 
 REPO = "laurentvandelle/boilerlift"
-LABEL = "inbox"
-LABEL_COLOR = "fbca04"
-LABEL_DESC = "Raw idea, not yet refined into a backlog card"
 MAX_TITLE = 80
 
 EXIT_CODES = """\
@@ -50,16 +47,7 @@ def gh(*args: str, stdin: str | None = None) -> str:
 
 
 def create(title: str, body: str) -> str:
-    args = ["issue", "create", "--repo", REPO, "--title", title, "--body-file", "-", "--label", LABEL]
-    try:
-        return gh(*args, stdin=body)
-    except Fail as e:
-        # first capture ever: the label does not exist yet, so create it once and retry
-        if e.code != 6 or "could not add label" not in str(e):
-            raise
-        # --force: a parallel capture may have created it in the meantime
-        gh("label", "create", LABEL, "--repo", REPO, "--color", LABEL_COLOR, "--description", LABEL_DESC, "--force")
-        return gh(*args, stdin=body)
+    return gh("issue", "create", "--repo", REPO, "--title", title, "--body-file", "-", stdin=body)
 
 
 def main() -> int:

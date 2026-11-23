@@ -1,13 +1,13 @@
 ---
 name: "boilerlift:implement-plan-local"
-description: Implements the decision summary in an open GitHub pull request body, in the current checkout on this machine. Plans its own steps from the code, runs the repo's verify command, commits and pushes with boilerlift:commit-push, posts the boilerlift:qa scenarios on the pull request, then asks Merge or fix. On Merge, squash-merges, deletes the branch, removes the worktree, fast-forwards the base branch (main or master) in the main checkout so the next session starts up to date, and moves the Notion Spec card to Done. Does not create a branch, a worktree, or a pull request. Use when the user invokes /boilerlift:implement-plan-local with a pull request URL, usually as the first prompt of the auto-mode session started by /boilerlift:ship in the kept worktree.
+description: Implements the decision summary in an open GitHub pull request body, in the current checkout on this machine. Plans its own steps from the code, runs the repo's verify command, commits and pushes with boilerlift:commit-push, posts the boilerlift:qa scenarios on the pull request, then asks Merge or fix. On Merge, squash-merges, deletes the branch, removes the worktree, fast-forwards the base branch (main or master) in the main checkout so the next session starts up to date, and the merge closes the card through Closes #N, which the project board moves to Done. Does not create a branch, a worktree, or a pull request. Use when the user invokes /boilerlift:implement-plan-local with a pull request URL, usually as the first prompt of the auto-mode session started by /boilerlift:ship in the kept worktree.
 disable-model-invocation: true
-allowed-tools: "Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/preflight.py *), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/finish.py *)"
+allowed-tools: "Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/preflight.py *), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/finish.py *), Bash(${CLAUDE_SKILL_DIR}/../boilerlift:create-backlog-card/scripts/backlog.py *)"
 ---
 
 Implement the decisions in one open pull request, in this checkout, get them QA'd by the user, and merge.
 
-`boilerlift:ship` already created the branch, the worktree you are in, and the pull request, and set the Notion card to `In Progress 🔁`. The user will run the app here and QA it, so a pushed, verified branch and clear QA scenarios come first, then the merge on their word.
+`boilerlift:ship` already created the branch, the worktree you are in, and the pull request, and set its backlog card (an issue in GitHub project 3) to `In progress`. The user will run the app here and QA it, so a pushed, verified branch and clear QA scenarios come first, then the merge on their word.
 
 ## Input
 
@@ -17,12 +17,12 @@ The prompt names one pull request URL. No URL: stop and say a pull request URL i
 python3 ${CLAUDE_SKILL_DIR}/scripts/preflight.py <url>
 ```
 
-It prints one JSON object: `pr` (with `body`), `branch`, `spec_url`, `install`, `verify`, and `problems`. Exit 1 means `problems` is not empty: the pull request is not `OPEN` (pushing there goes nowhere useful), or the current branch is not its head branch (the work would land in the wrong place). Stop and report each problem. Exit 2 is one `error:` line: stop and report it. Do not create a branch, a worktree, or a pull request.
+It prints one JSON object: `pr` (with `body`), `branch`, `card` (the issue number from the body's `Closes #N` line, or null), `install`, `verify`, and `problems`. Exit 1 means `problems` is not empty: the pull request is not `OPEN` (pushing there goes nowhere useful), or the current branch is not its head branch (the work would land in the wrong place). Stop and report each problem. Exit 2 is one `error:` line: stop and report it. Do not create a branch, a worktree, or a pull request.
 
 `pr.body` is a decision summary, not a step plan:
 
 ```markdown
-Spec: <notion-url>
+Closes #<card>
 Branch name : <branch>
 
 ## Decisions
@@ -62,7 +62,15 @@ No changes: stop and say the decisions changed no files. Do not commit.
 
 Commit and push with the `/boilerlift:commit-push` skill. It pushes this pull request branch to its own remote branch, never to the base. Any push failure, including a protected branch: report its `error:` line and stop. The commits stay local. Ignore its `/boilerlift:ship` suggestion, since this branch already has a pull request.
 
-The Notion card stays at `In Progress 🔁` until the merge.
+## Card in review
+
+Right after the first push and before QA, move the card to `In review`:
+
+```bash
+${CLAUDE_SKILL_DIR}/../boilerlift:create-backlog-card/scripts/backlog.py status --issue <card> --status "In review" --only-from "In progress"
+```
+
+`--only-from` makes a re-run after a fix a no-op (`skipped`). No `card` in the preflight JSON, or a non-zero exit: warn and continue, because QA does not depend on it.
 
 ## QA
 
@@ -102,8 +110,8 @@ Run it from this worktree. It refuses before changing anything when the worktree
 
 It prints JSON with `ok`, `branch`, `base`, `worktree`, `main`, and `steps` (`step`, `ok`, `detail`), and one `error:` line on failure. On failure, report the failed step and its detail, and what the earlier steps already did. Do not retry with `--force` or delete anything by hand. Running it again is safe: it skips a merge already done and a branch already deleted.
 
-When `ok` is true, take the Notion page from `spec_url`. Set its `Status` to `Done ✅` with the Notion MCP `notion-update-page` tool. No `Spec:` line, or the update fails: warn and continue.
+When `ok` is true, the merge has closed the card through `Closes #N`, and the board's own rules set it to `Done`: make no status call, because the worktree holding this skill's scripts is gone. No `card` in the preflight JSON: say the pull request closed no card.
 
 ## Report
 
-End with the pull request URL, whether it is merged, the commits pushed, the verify command that passed (or "none found"), the Notion status, and **Assumptions** when there are any.
+End with the pull request URL, whether it is merged, the commits pushed, the verify command that passed (or "none found"), the card (`#<card>` closed, or none), and **Assumptions** when there are any.

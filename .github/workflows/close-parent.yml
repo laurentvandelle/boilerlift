@@ -1,0 +1,31 @@
+name: Close parent issue 🧹
+
+# A parent is an issue that /boilerlift:create-backlog-card triaged into cards, its sub-issues. When the
+# last card closes, this closes the parent (completed if a card was done, else not planned) with a
+# comment, so its reporter is notified. It never reopens a parent. The logic lives in
+# .github/scripts/close_parent.py.
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write # close the parent and comment on it
+
+concurrency:
+  # two cards of one parent closing together must not both close it
+  group: close-parent
+  cancel-in-progress: false
+
+jobs:
+  close:
+    name: Close the parent once all its cards are closed
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Close the parent
+        run: python3 .github/scripts/close_parent.py

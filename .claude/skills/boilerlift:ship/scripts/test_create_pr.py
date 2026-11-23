@@ -157,7 +157,7 @@ def flow_checks(tmp: Path):
         (demo / rel).parent.mkdir(parents=True, exist_ok=True)
         (demo / rel).write_text(value + "\n")
     body_file = tmp / "body.md"
-    body_file.write_text("Spec: https://www.notion.so/Spec-abcdef0123456789abcdef0123456789\n\n"
+    body_file.write_text("Closes #12\n\n"
                          "Branch name : feature/12-link-env\n\n## Steps\n\n1. Link env files.\n")
     title, branch = "feat(env): link nested env files", "feature/12-link-env"
     wt = tmp / "demo-12-link-env"
@@ -242,16 +242,18 @@ def flow_checks(tmp: Path):
 
     # Card fields build a clean, capped branch.
     card = [sys.executable, MAIN, "--repo", demo, "--title", title, "--dry-run", "--body-file", body_file,
-            "--type", "story", "--id", "BOILERLIFT-14",
+            "--type", "story", "--id", "14",
             "--name", "Recognise my deployed workflows by their n8n id, recorded in my project"]
     slug = run(card)
     check(slug.returncode == 0, f"card dry-run exited {slug.returncode}: {slug.stderr}")
-    check(json.loads(slug.stdout)["branch"] == "feature/boilerlift-14-recognise-my-deployed-workflows-by",
+    check(json.loads(slug.stdout)["branch"] == "feature/14-recognise-my-deployed-workflows-by-their-n8n-id",
           f"card branch: {slug.stdout}")
     accents = run(card[:-6] + ["--type", "bug", "--id", "APP-3", "--name", "Écran « Paiement » cassé !"])
     check(json.loads(accents.stdout)["branch"] == "fix/app-3-ecran-paiement-casse", f"accents: {accents.stdout}")
+    spike = run(card[:-6] + ["--type", "investigation", "--id", "21", "--name", "Reproduce deploy crash"])
+    check(json.loads(spike.stdout)["branch"] == "spike/21-reproduce-deploy-crash", f"investigation: {spike.stdout}")
     token_body = tmp / "token.md"
-    token_body.write_text("Spec: x\n\nBranch name : {{BRANCH}}\n")
+    token_body.write_text("Closes #9\n\nBranch name : {{BRANCH}}\n")
     git("-C", demo, "worktree", "prune")
     made = run([sys.executable, MAIN, "--repo", demo, "--title", title, "--body-file", "-",
                 "--type", "tech story", "--id", "T-9", "--name", "Token fill"], input=token_body.read_text())
@@ -261,7 +263,7 @@ def flow_checks(tmp: Path):
     both = run(card + ["--branch", "feature/x"])
     check(both.returncode == 2 and "not both" in both.stderr, f"branch and card: {both.stderr}")
     empty = run(card[:-2] + ["--name", "!!!"])
-    check(empty.returncode == 2 and "Nom" in empty.stderr, f"empty Nom: {empty.stderr}")
+    check(empty.returncode == 2 and "title" in empty.stderr, f"empty title: {empty.stderr}")
 
     # An existing regular file is left untouched. A missing nested file is linked.
     manual = tmp / "demo-manual"

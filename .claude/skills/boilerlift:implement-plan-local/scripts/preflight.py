@@ -6,7 +6,7 @@ its head branch, then detects the dependency install command (from the lockfile)
 and the verify command (package.json "verify" script). Changes nothing.
 
 stdout: one JSON object
-  ok, pr {number, title, url, head, state, body}, branch, spec_url,
+  ok, pr {number, title, url, head, state, body}, branch, card (issue number from "Closes #N", or null),
   install (command or null), verify (command or null), problems [..]
 exit 0  ready (problems is empty)
 exit 1  not ready: problems names each reason
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -81,14 +82,14 @@ def main(argv=None) -> int:
     if branch != pr.get("headRefName"):
         problems.append(f"current branch {branch or '(detached)'} is not the head branch {pr.get('headRefName')}")
     body = pr.get("body") or ""
-    spec = next((line.split(":", 1)[1].strip() for line in body.splitlines() if line.startswith("Spec:")), None)
+    closes = next((m for m in (re.match(r"(?i)(?:closes|fixes|resolves) #(\d+)\b", line.strip()) for line in body.splitlines()) if m), None)
 
     result = {
         "ok": not problems,
         "pr": {"number": pr.get("number"), "title": pr.get("title"), "url": pr.get("url"),
                "head": pr.get("headRefName"), "state": pr.get("state"), "body": body},
         "branch": branch,
-        "spec_url": spec,
+        "card": int(closes.group(1)) if closes else None,
         "install": install_command(root),
         "verify": verify_command(root),
         "problems": problems,

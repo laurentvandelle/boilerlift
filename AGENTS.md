@@ -41,7 +41,7 @@ Releases go through a release pull request. After its merge, the release skill d
 - Before writing or changing a test, read `docs/testing.md`.
 - Before writing an architecture decision, read `docs/adr/README.md`.
 - Before preparing a release, read `.claude/skills/release/SKILL.md`.
-- Before shipping a Notion card to a pull request, read `.claude/skills/boilerlift:ship/SKILL.md`.
+- Before shipping a backlog card to a pull request, read `.claude/skills/boilerlift:ship/SKILL.md`.
 - Before changing these instruction files, read `docs/agents.md`.
 - Before treating a convention as enforced, read `docs/guardrails.md`.
 - Before adding a convention after review, read `docs/maintenance.md`.

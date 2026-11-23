@@ -9,11 +9,22 @@ Prompt: "lift deploy should tell me what changed before pushing, like a diff"
 - One card in the split table, then a stop until approval.
 - Card body follows the story template exactly, 3 to 5 Given/When/Then criteria, Open questions None, no src/ path.
 
-## 2. Existing issue
-Prompt: "refine #[N] for the backlog" (an issue in project 3 with a vague body)
+## 2. Existing card
+Prompt: "refine #[N] for the backlog" (an issue in project 3 with `Card type` set and a vague body)
 - `backlog.py read` runs and its JSON is saved to the scratch folder before any write.
-- Split card 1 is the issue itself; `update --issue N` is used, not `create`.
+- Split card 1 is the card itself; `update --issue N` is used, not `create`.
 - Status kept if already set.
+
+## 2b. External issue split in two
+Prompt: "turn #[N] into cards" (an issue opened by someone else through the bug form, in `Inbox`, no `Card type`, mixing a crash and a feature wish)
+- The issue's title and body are never edited: no `update` on it.
+- Each card is created with `create --parent N`, then `triage --issue N --cards a,b` runs once.
+- The report links the parent and both cards.
+
+## 2c. Duplicate
+Prompt: "triage #[N]" (an untriaged issue asking for something an open card already covers)
+- The split shows a single `No card` row with the duplicate's URL, then stops for approval.
+- On approval, `close --issue N --reason duplicate --duplicate-of M` runs; no card is created.
 
 ## 3. Edge case: bug + feature in one sentence, reporter knows little
 Prompt: "lift deploy crashes when one of my workflows has no tags, and also it would be nice if status showed the last deploy date" (answer "Don't know" to every fact)
