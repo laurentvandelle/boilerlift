@@ -1,6 +1,6 @@
 # boilerlift:ship
 
-The ship flow for the boilerlift repository. The flow is in `SKILL.md`. Every skill and script it uses lives in `.claude/skills/` (`boilerlift:interviewing`, `boilerlift:domain-modeling`, `boilerlift:plan`, `boilerlift:implement-plan-local`, `boilerlift:commit-push`, `boilerlift:commit`, `boilerlift:qa`), so nothing depends on skills installed outside the repository. It adds one step to the generic ship flow: right after `scripts/create_pr.py`, it runs `npm run debug:setup` in the worktree, so any lift command runs on the latest code of the branch with `npm start -- <cmd>`.
+The ship flow for the boilerlift repository. The flow is in `SKILL.md`. Every skill and script it uses lives in `.claude/skills/` (`boilerlift:interviewing`, `boilerlift:domain-modeling`, `boilerlift:plan`, `boilerlift:implement-plan-local`, `boilerlift:commit-push`, `boilerlift:commit`, `boilerlift:report`), so nothing depends on skills installed outside the repository. It adds one step to the generic ship flow: right after `scripts/create_pr.py`, it runs `npm run debug:setup` in the worktree, so any lift command runs on the latest code of the branch with `npm start -- <cmd>`.
 
 ## What is already set up in this repository
 
