@@ -1,8 +1,8 @@
 import { fakeStableName } from '#src/core/compile/workflow.fake';
 import { StableName } from '#src/core/compile/workflow.model';
-import { err, ok } from '#src/core/common/result';
+import { Result, err, ok } from '#src/core/common/result';
 import { emptyLockFile, lockWriter, managedIds, parseLockFile } from '#src/core/lock/lock-file';
-import { LockWriter } from '#src/core/lock/lock-file.model';
+import { LockStore, LockWriter } from '#src/core/lock/lock-file.model';
 import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
@@ -55,6 +55,42 @@ export function fakeLockWriter({ entries = {}, failWith }: { entries?: Record<st
     writer,
     managed,
     recorded: () => Object.fromEntries(managed()),
+    saves: () => saves,
+  };
+}
+
+/** An in-memory lock file behind the `LockStore` port: seed it, read back what was saved, or make its saves fail. */
+export interface FakeLockStore {
+  store: LockStore;
+  /** The text the file holds now, or `undefined` when there is none. */
+  text(): string | undefined;
+  /** The ids the file records now for `instance` (FAKE_INSTANCE by default), as plain strings. */
+  recorded(instance?: string): Record<string, string>;
+  /** How many times the file was saved. */
+  saves(): number;
+}
+
+/** A `LockStore` over an in-memory file that starts as `text` (no file when `undefined`). With `failWith`, every save fails. */
+export function fakeLockStore({ text: seed, failWith }: { text?: string; failWith?: string } = {}): FakeLockStore {
+  let text = seed;
+  let saves = 0;
+  return {
+    store: {
+      read: () => Promise.resolve(text),
+      write: (next): Promise<Result<void, { reason: string }>> => {
+        saves += 1;
+        if (failWith !== undefined) {
+          return Promise.resolve(err({ reason: failWith }));
+        }
+        text = next;
+        return Promise.resolve(ok(undefined));
+      },
+    },
+    text: () => text,
+    recorded: (instance = FAKE_INSTANCE): Record<string, string> => {
+      const lock = parseLockFile(text);
+      return lock.ok ? Object.fromEntries(managedIds(lock.value, instance)) : {};
+    },
     saves: () => saves,
   };
 }

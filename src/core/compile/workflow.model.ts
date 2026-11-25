@@ -9,6 +9,12 @@ export type WorkflowFile =
   | { path: string; error: string };
 
 /**
+ * Reads every workflow file under `folder`, sorted by path; `[]` when the folder does not exist. A port: the CLI fills it
+ * with `CommandContext.loadWorkflowFiles`.
+ */
+export type WorkflowFileLoader = (folder: string) => Promise<WorkflowFile[]>;
+
+/**
  * The file base name without `.workflow.ts` / `.json`: 1 to 64 of a-z, 0-9 and -. It names the workflow in the
  * project and in the lock file (ADR 0009). Only `isStableName` in load-workflows.ts produces one.
  */

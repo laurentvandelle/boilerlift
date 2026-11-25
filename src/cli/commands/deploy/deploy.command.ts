@@ -1,18 +1,8 @@
-import { ConnectedTarget, CommandDefinition, Deps } from '#src/cli/cli.model';
-import {
-  DeployFormat,
-  renderInvalidFiles,
-  renderInvalidLockFile,
-  renderNothingToDeploy,
-  renderReport,
-  renderSharedEntries,
-} from '#src/cli/commands/deploy/deploy.render';
+import { CommandDefinition, Deps } from '#src/cli/cli.model';
+import { DeployFormat, renderDelivery, renderSharedEntries } from '#src/cli/commands/deploy/deploy.render';
 import { defineCommand } from '#src/cli/define-command';
 import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { CREDENTIALS_DIR, credentialsFilePath, targetCredentials } from '#src/core/compile/credential-lists';
-import { CredentialEntry, CredentialsFile } from '#src/core/compile/credential.model';
-import { WorkflowFile } from '#src/core/compile/workflow.model';
-import { loadWorkflows } from '#src/core/compile/load-workflows';
+import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import {
   EXIT_API_KEY_REJECTED,
   EXIT_CREDENTIALS_MISSING,
@@ -24,14 +14,12 @@ import {
   EXIT_UNREACHABLE,
   EXIT_USAGE,
 } from '#src/core/common/exit-codes';
-import { err, ok } from '#src/core/common/result';
-import { ProjectConfig } from '#src/core/config/config.model';
-import { CONFIG_FILE, checkWorkflowFolders, targetTagName } from '#src/core/config/project-config';
-import { deploy, previewDeploy } from '#src/core/deliver/deploy';
-import { DeployInput, DeployReport } from '#src/core/deliver/deploy.model';
-import { LOCK_FILE, lockWriter, managedIds, parseLockFile } from '#src/core/lock/lock-file';
-import { LockWriter } from '#src/core/lock/lock-file.model';
-import { findSharedEntries } from '#src/core/deliver/shared-entries';
+import { err } from '#src/core/common/result';
+import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
+import { deliverTargets, loadDeliverySources } from '#src/core/deliver/deliver';
+import { DeliverySources } from '#src/core/deliver/deliver.model';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockStore } from '#src/core/lock/lock-file.model';
 import { CREDENTIAL_LIST_SCOPE, MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 
 const DESCRIPTION = `Delivers every workflow in the workflows folder of a target of ./${CONFIG_FILE}
@@ -99,92 +87,23 @@ export const deployCommand: CommandDefinition = defineCommand({
     if (!folders.ok) {
       return err(renderConfigError(folders.error, format));
     }
-    // The lists first: importing them gives credential() its types when the workflow files run it.
-    const credentials = await loadCredentialsFiles(CREDENTIALS_DIR);
-    const files = await loadDeclaredFiles(config, loadWorkflowFiles);
-    const shared = findSharedEntries(
-      selected.map(({ name }) => name),
-      config.targets.map((target) => ({ target: target.name, instance: target.url, paths: (files.get(target.workflows) ?? []).map(({ path }) => path) })),
-    );
-    return shared.length > 0 ? err(renderSharedEntries(shared, format)) : ok({ files, credentials });
+    const sources = await loadDeliverySources(config, selected, { loadCredentialsFiles, loadWorkflowFiles });
+    return sources.ok ? sources : err(renderSharedEntries(sources.error, format));
   },
   modes: {
-    'dry-run': (project, deps, { target }) =>
-      eachTarget(project, deps, { dryRun: true, named: target.kind !== 'default' }, previewDeploy),
+    'dry-run': (sources, deps, { target }) => eachTarget(sources, deps, { dryRun: true, named: target.kind !== 'default' }),
   },
-  default: (project, deps, { target }) => eachTarget(project, deps, { dryRun: false, named: target.kind !== 'default' }, deploy),
+  default: (sources, deps, { target }) => eachTarget(sources, deps, { dryRun: false, named: target.kind !== 'default' }),
   render: (runs, { format, target }) => renderTargets(runs, { json: format.json, all: target.kind === 'all' }),
 });
 
-/** The workflow files of every declared target, by folder, each folder read once. A missing folder reads as empty. */
-async function loadDeclaredFiles(
-  config: ProjectConfig,
-  loadWorkflowFiles: (dir: string) => Promise<WorkflowFile[]>,
-): Promise<Map<string, WorkflowFile[]>> {
-  const files = new Map<string, WorkflowFile[]>();
-  for (const { workflows } of config.targets) {
-    if (!files.has(workflows)) {
-      files.set(workflows, await loadWorkflowFiles(workflows));
-    }
-  }
-  return files;
-}
-
-type TargetDeps = Deps<'targets' | 'readLockFile' | 'writeLockFile'>;
-
-/** What prepare read: the workflow files of every declared target, by folder, and the credential lists of the project. */
-interface Project {
-  files: Map<string, WorkflowFile[]>;
-  credentials: CredentialsFile[];
-}
-
-/** Runs `run` (a deploy, or a dry run) on each selected target in turn; a failed target does not stop the next ones. */
+/** Runs deploy, or the dry run `format.dryRun` names, on each selected target, and renders the run of each one. */
 async function eachTarget(
-  { files, credentials }: Project,
-  deps: TargetDeps,
+  sources: DeliverySources,
+  { targets, readLockFile, writeLockFile }: Deps<'targets' | 'readLockFile' | 'writeLockFile'>,
   format: DeployFormat,
-  run: (input: DeployInput, writer: LockWriter) => Promise<DeployReport>,
 ): Promise<TargetRun[]> {
-  const runs: TargetRun[] = [];
-  for (const target of deps.targets.selected) {
-    runs.push(await deployTarget(target, files.get(target.workflows) ?? [], targetCredentials(credentials, target.name), deps, format, run));
-  }
-  return runs;
-}
-
-/**
- * Deploys, or plans, the files of one target, resolving their credential() markers through `credentials`, the list of
- * the target. The lock file is read again for each target.
- */
-async function deployTarget(
-  target: ConnectedTarget,
-  files: WorkflowFile[],
-  credentials: CredentialEntry[],
-  { readLockFile, writeLockFile }: TargetDeps,
-  format: DeployFormat,
-  run: (input: DeployInput, writer: LockWriter) => Promise<DeployReport>,
-): Promise<TargetRun> {
-  const instance = target.connection.url.value;
-  const where = { name: target.name, instance };
-  const loaded = loadWorkflows(files);
-  if (!loaded.ok) {
-    return renderInvalidFiles(where, loaded.error);
-  }
-  const workflows = loaded.value;
-  if (workflows.length === 0) {
-    return renderNothingToDeploy(where, target.workflows, format);
-  }
-  const lock = parseLockFile(await readLockFile(LOCK_FILE));
-  if (!lock.ok) {
-    return renderInvalidLockFile(where, lock.error);
-  }
-  const input: DeployInput = {
-    workflows,
-    client: target.client,
-    managed: managedIds(lock.value, instance),
-    target: target.name,
-    credentials,
-    ...(target.tag ? { targetTag: targetTagName(target.name) } : {}),
-  };
-  return renderReport(where, await run(input, lockWriter(lock.value, instance, (text) => writeLockFile(LOCK_FILE, text))), format);
+  const lock: LockStore = { read: () => readLockFile(LOCK_FILE), write: (text) => writeLockFile(LOCK_FILE, text) };
+  const deliveries = await deliverTargets({ sources, targets: targets.selected, mode: format.dryRun ? 'dry-run' : 'deploy' }, { lock });
+  return deliveries.map((delivery) => renderDelivery(delivery, format));
 }

@@ -1,22 +1,20 @@
-import { CommandDefinition, ConnectedTarget, Deps } from '#src/cli/cli.model';
+import { CommandDefinition, Deps } from '#src/cli/cli.model';
 import {
   CleanFormat,
   CleanOutput,
-  CleanTarget,
   ListingStage,
-  PlannedTarget,
+  placeOf,
+  plannedOf,
   renderConfirmation,
   renderDeclined,
-  renderHeldBack,
+  renderHeldBackPlan,
   renderInvalidLockFile,
   renderListing,
   renderReport,
-  renderStopped,
 } from '#src/cli/commands/clean/clean.render';
 import { defineCommand } from '#src/cli/define-command';
-import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { planClean } from '#src/core/clean/clean';
-import { stableNamesOf } from '#src/core/compile/load-workflows';
+import { renderConfigError, renderTargets } from '#src/cli/targets.render';
+import { applyCleanTargets, isCleanConfirmed, planCleanTargets } from '#src/core/clean/clean-targets';
 import {
   EXIT_API_KEY_REJECTED,
   EXIT_CONFIRMATION_NEEDED,
@@ -27,9 +25,8 @@ import {
 } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
-import { LOCK_FILE, lockRemover, managedIds, parseLockFile, removedEntries } from '#src/core/lock/lock-file';
-import { LockFile } from '#src/core/lock/lock-file.model';
-import { applyRemoval } from '#src/core/removal/removal';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockStore } from '#src/core/lock/lock-file.model';
 import { RemovalMode } from '#src/core/removal/removal.model';
 
 const DESCRIPTION = `Archives, on the n8n instance of a target, the workflows you removed from the project: the
@@ -84,37 +81,38 @@ export const cleanCommand: CommandDefinition = defineCommand({
     json: { type: 'boolean', description: 'Print the result as JSON', format: true },
   },
   needs: ['targets', 'isDirectory', 'loadWorkflowFiles', 'readLockFile', 'writeLockFile', 'ask', 'isInteractive'],
-  prepare: async ({ format }, { targets: { config, selected }, isDirectory, readLockFile }) => {
+  prepare: async ({ format }, { targets: { config, selected }, isDirectory }) => {
     // Every folder on the instance of a selected target: a missing one would make its workflows look removed.
     const onInstances = selected.flatMap((target) => targetsOnInstance(config, target.connection.url.value));
     const folders = await checkWorkflowFolders(config, [...selected, ...onInstances], isDirectory);
-    if (!folders.ok) {
-      return err(renderConfigError(folders.error, format));
-    }
-    const lock = parseLockFile(await readLockFile(LOCK_FILE));
-    if (!lock.ok) {
-      const runs = selected.map((target) => renderInvalidLockFile(where(target), lock.error));
-      return err(renderTargets(runs, { json: format.json, all: selected.length > 1 }));
-    }
-    return ok(lock.value);
+    return folders.ok ? ok(undefined) : err(renderConfigError(folders.error, format));
   },
   modes: {
-    'dry-run': (lock, deps, { options, format, target }) =>
-      run(lock, deps, { dryRun: true, yes: false, json: format.json, named: target.kind !== 'default', mode: modeOf(options.flag('delete')) }),
+    'dry-run': (_prepared, deps, { options, format, target }) =>
+      run(deps, { dryRun: true, yes: false, json: format.json, named: target.kind !== 'default', mode: modeOf(options.flag('delete')) }),
   },
-  default: (lock, deps, { options, format, target }) =>
-    run(lock, deps, {
+  default: (_prepared, deps, { options, format, target }) =>
+    run(deps, {
       dryRun: false,
       yes: options.flag('yes') || options.flag('force'),
       json: format.json,
       named: target.kind !== 'default',
       mode: modeOf(options.flag('delete')),
     }),
-  render: (output, { format, target }) =>
-    output.kind === 'declined' ? renderDeclined(output.mode) : renderTargets(output.runs, { json: format.json, all: target.kind === 'all' }),
+  render: (output, { format, target }) => {
+    switch (output.kind) {
+    case 'declined':
+      return renderDeclined(output.mode);
+    case 'invalid-lock-file':
+      // As before any target is read: one block per selected target, laid out as --all only when there are several.
+      return renderTargets(output.runs, { json: format.json, all: output.runs.length > 1 });
+    case 'runs':
+      return renderTargets(output.runs, { json: format.json, all: target.kind === 'all' });
+    }
+  },
 });
 
-type CleanDeps = Deps<'targets' | 'loadWorkflowFiles' | 'writeLockFile' | 'ask' | 'isInteractive'>;
+type CleanDeps = Deps<'targets' | 'loadWorkflowFiles' | 'readLockFile' | 'writeLockFile' | 'ask' | 'isInteractive'>;
 /**
  * What the command line asks of a run: list only, clean without asking, print JSON, write `--target` in next steps, and
  * archive or delete for good.
@@ -131,67 +129,32 @@ function modeOf(deleteFlag: boolean): RemovalMode {
   return deleteFlag ? 'delete' : 'archive';
 }
 
-/** One target after its reads: ready, with its groups, or the run that says why it is not. */
-type TargetPlan = (PlannedTarget & { kind: 'ready'; client: ConnectedTarget['client'] }) | { kind: 'problem'; run: TargetRun };
-
-function where(target: ConnectedTarget): CleanTarget {
-  return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
-}
-
 /** Reads every target, then lists, asks, archives or deletes, by the options and whether a person can answer. */
-async function run(lock: LockFile, deps: CleanDeps, { dryRun, yes, json, named, mode }: RunOptions): Promise<CleanOutput> {
+async function run({ targets, loadWorkflowFiles, readLockFile, writeLockFile, ask, isInteractive }: CleanDeps, { dryRun, yes, json, named, mode }: RunOptions): Promise<CleanOutput> {
   const format: CleanFormat = { named, mode };
-  const plans: TargetPlan[] = [];
-  for (const target of deps.targets.selected) {
-    plans.push(await planTarget(target, lock, deps, format));
+  const lock: LockStore = { read: () => readLockFile(LOCK_FILE), write: (text) => writeLockFile(LOCK_FILE, text) };
+  const plan = await planCleanTargets({ config: targets.config, targets: targets.selected, mode }, { loadWorkflowFiles, lock });
+  switch (plan.kind) {
+  case 'invalid-lock-file':
+    return { kind: 'invalid-lock-file', runs: targets.selected.map((target) => renderInvalidLockFile(placeOf(target), plan.error)) };
+  case 'held-back':
+    return { kind: 'runs', runs: plan.plans.map((target) => renderHeldBackPlan(target, format)) };
+  case 'nothing-to-remove':
+  case 'needs-confirmation':
+    break;
   }
-  const ready = plans.flatMap((plan) => (plan.kind === 'ready' ? [plan] : []));
-  if (ready.length < plans.length) {
-    return { kind: 'runs', runs: plans.map((plan) => (plan.kind === 'ready' ? renderHeldBack(plan.target, format) : plan.run)) };
-  }
-  const listing = (stage: ListingStage): CleanOutput => ({ kind: 'runs', runs: ready.map((plan) => renderListing(plan, stage, format)) });
-  if (dryRun || ready.every(({ groups }) => groups.removed.length === 0)) {
+  const listing = (stage: ListingStage): CleanOutput => ({ kind: 'runs', runs: plan.ready.map((ready) => renderListing(plannedOf(ready), stage, format)) });
+  if (dryRun || plan.kind === 'nothing-to-remove') {
     return listing('dry-run');
   }
   if (!yes) {
-    if (json || !deps.isInteractive) {
+    if (json || !isInteractive) {
       return listing('confirmation-needed');
     }
-    if (!isYes(await deps.ask(renderConfirmation(ready, mode)))) {
+    if (!isCleanConfirmed(await ask(renderConfirmation(plan.ready.map(plannedOf), mode)))) {
       return { kind: 'declined', mode };
     }
   }
-  const remover = lockRemover(lock, (text) => deps.writeLockFile(LOCK_FILE, text));
-  const runs: TargetRun[] = [];
-  for (const plan of ready) {
-    runs.push(renderReport(plan, await applyRemoval(plan.groups.removed, plan.client, plan.target.instance, remover), format));
-  }
-  return { kind: 'runs', runs };
-}
-
-/** Reads the files of every folder on the instance of `target`, and the instance, and works out its three groups. */
-async function planTarget(target: ConnectedTarget, lock: LockFile, { targets, loadWorkflowFiles }: CleanDeps, format: CleanFormat): Promise<TargetPlan> {
-  const place = where(target);
-  const present = new Set<string>();
-  for (const { workflows: folder } of targetsOnInstance(targets.config, place.instance)) {
-    stableNamesOf((await loadWorkflowFiles(folder)).map(({ path }) => path)).forEach((name) => present.add(name));
-  }
-  const files = (await loadWorkflowFiles(target.workflows)).map(({ path }) => path);
-  const plan = await planClean({
-    client: target.client,
-    managed: managedIds(lock, place.instance),
-    removed: removedEntries(lock, place.instance, present),
-    files,
-    mode: format.mode,
-  });
-  if (plan.kind === 'stopped') {
-    return { kind: 'problem', run: renderStopped(place, plan, format) };
-  }
-  return { kind: 'ready', target: place, client: target.client, groups: plan };
-}
-
-/** `y` or `yes`, in any case, archives (or deletes). Enter, any other answer, or a closed stdin, is a no: the default is no. */
-function isYes(answer: string | undefined): boolean {
-  const word = answer?.trim().toLowerCase();
-  return word === 'y' || word === 'yes';
+  const cleaned = await applyCleanTargets(plan, lock);
+  return { kind: 'runs', runs: cleaned.map(({ plan: ready, report }) => renderReport(plannedOf(ready), report, format)) };
 }

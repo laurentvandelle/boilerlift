@@ -1,7 +1,7 @@
-import { CliResult } from '#src/cli/cli.model';
+import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
-import { CleanGroups, CleanPlan } from '#src/core/clean/clean.model';
+import { CleanGroups, CleanPlan, ReadyClean, TargetCleanPlan } from '#src/core/clean/clean.model';
 import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
@@ -30,8 +30,14 @@ export interface PlannedTarget {
   groups: CleanGroups;
 }
 
-/** What the command prints: the run of each target, or a declined confirmation, in the mode it asked about. */
-export type CleanOutput = { kind: 'runs'; runs: TargetRun[] } | { kind: 'declined'; mode: RemovalMode };
+/**
+ * What the command prints: the run of each target, the invalid lock file on each selected target (read before any
+ * target), or a declined confirmation, in the mode it asked about.
+ */
+export type CleanOutput =
+  | { kind: 'runs'; runs: TargetRun[] }
+  | { kind: 'invalid-lock-file'; runs: TargetRun[] }
+  | { kind: 'declined'; mode: RemovalMode };
 
 /**
  * Why clean lists the removed workflows without archiving them: `dry-run` (`--dry-run`), or `confirmation-needed` (no
@@ -88,6 +94,29 @@ function heading(target: CleanTarget): string {
   return header('lift clean', target.name, target.instance);
 }
 
+/** Where clean runs: the name, instance and folder of `target`. */
+export function placeOf(target: ConnectedTarget): CleanTarget {
+  return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
+}
+
+/** A ready target as the listing, the question and the report show it. */
+export function plannedOf({ target, groups }: ReadyClean): PlannedTarget {
+  return { target: placeOf(target), groups };
+}
+
+/**
+ * The run of one target when a read stopped on this target or another one: the read that stopped, or, for a ready
+ * target, that nothing was archived there either.
+ */
+export function renderHeldBackPlan(plan: TargetCleanPlan, format: CleanFormat): TargetRun {
+  switch (plan.kind) {
+  case 'stopped':
+    return renderStopped(placeOf(plan.target), plan.plan, format);
+  case 'ready':
+    return renderHeldBack(placeOf(plan.target), format);
+  }
+}
+
 /** A lock file that cannot be read: exit 1, nothing was archived, the problem and the fix on stderr. */
 export function renderInvalidLockFile(target: CleanTarget, error: LockFileError): TargetRun {
   const message = `Invalid ${LOCK_FILE}. Nothing was archived.`;
@@ -108,7 +137,7 @@ export function renderInvalidLockFile(target: CleanTarget, error: LockFileError)
 }
 
 /** A read that failed: exit 3 or 4, nothing was archived, `lift ping` next. */
-export function renderStopped(target: CleanTarget, plan: Extract<CleanPlan, { kind: 'stopped' }>, format: CleanFormat): TargetRun {
+function renderStopped(target: CleanTarget, plan: Extract<CleanPlan, { kind: 'stopped' }>, format: CleanFormat): TargetRun {
   const { error } = plan;
   const ping = withTarget('lift ping', target, format);
   return {
@@ -121,7 +150,7 @@ export function renderStopped(target: CleanTarget, plan: Extract<CleanPlan, { ki
 }
 
 /** A target whose reads went through, while another target's did not: nothing was archived (or deleted) there either. */
-export function renderHeldBack(target: CleanTarget, format: CleanFormat): TargetRun {
+function renderHeldBack(target: CleanTarget, format: CleanFormat): TargetRun {
   const message = `Nothing ${DONE[format.mode]}: another target has a problem.`;
   return {
     target: target.name,

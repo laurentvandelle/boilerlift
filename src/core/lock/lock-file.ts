@@ -1,8 +1,8 @@
-import { isStableName } from '#src/core/compile/load-workflows';
-import { StableName } from '#src/core/compile/workflow.model';
+import { isStableName, stableNamesOf } from '#src/core/compile/load-workflows';
+import { StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
-import { LockEntry, LockFile, LockFileError, LockRemover, LockWriteError, LockWriter } from '#src/core/lock/lock-file.model';
+import { LockEntry, LockFile, LockFileError, LockReader, LockRemover, LockWriteError, LockWriter } from '#src/core/lock/lock-file.model';
 import { isWorkflowId } from '#src/core/n8n/n8n-ids';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
@@ -63,6 +63,11 @@ export function parseLockFile(text: string | undefined): Result<LockFile, LockFi
   return ok({ version: VERSION, instances });
 }
 
+/** Reads the lock file through `store` and parses it: the one way a use case gets the record. */
+export async function readLock(store: LockReader): Promise<Result<LockFile, LockFileError>> {
+  return parseLockFile(await store.read());
+}
+
 /** The ids deploy manages on `instance`, by stable name. The only source of the managed ids. */
 export function managedIds(lock: LockFile, instance: string): Map<StableName, WorkflowId> {
   const entries = lock.instances.get(instance) ?? new Map<StableName, LockEntry>();
@@ -84,6 +89,18 @@ export function withEntry(lock: LockFile, instance: string, stableName: StableNa
  */
 export function removedEntries(lock: LockFile, instance: string, present: ReadonlySet<string>): Map<StableName, WorkflowId> {
   return new Map([...managedIds(lock, instance)].filter(([name]) => !present.has(name)));
+}
+
+/**
+ * The stable names of the workflow files in `folders`, each read with `loadFiles`: given the folders of every target on
+ * one instance, the names the project still has there. `removedEntries` decides the removed workflows against this set.
+ */
+export async function presentStableNames(folders: readonly string[], loadFiles: WorkflowFileLoader): Promise<Set<StableName>> {
+  const present = new Set<StableName>();
+  for (const folder of folders) {
+    stableNamesOf((await loadFiles(folder)).map(({ path }) => path)).forEach((name) => present.add(name));
+  }
+  return present;
 }
 
 /**

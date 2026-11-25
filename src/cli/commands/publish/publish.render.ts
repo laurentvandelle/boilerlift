@@ -1,4 +1,4 @@
-import { CliResult, TargetSelection } from '#src/cli/cli.model';
+import { CliResult, ConnectedTarget, TargetSelection } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
@@ -6,7 +6,16 @@ import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
-import { PlannedPublish, PublishPlan, PublishReport, PublishResult, UnknownName } from '#src/core/publish/publish.model';
+import {
+  PlannedPublish,
+  PublishPlan,
+  PublishReport,
+  PublishResult,
+  ReadyPublish,
+  TargetPublishPlan,
+  TargetPublished,
+  UnknownName,
+} from '#src/core/publish/publish.model';
 
 /** The target publish runs on: its name, its url (the instance the lock file records under) and its workflows folder. */
 export interface PublishTarget {
@@ -18,12 +27,6 @@ export interface PublishTarget {
 /** How the next steps are written: with `--target <name>` when the command line picked targets (`-t` or `--all`). */
 export interface PublishFormat {
   named: boolean;
-}
-
-/** One target ready to publish, as the confirmation lists it. */
-export interface ReadyTarget {
-  target: PublishTarget;
-  workflows: PlannedPublish[];
 }
 
 /** What the command prints: the run of each target, or a declined confirmation. */
@@ -53,7 +56,7 @@ function withTarget(command: string, target: PublishTarget, format: PublishForma
 }
 
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
-export function renderInvalidFiles(target: PublishTarget, problems: LoadProblem[]): TargetRun {
+function renderInvalidFiles(target: PublishTarget, problems: LoadProblem[]): TargetRun {
   const message = 'Invalid workflow files. Nothing was published.';
   const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
   return {
@@ -70,7 +73,7 @@ export function renderInvalidFiles(target: PublishTarget, problems: LoadProblem[
 }
 
 /** A lock file that cannot be read: exit 1, nothing was published, the problem and the fix on stderr. */
-export function renderInvalidLockFile(target: PublishTarget, error: LockFileError): TargetRun {
+function renderInvalidLockFile(target: PublishTarget, error: LockFileError): TargetRun {
   const message = `Invalid ${LOCK_FILE}. Nothing was published.`;
   return {
     target: target.name,
@@ -88,8 +91,31 @@ export function renderInvalidLockFile(target: PublishTarget, error: LockFileErro
   };
 }
 
+/** Where publish runs: the name, instance and folder of `target`. */
+function placeOf(target: ConnectedTarget): PublishTarget {
+  return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
+}
+
+/**
+ * The run of one target when another target, or this one, is not ready: its problem, or, for a ready target, that
+ * nothing was published there either.
+ */
+export function renderHeldBackPlan(plan: TargetPublishPlan, format: PublishFormat): TargetRun {
+  const target = placeOf(plan.target);
+  switch (plan.kind) {
+  case 'invalid-files':
+    return renderInvalidFiles(target, plan.problems);
+  case 'invalid-lock-file':
+    return renderInvalidLockFile(target, plan.error);
+  case 'not-ready':
+    return renderNotReady(target, plan.plan, format);
+  case 'ready':
+    return renderHeldBack(target);
+  }
+}
+
 /** A plan that is not ready: names that match no deployed workflow (exit 1), or a read that failed (exit 3 or 4). */
-export function renderNotReady(target: PublishTarget, plan: Exclude<PublishPlan, { kind: 'ready' }>, format: PublishFormat): TargetRun {
+function renderNotReady(target: PublishTarget, plan: Exclude<PublishPlan, { kind: 'ready' }>, format: PublishFormat): TargetRun {
   switch (plan.kind) {
   case 'unknown-names':
     return renderUnknownNames(target, plan.unknown, format);
@@ -161,7 +187,7 @@ function renderUnknownNames(target: PublishTarget, unknown: UnknownName[], forma
 }
 
 /** A target that was ready, while another target was not: nothing was published there either. */
-export function renderHeldBack(target: PublishTarget): TargetRun {
+function renderHeldBack(target: PublishTarget): TargetRun {
   const message = 'Nothing published: another target has a problem.';
   return {
     target: target.name,
@@ -173,10 +199,13 @@ export function renderHeldBack(target: PublishTarget): TargetRun {
 }
 
 /** The listing and the `[Y/n]` question, written to stderr before anything is published. */
-export function renderConfirmation(ready: ReadyTarget[], format: PublishFormat): string {
+export function renderConfirmation(ready: readonly ReadyPublish[], format: PublishFormat): string {
   const blocks = ready
     .filter(({ workflows }) => workflows.length > 0)
-    .map(({ target, workflows }) => [header('lift publish', target.name, target.instance), '', ...rows(workflows.map((workflow) => planRow(workflow, target, format)))]);
+    .map(({ target: connected, workflows }) => {
+      const target = placeOf(connected);
+      return [header('lift publish', target.name, target.instance), '', ...rows(workflows.map((workflow) => planRow(workflow, target, format)))];
+    });
   const count = ready.reduce((total, { workflows }) => total + workflows.filter(({ action }) => action === 'to-publish').length, 0);
   const targets = ready.filter(({ workflows }) => workflows.some(({ action }) => action === 'to-publish')).length;
   const where = targets > 1 ? ` on ${targets} targets` : '';
@@ -314,7 +343,8 @@ function resultRow(result: PublishResult, target: PublishTarget, format: Publish
  * What publish did on one target: its text, its JSON payload and its recap. `named`: the command line named workflows;
  * without names, a plan with no draft waiting reads "Nothing to publish", above the workflows that differ.
  */
-export function renderReport(target: PublishTarget, report: PublishReport, format: PublishFormat, named: boolean): TargetRun {
+export function renderReport({ target: connected, report }: TargetPublished, format: PublishFormat, named: boolean): TargetRun {
+  const target = placeOf(connected);
   const summary = summarize(report.results);
   const nothing = report.results.every(({ action }) => action === 'differs');
   const message = nothing && !named ? 'Nothing to publish: no draft is waiting to be published.' : undefined;

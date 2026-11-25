@@ -1,6 +1,7 @@
-import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
+import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
 import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/core/common/exit-codes';
-import { N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
+import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
+import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
 import { StatusError, StatusReport } from '#src/core/status/status.model';
 
 /** The local fields of a workflow of the project, as publish reports it. */
@@ -79,4 +80,50 @@ export type PublishResult = PublishedWorkflow &
 export interface PublishReport {
   results: PublishResult[];
   exitCode: typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE;
+}
+
+/**
+ * What publish found on one target, from reads only, tagged by `kind`:
+ * - `invalid-files`: a workflow file of its folder does not load.
+ * - `invalid-lock-file`: the lock file cannot be read.
+ * - `not-ready`: a name is unknown there, or a read failed (`PublishPlan` other than `ready`).
+ * - `ready`: the workflows of its plan, in stable-name order; empty when nothing is waiting.
+ */
+export type TargetPublishPlan =
+  | { kind: 'invalid-files'; target: ConnectedTarget; problems: LoadProblem[] }
+  | { kind: 'invalid-lock-file'; target: ConnectedTarget; error: LockFileError }
+  | { kind: 'not-ready'; target: ConnectedTarget; plan: Exclude<PublishPlan, { kind: 'ready' }> }
+  | { kind: 'ready'; target: ConnectedTarget; workflows: PlannedPublish[] };
+
+/** A target whose plan is ready to publish. */
+export type ReadyPublish = Extract<TargetPublishPlan, { kind: 'ready' }>;
+
+/**
+ * What publish found on every selected target, tagged by `kind`. Nothing is published yet:
+ * - `held-back`: at least one target is not ready, so nothing is published on any target. Every plan, in order.
+ * - `needs-confirmation`: every target is ready and a draft waits to be published: publish asks first.
+ * - `ready`: every target is ready and no draft waits: publish reports without asking.
+ */
+export type PublishRun =
+  | { kind: 'held-back'; plans: TargetPublishPlan[] }
+  | { kind: 'needs-confirmation'; ready: ReadyPublish[] }
+  | { kind: 'ready'; ready: ReadyPublish[] };
+
+export interface PublishTargetsInput {
+  /** The selected targets, in the order publish reads them. */
+  targets: readonly ConnectedTarget[];
+  /** The stable names given on the command line. Empty: every workflow whose draft is waiting to be published. */
+  names: string[];
+}
+
+/** The ports publish reads the project through. It never writes the lock file. */
+export interface PublishPorts {
+  loadWorkflowFiles: WorkflowFileLoader;
+  lock: LockReader;
+}
+
+/** What publish did on one target. */
+export interface TargetPublished {
+  target: ConnectedTarget;
+  report: PublishReport;
 }

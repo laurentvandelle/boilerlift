@@ -2,10 +2,10 @@ import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
 import { Result } from '#src/core/common/result';
 import { CredentialsFile } from '#src/core/compile/credential.model';
-import { BoilerliftConfig, FileCreation, ProjectConfig, ProjectConfigFile, Target, TargetSelection, TemplateFile } from '#src/core/config/config.model';
-import { N8nClient } from '#src/core/n8n/n8n.model';
+import { BoilerliftConfig, FileCreation, ProjectConfig, ProjectConfigFile, TargetSelection, TemplateFile } from '#src/core/config/config.model';
+import { ConnectedTarget } from '#src/core/n8n/n8n.model';
 
-export type { BoilerliftConfig, CredentialsFile, FileCreation, ProjectConfigFile, TargetSelection, TemplateFile, WorkflowFile };
+export type { BoilerliftConfig, ConnectedTarget, CredentialsFile, FileCreation, ProjectConfigFile, TargetSelection, TemplateFile, WorkflowFile };
 
 export interface CliResult {
   exitCode: ExitCode;
@@ -76,11 +76,6 @@ export interface TypedCommandInput<Options> {
   mode: ModeNames<Options> | 'default';
   /** The targets `--target` and `--all` select: `default` without them, and for a command that does not need targets. */
   target: TargetSelection;
-}
-
-/** A selected target, with the client of its n8n instance built on `ctx.fetch`. */
-export interface ConnectedTarget extends Target {
-  client: N8nClient;
 }
 
 /** The `'targets'` need: the project config, and the targets the command runs on, in the order it runs them. */
