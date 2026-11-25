@@ -2,10 +2,10 @@ import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/core/common/exit-codes';
 import { Result } from '#src/core/common/result';
 import { CredentialsFile } from '#src/core/compile/credential.model';
-import { BoilerliftConfig, ProjectConfig, ProjectConfigFile, Target, TargetSelection } from '#src/core/config/config.model';
+import { BoilerliftConfig, FileCreation, ProjectConfig, ProjectConfigFile, Target, TargetSelection, TemplateFile } from '#src/core/config/config.model';
 import { N8nClient } from '#src/core/n8n/n8n.model';
 
-export type { BoilerliftConfig, CredentialsFile, ProjectConfigFile, TargetSelection, WorkflowFile };
+export type { BoilerliftConfig, CredentialsFile, FileCreation, ProjectConfigFile, TargetSelection, TemplateFile, WorkflowFile };
 
 export interface CliResult {
   exitCode: ExitCode;
@@ -161,15 +161,6 @@ export interface RenderView<Options, Needs extends NeedName, Prepared> {
   prepared: Prepared;
   deps: Deps<Needs>;
 }
-
-/** A file of the project template: its path in the template, with `/`, and its text. */
-export interface TemplateFile {
-  path: string;
-  text: string;
-}
-
-/** What `CommandContext.createFile` did with one file. */
-export type FileCreation = { status: 'created' } | { status: 'exists' } | { status: 'failed'; reason: string };
 
 export interface CommandContext {
   version: string;

@@ -18,8 +18,30 @@ const noBarrelOrRelative = {
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
 const CORE = ['compile', 'deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'lock', 'credentials', 'config', 'n8n', 'connection', 'common'];
 
-/** The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports them (src/services/AGENTS.md). */
-const SERVICES = ['services-http', 'services-n8n'];
+/**
+ * The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports services/n8n/ and only
+ * cli/node-context.ts imports services/fs/ (src/services/AGENTS.md).
+ */
+const SERVICES = ['services-http', 'services-n8n', 'services-fs'];
+
+/** File, network and process modules: core/, services/ and the commands get them through a parameter or a port. */
+const IO_MODULES = ['fs', 'http', 'https', 'http2', 'net', 'tls', 'dgram', 'dns', 'child_process', 'process', 'console'];
+
+/** The hidden-dependency import ban: no relative import, and no module of `modules`. */
+function ioImportBan(modules: readonly string[]): unknown[] {
+  return [
+    'error',
+    {
+      patterns: [
+        ...noBarrelOrRelative.patterns,
+        {
+          regex: `^(node:)?(${modules.join('|')})(/.*)?$`,
+          message: 'No file, network or process access here: it comes through CommandContext or a port.',
+        },
+      ],
+    },
+  ];
+}
 
 const testTitle = ['^Should .+ when .+', 'Titles read "Should {outcome} when {condition}" (docs/testing.md).'];
 const noSleep = 'No sleeps in tests: use fake timers or await the event.';
@@ -187,6 +209,7 @@ export default tseslint.config(
         { type: 'common', pattern: 'src/core/common' },
         { type: 'services-http', pattern: 'src/services/http' },
         { type: 'services-n8n', pattern: 'src/services/n8n' },
+        { type: 'services-fs', pattern: 'src/services/fs' },
       ],
       'boundaries/files': [
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
@@ -195,6 +218,7 @@ export default tseslint.config(
         { category: 'targets-render', pattern: 'src/cli/targets.render.ts' },
         { category: 'output-render', pattern: 'src/cli/output.render.ts' },
         { category: 'targets-need', pattern: 'src/cli/targets-need.ts' },
+        { category: 'node-context', pattern: 'src/cli/node-context.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
         { category: 'n8n-client', pattern: 'src/services/n8n/n8n-client.ts' },
         { category: 'bin', pattern: 'src/bin.ts' },
@@ -289,6 +313,12 @@ export default tseslint.config(
             {
               from: { element: { type: 'services-n8n' } },
               allow: { to: { element: { type: ['services-n8n', 'services-http', 'n8n', 'config'] } } },
+            },
+            {
+              // fs/ reads and writes the files of the project for CommandContext: the config with its .env, the workflow
+              // and credentials files, the lock file, the template. It returns the file shapes of compile/ and config/.
+              from: { element: { type: 'services-fs' } },
+              allow: { to: { element: { type: ['services-fs', 'compile', 'config'] } } },
             },
             {
               // A command sees only itself, the CLI contracts (cli/*.model.ts and defineCommand) and core. Never another command.
@@ -391,13 +421,19 @@ export default tseslint.config(
             {
               from: { element: { type: 'cli' } },
               disallow: { to: { element: { type: SERVICES } } },
-              message: "Only cli/targets-need.ts imports services/: it builds the n8n client of each target from ctx.fetch for the commands that need 'targets' (src/cli/AGENTS.md).",
+              message: "Only cli/targets-need.ts and cli/node-context.ts import services/: the n8n client of each target, and the project file adapters (src/cli/AGENTS.md).",
             },
             {
               // The 'targets' need builds the client of each target from ctx.fetch: the one importer of services/. After
               // the disallow above.
               from: { file: { categories: 'targets-need' } },
               allow: { to: [{ element: { type: 'services-n8n' } }, { file: { categories: 'n8n-client' } }] },
+            },
+            {
+              // The composition root wires the project file adapters of services/fs/ into the CommandContext. After the
+              // disallow above.
+              from: { file: { categories: 'node-context' } },
+              allow: { to: { element: { type: 'services-fs' } } },
             },
           ],
         },
@@ -425,18 +461,7 @@ export default tseslint.config(
         },
       ],
       // Replaces the block above for these files, so it repeats the relative-import patterns.
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            ...noBarrelOrRelative.patterns,
-            {
-              regex: '^(node:)?(fs|http|https|http2|net|tls|dgram|dns|child_process|process|console)(/.*)?$',
-              message: 'No file, network or process access here: it comes through CommandContext or a port.',
-            },
-          ],
-        },
-      ],
+      'no-restricted-imports': ioImportBan(IO_MODULES),
       'no-restricted-properties': [
         'error',
         { object: 'Date', property: 'now', message: 'Inject a Clock.' },
@@ -444,6 +469,15 @@ export default tseslint.config(
         { object: 'crypto', property: 'randomUUID', message: 'Inject an IdGenerator.' },
       ],
       'no-restricted-syntax': ['error', ...hiddenDependencySyntax, inlineRecordCheck, resultAlias],
+    },
+  },
+  {
+    // services/fs/ is the file adapter behind CommandContext: it alone may import node:fs. The environment and the
+    // prompt streams still come in as parameters, so the process ban holds. Replaces the import ban above.
+    files: ['src/services/fs/**/*.ts'],
+    ignores: ['src/**/*.test.ts', 'src/**/*.test-d.ts', 'src/**/*.fake.ts'],
+    rules: {
+      'no-restricted-imports': ioImportBan(IO_MODULES.filter((module) => module !== 'fs')),
     },
   },
   {
