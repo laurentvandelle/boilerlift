@@ -1,10 +1,10 @@
 import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
+import { TargetRun, credentialStop, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
 import { EXIT_USAGE, statusExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { workflowLink } from '#src/core/n8n/n8n-api';
-import { StatusReport, TargetStatus, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
+import { StatusError, StatusReport, TargetStatus, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
 
 /** The target status runs on: its name, its url (the instance the lock file records under) and its workflows folder. */
 export interface StatusTarget {
@@ -97,7 +97,6 @@ export function renderInvalidManaged(value: string, format: { json: boolean }): 
 function renderStatus(target: StatusTarget, report: StatusReport, format: StatusFormat, empty: boolean): TargetRun {
   const message = empty && format.managed ? `No workflow yet in ${target.folder}. Add a workflow file there, then run lift deploy.` : undefined;
   const { error } = report;
-  const ping = withTarget('lift ping', target, format);
   const summary = summarize(report.workflows);
   return {
     target: target.name,
@@ -108,7 +107,7 @@ function renderStatus(target: StatusTarget, report: StatusReport, format: Status
       message: message ?? null,
       workflows: report.workflows.map((status) => workflowPayload(status, target, format)),
       summary,
-      error: error === undefined ? null : { kind: error.kind, call: error.call, detail: error.detail, next: ping },
+      error: error === undefined ? null : stopOf(error, target, format).payload,
       exitCode: statusExitCode(report),
     },
     outcome: error === undefined ? summaryLine(summary) : `stopped: ${error.call} : ${error.detail}`,
@@ -140,7 +139,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
   const lead = message === undefined ? [] : [message];
   const { error } = report;
   if (error !== undefined) {
-    const stop = stopped(error.call, error.detail, [next(withTarget('lift ping', target, format))]);
+    const stop = stopped(error.call, error.detail, stopOf(error, target, format).lines);
     return { exitCode: statusExitCode(report), stdout: sections(top, lead), stderr: sections(stop) };
   }
   const list = rows(
@@ -150,6 +149,24 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
     }),
   );
   return { exitCode: statusExitCode(report), stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
+}
+
+/**
+ * The lines under the stop and the --json `error`: a failed read points to `lift ping`; a credential error lists each
+ * missing credential and its hint, as deploy does.
+ */
+function stopOf(error: StatusError, target: StatusTarget, format: StatusFormat): { lines: string[]; payload: Record<string, unknown> } {
+  switch (error.kind) {
+  case 'credential-scope-missing':
+  case 'credentials-missing':
+    return credentialStop(target.name, error);
+  case 'unreachable':
+  case 'key-rejected':
+  case 'read-failed': {
+    const ping = withTarget('lift ping', target, format);
+    return { lines: [next(ping)], payload: { kind: error.kind, call: error.call, detail: error.detail, next: ping } };
+  }
+  }
 }
 
 /** A project workflow by its stable name; another one by its name in n8n. */

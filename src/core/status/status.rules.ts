@@ -1,5 +1,6 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
 import { Result, err, ok } from '#src/core/common/result';
+import { ResolutionError } from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';
@@ -9,6 +10,7 @@ import {
   RemovedStatus,
   StatusError,
   StatusInput,
+  StatusReadError,
   StatusReads,
   StatusReport,
   UnmanagedStatus,
@@ -84,8 +86,16 @@ function stopped(error: StatusError): StatusReport {
   return { workflows: [], error };
 }
 
+/**
+ * What status reports when the `credential()` markers do not resolve: it stops before comparing any workflow, with the
+ * credential error of deploy, or a failed list of the credentials as a failed read.
+ */
+export function credentialStop(error: ResolutionError): StatusReport {
+  return stopped(error.kind === 'list-failed' ? describeFailure(error.failure) : error);
+}
+
 /** What a failed read means for status: a rejected key, an unreachable instance, or another failed read. */
-function describeFailure(failure: ApiFailure): StatusError {
+function describeFailure(failure: ApiFailure): StatusReadError {
   switch (failure.kind) {
   case 'unreachable':
     return { kind: 'unreachable', call: failure.call, detail: `unreachable: ${failure.reason}` };

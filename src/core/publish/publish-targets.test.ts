@@ -1,8 +1,12 @@
+import { CredentialsFile } from '#src/core/compile/credential.model';
 import { describe, expect, test } from 'vitest';
 import { fakeLocalWorkflow, fakeWorkflowFile, fakeWorkflowLoader } from '#src/core/compile/workflow.fake';
 import { fakeLockStore, fakeLockText } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, fakeConnectedTarget, fakeN8n, fakeN8nWorkflow } from '#src/core/n8n/n8n.fake';
 import { applyPublishTargets, isPublishConfirmed, planPublishTargets } from '#src/core/publish/publish-targets';
+
+/** A project with no credential list. */
+const NO_LISTS = (): Promise<CredentialsFile[]> => Promise.resolve([]);
 
 const DEV_URL = 'https://dev.example.com';
 const PROD_URL = 'https://prod.example.com';
@@ -23,7 +27,7 @@ describe('planPublishTargets', () => {
   test('Should ask for a confirmation when a draft is waiting on a target', async () => {
     const target = fakeConnectedTarget('dev', pending('rep1').client);
 
-    const run = await planPublishTargets({ targets: [target], names: [] }, { loadWorkflowFiles: FILES, lock: fakeLockStore({ text: fakeLockText({ 'daily-report': 'rep1' }) }).store });
+    const run = await planPublishTargets({ targets: [target], names: [] }, { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: FILES, lock: fakeLockStore({ text: fakeLockText({ 'daily-report': 'rep1' }) }).store });
 
     expect(run.kind).toBe('needs-confirmation');
   });
@@ -31,7 +35,7 @@ describe('planPublishTargets', () => {
   test('Should not ask when no draft is waiting on any target', async () => {
     const target = fakeConnectedTarget('dev', fakeN8n({ workflows: [fakeN8nWorkflow(REPORT, { id: 'rep1' })] }).client);
 
-    const run = await planPublishTargets({ targets: [target], names: [] }, { loadWorkflowFiles: FILES, lock: fakeLockStore({ text: fakeLockText({ 'daily-report': 'rep1' }) }).store });
+    const run = await planPublishTargets({ targets: [target], names: [] }, { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: FILES, lock: fakeLockStore({ text: fakeLockText({ 'daily-report': 'rep1' }) }).store });
 
     expect(run.kind).toBe('ready');
   });
@@ -40,7 +44,7 @@ describe('planPublishTargets', () => {
     const dev = pending('rep1');
     const targets = [fakeConnectedTarget('dev', dev.client, { url: DEV_URL }), fakeConnectedTarget('prod', fakeN8n().client, { url: PROD_URL })];
 
-    const run = await planPublishTargets({ targets, names: ['daily-report'] }, { loadWorkflowFiles: FILES, lock: fakeLockStore({ text: twoInstanceLock() }).store });
+    const run = await planPublishTargets({ targets, names: ['daily-report'] }, { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: FILES, lock: fakeLockStore({ text: twoInstanceLock() }).store });
 
     expect([run.kind === 'held-back' ? run.plans.map(({ kind }) => kind) : run.kind, dev.calls.filter((call) => call.endsWith('/activate'))]).toEqual([
       ['ready', 'not-ready'],
@@ -51,7 +55,7 @@ describe('planPublishTargets', () => {
   test('Should hold the target back with the lock file error when the lock file is invalid', async () => {
     const target = fakeConnectedTarget('dev', pending('rep1').client);
 
-    const run = await planPublishTargets({ targets: [target], names: [] }, { loadWorkflowFiles: FILES, lock: fakeLockStore({ text: '{ not json' }).store });
+    const run = await planPublishTargets({ targets: [target], names: [] }, { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: FILES, lock: fakeLockStore({ text: '{ not json' }).store });
 
     expect(run.kind === 'held-back' ? run.plans.map(({ kind }) => kind) : run.kind).toEqual(['invalid-lock-file']);
   });
@@ -60,7 +64,7 @@ describe('planPublishTargets', () => {
     const target = fakeConnectedTarget('dev', pending('rep1').client);
     const loadWorkflowFiles = fakeWorkflowLoader({ './workflows': [{ path: 'workflows/broken.json', error: 'unexpected token' }] });
 
-    const run = await planPublishTargets({ targets: [target], names: [] }, { loadWorkflowFiles, lock: fakeLockStore().store });
+    const run = await planPublishTargets({ targets: [target], names: [] }, { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles, lock: fakeLockStore().store });
 
     expect(run.kind === 'held-back' ? run.plans.map(({ kind }) => kind) : run.kind).toEqual(['invalid-files']);
   });
@@ -71,7 +75,7 @@ describe('applyPublishTargets', () => {
     const dev = pending('rep1');
     const prod = pending('rep2');
     const targets = [fakeConnectedTarget('dev', dev.client, { url: DEV_URL }), fakeConnectedTarget('prod', prod.client, { url: PROD_URL })];
-    const run = await planPublishTargets({ targets, names: [] }, { loadWorkflowFiles: FILES, lock: fakeLockStore({ text: twoInstanceLock() }).store });
+    const run = await planPublishTargets({ targets, names: [] }, { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: FILES, lock: fakeLockStore({ text: twoInstanceLock() }).store });
 
     const published = await applyPublishTargets(run.kind === 'held-back' ? [] : run.ready);
 

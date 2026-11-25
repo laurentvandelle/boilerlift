@@ -1,5 +1,6 @@
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { Result } from '#src/core/common/result';
+import { describeFailure } from '#src/core/deliver/deploy-failure';
 import { DeployInput, DeployPlan } from '#src/core/deliver/deploy.model';
 import { byStableName, decideSpec, decideSteps, stoppedPlan, stopsReading } from '#src/core/deliver/plan-deploy.rules';
 import { resolveCredentials } from '#src/core/deliver/resolve-credentials';
@@ -17,9 +18,10 @@ export async function planDeploy(input: DeployInput): Promise<DeployPlan> {
   if (unsupported !== undefined) {
     return stoppedPlan(unsupported);
   }
-  const resolved = await resolveCredentials(input);
+  const resolved = await resolveCredentials({ ...input, command: 'deploy' });
   if (!resolved.ok) {
-    return stoppedPlan(resolved.error);
+    const { error } = resolved;
+    return stoppedPlan(error.kind === 'list-failed' ? describeFailure(error.failure) : error);
   }
   const drafts = await readDrafts(resolved.value, managed, client);
   return decideSteps(resolved.value, managed, drafts);

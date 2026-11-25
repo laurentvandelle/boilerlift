@@ -34,13 +34,15 @@ With `--json`, the question still goes to stderr, so stdout holds only the JSON 
 ## Which workflows
 
 - Without names: every workflow of the project whose draft is waiting to be published (the `draft-pending` state of [`lift status`](status.md)). With none, it prints `Nothing to publish: no draft is waiting to be published.` and exits 0.
-  - A workflow whose local file differs from the n8n draft (`differs`), often after a change made in the n8n editor, is listed as `not published` with `lift deploy` as its next step, in the question and in the result. It is never published, and it is not an error: `publish` still exits 0. `lift deploy` replaces the change made in n8n with the local file.
+  - A workflow whose local file differs from the n8n draft (`differs`), often after a change made in the n8n editor, is listed as `not published` with `lift deploy` as its next step, in the question and in the result. It is never published, and it is not an error: `publish` still exits 0. `lift deploy` replaces the change made in n8n with the local file. When every workflow differs, the last line reads `Nothing published: 1 workflow differs from n8n.` (or `<n> workflows differ`).
 - With names: only those workflows, by stable name.
   - A name that matches no workflow file, has no id in `boilerlift.lock.json` (or n8n no longer has that id), or is archived in n8n is unknown. Nothing is published, on any target, and nothing is asked. Each unknown name is listed with its next step (`lift deploy` or `lift status`), and `publish` exits 1.
   - A workflow whose local file differs from the n8n draft (`differs`) is not published: run `lift deploy` first. The others are still published, and `publish` exits 5.
   - A workflow already published (`up-to-date`) is skipped and reported as `already published`. It is not an error.
 
 Your workflows are found by the ids of `boilerlift.lock.json` only, never by name or tag. `publish` never writes `boilerlift.lock.json`.
+
+A node that picks a credential with `credential('key')` is compared with the n8n id and name of that key in `credentials/<target>.ts`, as `deploy` sends it, so the draft deploy just delivered is published. A key that does not resolve stops publish before anything is asked or published, with the same error as deploy, ending `then run publish again`; see [`lift status`](status.md).
 
 With `--all`, every target is read first. If one has a problem (an unknown name, an invalid file, a failed read), nothing is published on any target.
 
@@ -60,7 +62,7 @@ Without names, the last line counts only `published` and `failed`: workflows alr
 
 ## Exit codes
 
-0 when every workflow was published or already published, or nothing was waiting. 1 on a usage error, an invalid `boilerlift.config.ts`, `boilerlift.lock.json` or workflow file, an unknown name, or a confirmation that was not yes. 3 when the instance cannot be reached or a read fails, 4 when the API key is rejected: nothing was published. 5 when at least one workflow was not published (it differs from n8n, or n8n refused it); the others were.
+0 when every workflow was published or already published, or nothing was waiting. 1 on a usage error, an invalid `boilerlift.config.ts`, `boilerlift.lock.json` or workflow file, an unknown name, or a confirmation that was not yes. 3 when the instance cannot be reached or a read fails, 4 when the API key is rejected, 8 when workflows use credentials the target does not provide, 9 when they use `credential()` and the API key lacks the `credential:list` scope: nothing was published. 5 when at least one workflow was not published (it differs from n8n, or n8n refused it); the others were.
 
 ## JSON
 
@@ -68,4 +70,4 @@ Each result carries its `action` (`published`, `already-published`, `refused`, `
 
 ## Calls
 
-The reads of `lift status` for the workflows of the project (`GET /api/v1/workflows/{id}`), then `POST /api/v1/workflows/{id}/activate` for each workflow it publishes.
+The reads of `lift status` for the workflows of the project (`GET /api/v1/credentials` when a workflow uses `credential()`, then `GET /api/v1/workflows/{id}`), then `POST /api/v1/workflows/{id}/activate` for each workflow it publishes.

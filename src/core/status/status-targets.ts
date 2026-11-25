@@ -1,3 +1,4 @@
+import { CREDENTIALS_DIR, targetCredentials } from '#src/core/compile/credential-lists';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { targetsOnInstance } from '#src/core/config/project-config';
 import { managedIds, presentStableNames, readLock, removedEntries } from '#src/core/lock/lock-file';
@@ -7,9 +8,15 @@ import { StatusPorts, StatusTargetsInput, TargetStatus } from '#src/core/status/
 /**
  * Reads where each workflow of each selected target stands, in turn; a target that cannot be read does not stop the
  * next ones. A lock entry is `removed` when no workflow file of any target on its instance has its stable name (the
- * Removed rule of `presentStableNames` and `removedEntries`). Reads only: it changes nothing.
+ * Removed rule of `presentStableNames` and `removedEntries`). The credential lists are read once, before the workflow
+ * files (they give `credential()` its types), and each target resolves its markers through its own list. Reads only:
+ * it changes nothing.
  */
-export async function readStatusTargets({ config, targets, filter }: StatusTargetsInput, { loadWorkflowFiles, lock: store }: StatusPorts): Promise<TargetStatus[]> {
+export async function readStatusTargets(
+  { config, targets, filter }: StatusTargetsInput,
+  { loadCredentialsFiles, loadWorkflowFiles, lock: store }: StatusPorts,
+): Promise<TargetStatus[]> {
+  const credentials = await loadCredentialsFiles(CREDENTIALS_DIR);
   const statuses: TargetStatus[] = [];
   for (const target of targets) {
     const instance = target.connection.url.value;
@@ -31,6 +38,9 @@ export async function readStatusTargets({ config, targets, filter }: StatusTarge
       managed: managedIds(lock.value, instance),
       removed: removedEntries(lock.value, instance, present),
       filter,
+      target: target.name,
+      credentials: targetCredentials(credentials, target.name),
+      command: 'status',
     });
     statuses.push({ kind: 'report', target, report, empty: loaded.value.length === 0 });
   }

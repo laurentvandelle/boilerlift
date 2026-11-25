@@ -30,6 +30,8 @@ An entry of `boilerlift.lock.json` whose workflow file is gone, from the folder 
 
 `differs` compares the local file with the current n8n draft the way `deploy` does, so it covers both a change in the file and a change in the n8n editor: nothing records which side changed.
 
+A node that picks a credential with `credential('key')` is compared with the n8n id and name of that key in `credentials/<target>.ts`, as `deploy` sends it (see [`lift creds sync`](creds.md)). So a workflow deploy just delivered reads `draft-pending`, and a draft changed in the n8n editor still reads `differs`. A credential renamed in n8n keeps its id and resolves under its current name. A key that does not resolve (not in the list, its id gone from the instance, or its type changed there) stops status with the same error as deploy: each missing credential, then `Run lift creds sync --target <target> … then run status again`. With `--json`, the `error` carries `missing` and `next: "lift creds sync --target <target>"`. When no workflow uses `credential()`, status does not list the credentials.
+
 Every other workflow of the instance, one that `boilerlift.lock.json` does not record for this target, is `unmanaged` (not in my project). Status never changes it. Archived ones are listed only with `--archived`. Your workflows are found by the ids of `boilerlift.lock.json` only, never by name or tag.
 
 With a target named (`-t`) or `--all`, each next command carries `--target <name>`.
@@ -54,8 +56,8 @@ A target with no workflow file shows `No workflow yet in <folder>. Add a workflo
 
 ## Exit codes
 
-Status exits 0 whenever it read everything, whatever the states. It exits 1 on a usage error, an invalid `boilerlift.config.ts`, `boilerlift.lock.json` or workflow file; 3 when the instance cannot be reached or a read fails; 4 when the API key is rejected. On 3 and 4 it tells you to run `lift ping`.
+Status exits 0 whenever it read everything, whatever the states. It exits 1 on a usage error, an invalid `boilerlift.config.ts`, `boilerlift.lock.json` or workflow file; 3 when the instance cannot be reached or a read fails; 4 when the API key is rejected. On 3 and 4 it tells you to run `lift ping`. It exits 8 when workflows use credentials the target does not provide, and 9 when they use `credential()` and the API key lacks the `credential:list` scope, as deploy does.
 
 ## Calls
 
-`GET /api/v1/workflows/{id}` for each workflow `boilerlift.lock.json` records, then every page of `GET /api/v1/workflows` for the others (skipped with `--managed=true`). The draft and published versions come from the `versionId` and `activeVersionId` fields of n8n.
+Every page of `GET /api/v1/credentials`, once, when a workflow of the project uses `credential()` (skipped with `--managed=false`). Then `GET /api/v1/workflows/{id}` for each workflow `boilerlift.lock.json` records, then every page of `GET /api/v1/workflows` for the others (skipped with `--managed=true`). The draft and published versions come from the `versionId` and `activeVersionId` fields of n8n.

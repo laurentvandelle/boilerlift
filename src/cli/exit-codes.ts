@@ -1,7 +1,7 @@
 import { CheckFailure, ConnectionReport } from '#src/core/connection/connection.model';
 import { SyncError, SyncReport } from '#src/core/credentials/credentials.model';
 import { DeployErrorKind, RunEnd } from '#src/core/deliver/deploy.model';
-import { StatusReport } from '#src/core/status/status.model';
+import { StatusError, StatusReport } from '#src/core/status/status.model';
 
 // The process exit codes of every command, one name per code. Scripts read them, so a code means the same thing
 // in every command. The usage text of each command lists the codes it can return.
@@ -147,9 +147,26 @@ export function readErrorExitCode(kind: 'unreachable' | 'key-rejected' | 'read-f
   }
 }
 
+/**
+ * The exit code of a stop of status or publish: the code of its failed read, or of its credential error, the same as
+ * deploy (8 for missing credentials, 9 for a missing scope).
+ */
+export function statusErrorExitCode(error: StatusError): FailureExitCode {
+  switch (error.kind) {
+  case 'credential-scope-missing':
+    return EXIT_CREDENTIAL_SCOPE_MISSING;
+  case 'credentials-missing':
+    return EXIT_CREDENTIALS_MISSING;
+  case 'unreachable':
+  case 'key-rejected':
+  case 'read-failed':
+    return readErrorExitCode(error.kind);
+  }
+}
+
 /** The exit code of a status on one target: 0 whenever it could read everything, whatever the states. */
 export function statusExitCode(report: StatusReport): ExitCode {
-  return report.error === undefined ? EXIT_OK : readErrorExitCode(report.error.kind);
+  return report.error === undefined ? EXIT_OK : statusErrorExitCode(report.error);
 }
 
 /** The exit code of a creds sync error: the list was left as it was. */

@@ -9,10 +9,20 @@ import {
 } from '#src/cli/commands/publish/publish.render';
 import { defineCommand } from '#src/cli/define-command';
 import { renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/cli/exit-codes';
+import {
+  EXIT_API_KEY_REJECTED,
+  EXIT_CREDENTIALS_MISSING,
+  EXIT_CREDENTIAL_SCOPE_MISSING,
+  EXIT_OK,
+  EXIT_PARTIAL_FAILURE,
+  EXIT_UNREACHABLE,
+  EXIT_USAGE,
+} from '#src/cli/exit-codes';
+import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 import { applyPublishTargets, isPublishConfirmed, planPublishTargets } from '#src/core/publish/publish-targets';
 
 const DESCRIPTION = `Publishes deployed drafts on the n8n instance of a target: the draft becomes the published
@@ -21,6 +31,9 @@ version, and the workflow runs it on its triggers.
   draft is waiting to be published (the "draft not yet published" state of lift status), and
   lists the workflows that differ from n8n, such as after a change in the n8n editor, without
   publishing them.
+A node that picks a credential with credential('key') is compared with the n8n id and name of
+that key in ./${credentialsFilePath('<target>')}, as deploy sends it. A key that does not resolve
+stops publish before anything is published, as it stops deploy.
 Before publishing, publish lists the workflows of every selected target, then asks once, on
 stderr, and reads the answer from stdin, TTY or not. Enter, y or yes publishes; any other answer,
 or a closed stdin, publishes nothing. -y or -f skips the question.
@@ -46,6 +59,8 @@ export const publishCommand: CommandDefinition = defineCommand({
       [EXIT_UNREACHABLE, 'The n8n instance cannot be reached, or a read failed: nothing was published'],
       [EXIT_API_KEY_REJECTED, 'The API key is rejected: nothing was published'],
       [EXIT_PARTIAL_FAILURE, 'At least one workflow was not published (differs from n8n, or n8n refused it); the others were'],
+      [EXIT_CREDENTIALS_MISSING, 'Workflows use credentials the target does not provide: nothing was published'],
+      [EXIT_CREDENTIAL_SCOPE_MISSING, `Workflows use credential(), and the API key lacks the ${CREDENTIAL_LIST_SCOPE} scope: nothing was published`],
     ],
   },
   allowPositionals: true,
@@ -54,15 +69,15 @@ export const publishCommand: CommandDefinition = defineCommand({
     force: { type: 'boolean', short: 'f', description: 'Same as --yes' },
     json: { type: 'boolean', description: 'Print the result as JSON', format: true },
   },
-  needs: ['targets', 'isDirectory', 'loadWorkflowFiles', 'readLockFile', 'ask'],
+  needs: ['targets', 'isDirectory', 'loadCredentialsFiles', 'loadWorkflowFiles', 'readLockFile', 'ask'],
   prepare: async ({ format }, { targets: { config, selected }, isDirectory }) => {
     const folders = await checkWorkflowFolders(config, [...selected], isDirectory);
     return folders.ok ? ok(undefined) : err(renderConfigError(folders.error, format));
   },
   modes: {},
-  default: async (_prepared, { targets, loadWorkflowFiles, readLockFile, ask }, { positionals: names, options, target: selection }): Promise<PublishOutput> => {
+  default: async (_prepared, { targets, loadCredentialsFiles, loadWorkflowFiles, readLockFile, ask }, { positionals: names, options, target: selection }): Promise<PublishOutput> => {
     const format: PublishFormat = { named: selection.kind !== 'default' };
-    const run = await planPublishTargets({ targets: targets.selected, names }, { loadWorkflowFiles, lock: { read: () => readLockFile(LOCK_FILE) } });
+    const run = await planPublishTargets({ targets: targets.selected, names }, { loadCredentialsFiles, loadWorkflowFiles, lock: { read: () => readLockFile(LOCK_FILE) } });
     if (run.kind === 'held-back') {
       return { kind: 'runs', runs: run.plans.map((plan) => renderHeldBackPlan(plan, format)) };
     }

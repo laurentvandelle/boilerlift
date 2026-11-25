@@ -1,6 +1,6 @@
 import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
-import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiFailure, N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'recreated' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';
 
@@ -92,6 +92,34 @@ export interface UnresolvedCredential extends MissingCredential {
 export type DeployError =
   | (WorkflowError & { kind: Exclude<DeployErrorKind, 'credentials-missing'> })
   | (WorkflowError & { kind: 'credentials-missing'; missing: UnresolvedCredential[] });
+
+/**
+ * Why the `credential()` markers of a target do not resolve, as deploy, status and publish all report it: the API key
+ * cannot list the credentials (`credential-scope-missing`), or a key is missing on the target (`credentials-missing`).
+ */
+export type CredentialError =
+  | (WorkflowError & { kind: 'credential-scope-missing' })
+  | (WorkflowError & { kind: 'credentials-missing'; missing: UnresolvedCredential[] });
+
+/** The command that resolves the markers: its hints say which one to run again. */
+export type ResolvingCommand = 'deploy' | 'status' | 'publish';
+
+/** What `resolveCredentials` reads the markers of one target through. */
+export interface CredentialResolution {
+  workflows: LocalWorkflow[];
+  client: N8nClient;
+  /** The name of the target: the hints name it. */
+  target: string;
+  /** The credential list of the target (`credentials/<target>.ts`). Empty when the project has none. */
+  credentials: readonly CredentialEntry[];
+  command: ResolvingCommand;
+}
+
+/**
+ * Why the markers did not resolve: a credential error, or a failed list of the credentials (`list-failed`) that each
+ * command words as its own read failure.
+ */
+export type ResolutionError = CredentialError | { kind: 'list-failed'; failure: ApiFailure };
 
 /**
  * Something that went through but that the user should know about. It is data: the deploy command words it as what

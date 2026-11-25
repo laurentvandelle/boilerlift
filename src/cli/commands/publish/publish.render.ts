@@ -1,7 +1,7 @@
 import { CliResult, ConnectedTarget, TargetSelection } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
-import { EXIT_OK, EXIT_USAGE, outcomeExitCode, readErrorExitCode } from '#src/cli/exit-codes';
+import { TargetRun, credentialStop, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
+import { EXIT_OK, EXIT_USAGE, outcomeExitCode, statusErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
 import {
@@ -14,6 +14,7 @@ import {
   TargetPublished,
   UnknownName,
 } from '#src/core/publish/publish.model';
+import { StatusError } from '#src/core/status/status.model';
 
 /** The target publish runs on: its name, its url (the instance the lock file records under) and its workflows folder. */
 export interface PublishTarget {
@@ -83,15 +84,33 @@ function renderNotReady(target: PublishTarget, plan: Exclude<PublishPlan, { kind
     return renderUnknownNames(target, plan.unknown, format);
   case 'stopped': {
     const { error } = plan;
-    const exitCode = readErrorExitCode(error.kind);
-    const ping = withTarget('lift ping', target, format);
+    const exitCode = statusErrorExitCode(error);
+    const stop = stopOf(error, target, format);
     return {
       target: target.name,
       url: target.instance,
-      text: { exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), ['Nothing was published.']) },
-      payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode },
+      text: { exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, stop.lines), ['Nothing was published.']) },
+      payload: { instance: target.instance, error: stop.payload, exitCode },
       outcome: `stopped: ${error.call} : ${error.detail}`,
     };
+  }
+  }
+}
+
+/**
+ * The lines under the stop and the --json `error`: a failed read points to `lift ping`; a credential error lists each
+ * missing credential and its hint, as deploy does.
+ */
+function stopOf(error: StatusError, target: PublishTarget, format: PublishFormat): { lines: string[]; payload: Record<string, unknown> } {
+  switch (error.kind) {
+  case 'credential-scope-missing':
+  case 'credentials-missing':
+    return credentialStop(target.name, error);
+  case 'unreachable':
+  case 'key-rejected':
+  case 'read-failed': {
+    const ping = withTarget('lift ping', target, format);
+    return { lines: [next(ping)], payload: { kind: error.kind, call: error.call, detail: error.detail, next: ping } };
   }
   }
 }
@@ -303,14 +322,28 @@ function resultRow(result: PublishResult, target: PublishTarget, format: Publish
 }
 
 /**
+ * The message of a run without names where nothing was published: no workflow at all reads "Nothing to publish";
+ * only workflows that differ from n8n reads how many, above them. Undefined when a workflow was published or failed.
+ */
+function nothingMessage(results: PublishResult[]): string | undefined {
+  if (!results.every(({ action }) => action === 'differs')) {
+    return undefined;
+  }
+  const differs = results.length;
+  if (differs === 0) {
+    return 'Nothing to publish: no draft is waiting to be published.';
+  }
+  return `Nothing published: ${differs} ${differs === 1 ? 'workflow differs' : 'workflows differ'} from n8n.`;
+}
+
+/**
  * What publish did on one target: its text, its JSON payload and its recap. `named`: the command line named workflows;
- * without names, a plan with no draft waiting reads "Nothing to publish", above the workflows that differ.
+ * without names, a plan with no draft waiting reads "Nothing to publish", or how many workflows differ from n8n.
  */
 export function renderReport({ target: connected, report }: TargetPublished, format: PublishFormat, named: boolean): TargetRun {
   const target = placeOf(connected);
   const summary = summarize(report.results);
-  const nothing = report.results.every(({ action }) => action === 'differs');
-  const message = nothing && !named ? 'Nothing to publish: no draft is waiting to be published.' : undefined;
+  const message = named ? undefined : nothingMessage(report.results);
   return {
     target: target.name,
     url: target.instance,

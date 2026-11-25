@@ -1,3 +1,4 @@
+import { CredentialsFile } from '#src/core/compile/credential.model';
 import { describe, expect, test } from 'vitest';
 import { fakeLocalWorkflow, fakeWorkflowFile, fakeWorkflowLoader } from '#src/core/compile/workflow.fake';
 import { ProjectConfig } from '#src/core/config/config.model';
@@ -5,6 +6,9 @@ import { FAKE_INSTANCE, fakeLockStore, fakeLockText } from '#src/core/lock/lock-
 import { fakeConnectedTarget, fakeN8n, fakeN8nWorkflow } from '#src/core/n8n/n8n.fake';
 import { StatusFilter } from '#src/core/status/status.model';
 import { readStatusTargets } from '#src/core/status/status-targets';
+
+/** A project with no credential list. */
+const NO_LISTS = (): Promise<CredentialsFile[]> => Promise.resolve([]);
 
 const WEEKLY = fakeLocalWorkflow('weekly', { path: 'staging/weekly.json' });
 const FILTER: StatusFilter = { managed: true, unmanaged: false, archived: false };
@@ -29,7 +33,7 @@ describe('readStatusTargets', () => {
 
     const [status] = await readStatusTargets(
       { config: sharedInstance(), targets: [devTarget()], filter: FILTER },
-      { loadWorkflowFiles, lock: fakeLockStore({ text: fakeLockText({ weekly: 'wk1' }) }).store },
+      { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles, lock: fakeLockStore({ text: fakeLockText({ weekly: 'wk1' }) }).store },
     );
 
     expect(status?.kind === 'report' ? status.report.workflows.map(({ state }) => state) : status?.kind).toEqual([]);
@@ -38,7 +42,7 @@ describe('readStatusTargets', () => {
   test('Should show a workflow as removed when no folder on its instance has its file any more', async () => {
     const [status] = await readStatusTargets(
       { config: sharedInstance(), targets: [devTarget()], filter: FILTER },
-      { loadWorkflowFiles: fakeWorkflowLoader({}), lock: fakeLockStore({ text: fakeLockText({ weekly: 'wk1' }) }).store },
+      { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: fakeWorkflowLoader({}), lock: fakeLockStore({ text: fakeLockText({ weekly: 'wk1' }) }).store },
     );
 
     expect(status?.kind === 'report' ? [status.report.workflows.map(({ state }) => state), status.empty] : status?.kind).toEqual([['removed'], true]);
@@ -49,7 +53,7 @@ describe('readStatusTargets', () => {
 
     const statuses = await readStatusTargets(
       { config: sharedInstance(), targets: [fakeConnectedTarget('dev', n8n.client, { workflows: './dev' })], filter: FILTER },
-      { loadWorkflowFiles: fakeWorkflowLoader({}), lock: fakeLockStore({ text: '{ not json' }).store },
+      { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles: fakeWorkflowLoader({}), lock: fakeLockStore({ text: '{ not json' }).store },
     );
 
     expect([statuses.map(({ kind }) => kind), n8n.calls]).toEqual([['invalid-lock-file'], []]);
@@ -61,7 +65,7 @@ describe('readStatusTargets', () => {
 
     const statuses = await readStatusTargets(
       { config: sharedInstance(), targets: [devTarget(), staging], filter: FILTER },
-      { loadWorkflowFiles, lock: fakeLockStore().store },
+      { loadCredentialsFiles: NO_LISTS, loadWorkflowFiles, lock: fakeLockStore().store },
     );
 
     expect(statuses.map(({ kind }) => kind)).toEqual(['invalid-files', 'report']);

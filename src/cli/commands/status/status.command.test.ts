@@ -4,14 +4,17 @@ import {
   FAKE_DEV_URL as DEV_URL,
   FakeLockFile,
   fakeContext,
+  fakeCredentialsFolder,
   fakeLockFile,
   fakeSingleTarget,
   fakeTwoTargets,
 } from '#src/cli/cli.fake';
 import { statusCommand } from '#src/cli/commands/status/status.command';
+import { fakeCredentialEntry, fakeLocalWorkflowUsing } from '#src/core/compile/credential.fake';
 import { fakeLocalWorkflow, fakeNode, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
+import { LocalWorkflow, WorkflowNode } from '#src/core/compile/workflow.model';
 import { fakeLockText } from '#src/core/lock/lock-file.fake';
-import { FakeN8n, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
+import { FakeN8n, fakeCredential, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 
 const TEXT = { positionals: [], values: {} };
 const JSON_INPUT = { positionals: [], values: { json: true } };
@@ -23,6 +26,12 @@ const WEEKLY = fakeLocalWorkflow('weekly', { path: 'workflows/weekly.json', name
 const HAND_MADE = fakeLocalWorkflow('hand-made', { name: 'Hand made' });
 const OLD_HAND_MADE = fakeLocalWorkflow('old-hand-made', { name: 'Old hand made' });
 const FILES = [CRM, REPORT, INVOICE, WEEKLY].map(fakeWorkflowFile);
+const INVOICE_USING = fakeLocalWorkflowUsing('invoice-sync', ['gmail-sales']);
+
+/** The nodes of `workflow` with each `credential()` marker resolved, as deploy writes them to n8n. */
+function resolvedNodes(workflow: LocalWorkflow): WorkflowNode[] {
+  return workflow.nodes.map((node) => ({ ...node, credentials: { httpHeaderAuth: { id: 'gmail-sales-id', name: 'gmail-sales' } } }));
+}
 
 /** CRM differs, REPORT is a draft not yet published, WEEKLY is archived, INVOICE is not recorded; two hand-made workflows, one archived. */
 function mixedInstance(): FakeN8n {
@@ -248,6 +257,49 @@ describe('statusCommand', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({
       error: { kind: 'key-rejected', call: 'GET /api/v1/workflows/crm1', detail: 'HTTP 401', next: 'lift ping --target dev' },
       exitCode: 4,
+    });
+  });
+
+  test('Should show the draft deploy wrote as not yet published when the workflow picks a credential with credential()', async () => {
+    const n8n = fakeN8n({
+      credentials: [fakeCredential('gmail-sales')],
+      workflows: [fakeN8nWorkflow(INVOICE_USING, { id: 'inv1', nodes: resolvedNodes(INVOICE_USING), versionId: 'v2', activeVersionId: 'v1' })],
+    });
+    const folder = fakeCredentialsFolder({ files: [{ path: 'credentials/dev.ts', content: [fakeCredentialEntry('gmail-sales')] }] });
+    const ctx = context(n8n, { ...folder.context, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(INVOICE_USING)]) }, fakeLockFile({ text: fakeLockText({ 'invoice-sync': 'inv1' }) }));
+
+    const result = await statusCommand.run({ positionals: [], values: { managed: 'true' } }, ctx);
+
+    expect(result.stdout).toContain('^ invoice-sync  draft not yet published  https://n8n.example.com/workflow/inv1\n  → lift publish invoice-sync\n');
+  });
+
+  test('Should list each missing credential with the creds sync hint and exit 8 when the target lacks a credential the workflows use', async () => {
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(INVOICE_USING, { id: 'inv1' })] });
+    const ctx = context(n8n, { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(INVOICE_USING)]) }, fakeLockFile({ text: fakeLockText({ 'invoice-sync': 'inv1' }) }));
+
+    const result = await statusCommand.run(TEXT, ctx);
+
+    expect(result).toEqual({
+      exitCode: 8,
+      stdout: 'lift status · dev (https://n8n.example.com)\n',
+      stderr: [
+        '✗ GET /api/v1/credentials : 1 credential missing on target dev: gmail-sales',
+        '  gmail-sales (httpHeaderAuth)  not in credentials/dev.ts; used by invoice-sync',
+        '  → Run lift creds sync --target dev to update credentials/dev.ts, or create the missing credentials in n8n first, then run status again',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  test('Should give the credential error with its hint and creds sync as next in the JSON when the target lacks a credential', async () => {
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(INVOICE_USING, { id: 'inv1' })] });
+    const ctx = context(n8n, { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(INVOICE_USING)]) }, fakeLockFile({ text: fakeLockText({ 'invoice-sync': 'inv1' }) }));
+
+    const result = await statusCommand.run(JSON_INPUT, ctx);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      exitCode: 8,
+      error: { kind: 'credentials-missing', hint: 'Run lift creds sync --target dev to update credentials/dev.ts, or create the missing credentials in n8n first, then run status again', missing: [{ key: 'gmail-sales', reason: 'not-listed' }], next: 'lift creds sync --target dev' },
     });
   });
 

@@ -1,3 +1,4 @@
+import { CredentialEntry, CredentialsFile } from '#src/core/compile/credential.model';
 import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
@@ -35,7 +36,8 @@ export interface UnknownName {
  * What publish found on one target, from reads only:
  * - `ready`: the workflows of the plan, in stable-name order; empty when nothing is waiting.
  * - `unknown-names`: names that match no deployed workflow. Nothing is published, on any target.
- * - `stopped`: a read failed (status' error). Nothing is published, on any target.
+ * - `stopped`: a read failed, or a `credential()` marker does not resolve (status' error). Nothing is published, on any
+ *   target.
  */
 export type PublishPlan =
   | { kind: 'ready'; workflows: PlannedPublish[] }
@@ -49,6 +51,10 @@ export interface PlanPublishInput {
   managed: Map<StableName, WorkflowId>;
   /** The stable names given on the command line. Empty: every workflow whose draft is waiting to be published. */
   names: string[];
+  /** The name of the target: the credential hints name it. */
+  target: string;
+  /** The credential list of the target (`credentials/<target>.ts`), through which `credential()` markers resolve. */
+  credentials: readonly CredentialEntry[];
 }
 
 /**
@@ -117,6 +123,8 @@ export interface PublishTargetsInput {
 
 /** The ports publish reads the project through. It never writes the lock file. */
 export interface PublishPorts {
+  /** Imports the credential lists of a folder. Called before `loadWorkflowFiles`: the lists give `credential()` its types. */
+  loadCredentialsFiles: (dir: string) => Promise<CredentialsFile[]>;
   loadWorkflowFiles: WorkflowFileLoader;
   lock: LockReader;
 }

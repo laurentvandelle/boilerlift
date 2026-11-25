@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { CommandContext, CommandInput } from '#src/cli/cli.model';
-import { FAKE_DEV_URL, FAKE_PROD_URL, fakeAnswer, fakeContext, fakeLockFile, fakeSingleTarget, fakeTwoTargets } from '#src/cli/cli.fake';
+import { FAKE_DEV_URL, FAKE_PROD_URL, fakeAnswer, fakeContext, fakeCredentialsFolder, fakeLockFile, fakeSingleTarget, fakeTwoTargets } from '#src/cli/cli.fake';
 import { publishCommand } from '#src/cli/commands/publish/publish.command';
+import { fakeCredentialEntry, fakeLocalWorkflowUsing } from '#src/core/compile/credential.fake';
 import { fakeLocalWorkflow, fakeNode, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
+import { LocalWorkflow, WorkflowNode } from '#src/core/compile/workflow.model';
 import { fakeLockText } from '#src/core/lock/lock-file.fake';
-import { FakeN8n, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError } from '#src/core/n8n/n8n.fake';
+import { FakeN8n, fakeCredential, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError } from '#src/core/n8n/n8n.fake';
 
 const TEXT: CommandInput = { positionals: [], values: {} };
 const YES: CommandInput = { positionals: [], values: { yes: true } };
@@ -14,6 +16,12 @@ const REPORT = fakeLocalWorkflow('daily-report', { path: 'workflows/daily-report
 const WEEKLY = fakeLocalWorkflow('weekly', { path: 'workflows/weekly.json', name: 'Weekly' });
 const NEW = fakeLocalWorkflow('invoice-sync', { path: 'workflows/invoice-sync.json', name: 'Invoice sync' });
 const FILES = [CRM, REPORT, WEEKLY, NEW].map(fakeWorkflowFile);
+const INVOICE_USING = fakeLocalWorkflowUsing('invoice-sync', ['gmail-sales']);
+
+/** The nodes of `workflow` with each `credential()` marker resolved, as deploy writes them to n8n. */
+function resolvedNodes(workflow: LocalWorkflow): WorkflowNode[] {
+  return workflow.nodes.map((node) => ({ ...node, credentials: { httpHeaderAuth: { id: 'gmail-sales-id', name: 'gmail-sales' } } }));
+}
 
 /** CRM differs, REPORT is a draft not yet published, WEEKLY is up to date, NEW is not deployed. */
 function instance(): FakeN8n {
@@ -141,7 +149,7 @@ describe('publishCommand', () => {
     });
   });
 
-  test('Should report the differing workflows under "Nothing to publish" and exit 0 when no draft is waiting', async () => {
+  test('Should count the workflows that differ from n8n and exit 0 when every one differs and no name is given', async () => {
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(CRM, { id: 'crm1', nodes: [fakeNode({ name: 'Changed in n8n' })] }), fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] });
 
     const result = await publishCommand.run(TEXT, context(n8n));
@@ -154,10 +162,53 @@ describe('publishCommand', () => {
         '✗ crm-import  not published  differs from n8n: the local file and the n8n draft differ  https://n8n.example.com/workflow/crm1',
         '  → Run lift deploy first (it replaces any change made in the n8n editor), then lift publish crm-import',
         '',
-        'Nothing to publish: no draft is waiting to be published.',
+        'Nothing published: 1 workflow differs from n8n.',
         '',
       ].join('\n'),
       stderr: '',
+    });
+    expect(published(n8n)).toEqual([]);
+  });
+
+  test('Should count the workflows in the plural when several differ from n8n and no name is given', async () => {
+    const changed = { nodes: [fakeNode({ name: 'Changed in n8n' })] };
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(CRM, { id: 'crm1', ...changed }), fakeN8nWorkflow(REPORT, { id: 'rep1', ...changed })] });
+
+    const result = await publishCommand.run(TEXT, context(n8n));
+
+    expect(result.stdout).toContain('\nNothing published: 2 workflows differ from n8n.\n');
+  });
+
+  test('Should publish the draft deploy wrote when the workflow picks a credential with credential()', async () => {
+    const n8n = fakeN8n({
+      credentials: [fakeCredential('gmail-sales')],
+      workflows: [fakeN8nWorkflow(INVOICE_USING, { id: 'inv1', nodes: resolvedNodes(INVOICE_USING), versionId: 'v2', activeVersionId: 'v1' })],
+    });
+    const folder = fakeCredentialsFolder({ files: [{ path: 'credentials/dev.ts', content: [fakeCredentialEntry('gmail-sales')] }] });
+    const ctx = context(n8n, { ...folder.context, loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(INVOICE_USING)]), ...fakeLockFile({ text: fakeLockText({ 'invoice-sync': 'inv1' }) }).context });
+
+    const result = await publishCommand.run(YES, ctx);
+
+    expect([result.exitCode, published(n8n)]).toEqual([0, ['POST /api/v1/workflows/inv1/activate']]);
+  });
+
+  test('Should publish nothing and exit 8 with the creds sync hint when the target lacks a credential the workflows use', async () => {
+    const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(INVOICE_USING, { id: 'inv1', versionId: 'v2', activeVersionId: 'v1' })] });
+    const ctx = context(n8n, { loadWorkflowFiles: () => Promise.resolve([fakeWorkflowFile(INVOICE_USING)]), ...fakeLockFile({ text: fakeLockText({ 'invoice-sync': 'inv1' }) }).context });
+
+    const result = await publishCommand.run(YES, ctx);
+
+    expect(result).toEqual({
+      exitCode: 8,
+      stdout: '',
+      stderr: [
+        '✗ GET /api/v1/credentials : 1 credential missing on target dev: gmail-sales',
+        '  gmail-sales (httpHeaderAuth)  not in credentials/dev.ts; used by invoice-sync',
+        '  → Run lift creds sync --target dev to update credentials/dev.ts, or create the missing credentials in n8n first, then run publish again',
+        '',
+        'Nothing was published.',
+        '',
+      ].join('\n'),
     });
     expect(published(n8n)).toEqual([]);
   });

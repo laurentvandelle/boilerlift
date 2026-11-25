@@ -1,5 +1,7 @@
+import { CredentialEntry, CredentialsFile } from '#src/core/compile/credential.model';
 import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
 import { ProjectConfig } from '#src/core/config/config.model';
+import { CredentialError } from '#src/core/deliver/deploy.model';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { Result } from '#src/core/common/result';
 import { ApiAnswer, ApiFailure, ConnectedTarget, N8nClient, N8nListedWorkflow, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';
@@ -56,15 +58,21 @@ export interface StatusFilter {
 }
 
 /**
- * Why status could not read everything, tagged by `kind`: the instance gives no answer or not the n8n public API
+ * Why a read of status failed, tagged by `kind`: the instance gives no answer or not the n8n public API
  * (`unreachable`), rejects the API key (`key-rejected`), or answers another HTTP error (`read-failed`).
  */
-export interface StatusError {
+export interface StatusReadError {
   kind: 'unreachable' | 'key-rejected' | 'read-failed';
   /** The call that failed, for example `GET /api/v1/workflows`. */
   call: string;
   detail: string;
 }
+
+/**
+ * Why status could not read everything: a failed read, or `credential()` markers that do not resolve on the target,
+ * the same credential error as deploy (`credential-scope-missing`, `credentials-missing`), with its hint.
+ */
+export type StatusError = StatusReadError | CredentialError;
 
 /**
  * Where every workflow stands, or why status stopped. A status that could read everything carries no error, whatever
@@ -80,6 +88,15 @@ export interface StatusInput {
   /** The entries no workflow file points to any more (`removedEntries`): shown as `removed` with the managed ones. */
   removed: Map<StableName, WorkflowId>;
   filter: StatusFilter;
+  /** The name of the target: the credential hints name it. */
+  target: string;
+  /**
+   * The credential list of the target (`credentials/<target>.ts`), through which each `credential()` marker resolves
+   * before it is compared with the n8n draft, as deploy does. Empty when the project has none.
+   */
+  credentials: readonly CredentialEntry[];
+  /** The command that reads the status: the credential hints say which one to run again. */
+  command: 'status' | 'publish';
 }
 
 /** One workflow of the project as status read it: with no recorded id, or with the answer to the GET of its id. */
@@ -116,6 +133,8 @@ export interface StatusTargetsInput {
 
 /** The ports status reads the project through. It never writes. */
 export interface StatusPorts {
+  /** Imports the credential lists of a folder. Called before `loadWorkflowFiles`: the lists give `credential()` its types. */
+  loadCredentialsFiles: (dir: string) => Promise<CredentialsFile[]>;
   loadWorkflowFiles: WorkflowFileLoader;
   lock: LockReader;
 }
