@@ -1,9 +1,13 @@
-// @ts-check
 // `npm run lint`: the import style and the boundaries between workflows/ and code/.
 
+import { createRequire } from 'node:module';
 import eslint from '@eslint/js';
+import type { ESLint } from 'eslint';
 import tseslint from 'typescript-eslint';
-import boundaries from 'eslint-plugin-boundaries';
+
+// eslint-plugin-boundaries types its CommonJS export as an ES default export, which NodeNext reads as the whole module:
+// require gives the plugin object that ESLint loads.
+const boundaries: ESLint.Plugin = createRequire(import.meta.url)('eslint-plugin-boundaries');
 
 const noRelative = {
   patterns: [
@@ -16,7 +20,7 @@ const noRelative = {
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', 'credentials/**', 'eslint.config.mjs'],
+    ignores: ['**/node_modules/**', 'credentials/**', 'eslint.config.mts'],
   },
   eslint.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
