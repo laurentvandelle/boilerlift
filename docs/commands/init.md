@@ -20,7 +20,7 @@ lift init --json     # the result as JSON, for scripts and AI agents
 | `package.json` | `"type": "module"`, the `#code/*` import, `boilerlift`, ESLint, TypeScript and Vitest as devDependencies, and the scripts `verify` (`lint`, `typecheck`, `test`), `ping`, `check` (`lift deploy --dry-run`), `deploy`, `status`, `n8n:publish`, `creds`, `clean` and `n8n` |
 | `scripts/n8n.ts`, `scripts/n8n.test.ts` | `npm run n8n -- <METHOD> <path> [body]`: one call to the n8n public API at `N8N_URL` + `/api/v1<path>`, with the key of `N8N_API_KEY` (read from `.env`) in the `X-N8N-API-KEY` header. It prints the response body, never the key. The body is JSON, as an argument or `-` for stdin |
 | `tsconfig.json` | Type-checking for the config, the workflow files, the Code node functions, `scripts/` and the hook |
-| `eslint.config.mjs` | `npm run lint`: no relative import, a Code node function imports nothing, only tests import Vitest |
+| `eslint.config.mts` | `npm run lint`: no relative import, a Code node function imports nothing, only tests import Vitest |
 | `.env.example` | `N8N_URL=` and `N8N_API_KEY=`, with empty values |
 | `.gitignore` | `node_modules`, `.env` and `boilerlift.lock.json` |
 | `README.md` | The next steps |

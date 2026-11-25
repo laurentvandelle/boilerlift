@@ -18,7 +18,7 @@ const DESCRIPTION = `Writes a ready-to-use Boilerlift project into folder, creat
 current folder: boilerlift.config.ts with one target, dev, read from N8N_URL and N8N_API_KEY,
 an example workflow in workflows/ with its tested Code node function in code/, package.json
 with npm run verify (ESLint, tsc, Vitest) and npm run n8n (one call to the n8n public API),
-tsconfig.json, eslint.config.mjs, .env.example, .gitignore and README.md.
+tsconfig.json, eslint.config.mts, .env.example, .gitignore and README.md.
 
 It also writes the Agent kit: AGENTS.md with its docs, the BOILERLIFT: skills in
 .claude/skills/, with which an AI agent takes a workflow request from interview to a checked

@@ -332,7 +332,7 @@ describe('loadProjectTemplate', () => {
       'docs/guardrails.md',
       'docs/maintenance.md',
       'docs/testing.md',
-      'eslint.config.mjs',
+      'eslint.config.mts',
       'package.json',
       'scripts/n8n.test.ts',
       'scripts/n8n.ts',
