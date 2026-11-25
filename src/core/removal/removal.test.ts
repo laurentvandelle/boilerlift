@@ -93,7 +93,7 @@ describe('applyRemoval', () => {
         { stableName: 'legacy', id: 'leg1', name: 'Legacy', action: 'already-archived' },
         { stableName: 'old-report', id: 'old1', name: 'Old report', action: 'archived' },
       ],
-      exitCode: 0,
+      outcome: 'completed',
     });
     expect(lock.recorded()).toEqual({ 'crm-import': 'crm1' });
     expect(n8n.workflows.find(({ id }) => id === 'old1')).toMatchObject({ isArchived: true });
@@ -108,7 +108,7 @@ describe('applyRemoval', () => {
     expect(n8n.calls.filter((call) => call.startsWith('POST '))).toEqual(['POST /api/v1/workflows/old1/archive']);
   });
 
-  test('Should keep the entry, carry on and exit 5 when one archive is refused for a missing scope', async () => {
+  test('Should keep the entry, carry on and end partial when one archive is refused for a missing scope', async () => {
     const n8n = fakeN8n({
       workflows: [fakeN8nWorkflow(OLD, { id: 'old1' }), fakeN8nWorkflow(LEGACY, { id: 'leg1' })],
       failures: [httpError('POST /api/v1/workflows/leg1/archive', 403, 'Forbidden')],
@@ -132,7 +132,7 @@ describe('applyRemoval', () => {
         },
         { stableName: 'old-report', id: 'old1', name: 'Old report', action: 'archived' },
       ],
-      exitCode: 5,
+      outcome: 'partial',
     });
     expect(lock.recorded()).toEqual({ legacy: 'leg1' });
   });
@@ -148,7 +148,7 @@ describe('applyRemoval', () => {
     expect(lock.recorded()).toEqual({});
   });
 
-  test('Should fail the workflow with lock-write-failed and exit 5 when the lock file cannot be written', async () => {
+  test('Should fail the workflow with lock-write-failed and end partial when the lock file cannot be written', async () => {
     const n8n = instance();
     const removed: WorkflowToRemove[] = [{ stableName: fakeStableName('old-report'), id: fakeWorkflowId('old1'), name: 'Old report', state: 'to-archive' }];
 
@@ -168,7 +168,7 @@ describe('applyRemoval', () => {
           },
         },
       ],
-      exitCode: 5,
+      outcome: 'partial',
     });
   });
 });
@@ -207,7 +207,7 @@ describe('applyRemoval in delete mode', () => {
     expect(n8n.calls.filter((call) => call.includes('gone1') && !call.startsWith('GET '))).toEqual([]);
   });
 
-  test('Should fail with delete-failed, keep the workflow archived and its entry, and exit 5 when the delete fails', async () => {
+  test('Should fail with delete-failed, keep the workflow archived and its entry, and end partial when the delete fails', async () => {
     const n8n = fakeN8n({
       workflows: [fakeN8nWorkflow(OLD, { id: 'old1' })],
       failures: [httpError('DELETE /api/v1/workflows/old1', 403, 'Forbidden')],
@@ -229,7 +229,7 @@ describe('applyRemoval in delete mode', () => {
           error: { kind: 'delete-failed', cause: 'scope-missing', call: 'DELETE /api/v1/workflows/old1', detail: 'HTTP 403: Forbidden' },
         },
       ],
-      exitCode: 5,
+      outcome: 'partial',
     });
     expect(n8n.workflows.find(({ id }) => id === 'old1')).toMatchObject({ isArchived: true });
     expect(lock.recorded()).toEqual({ 'old-report': 'old1' });

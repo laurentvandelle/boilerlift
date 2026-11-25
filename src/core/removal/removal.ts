@@ -1,5 +1,5 @@
 import { StableName } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockRemover } from '#src/core/lock/lock-file.model';
@@ -56,14 +56,14 @@ export function readStopExitCode(error: RemovalReadError): typeof EXIT_UNREACHAB
  * Archives each workflow that is still on the instance, in order, or for a `to-delete` one archives it when it is not
  * archived yet, then deletes it for good. It drops the lock entry of each one archived, already archived, deleted or
  * not found, through `remover`. A failure fails only that workflow and keeps its entry; the others are still removed,
- * and the run exits 5.
+ * and the outcome is `partial`.
  */
 export async function applyRemoval(workflows: WorkflowToRemove[], client: N8nClient, instance: string, remover: LockRemover): Promise<RemovalReport> {
   const results: RemovalResult[] = [];
   for (const workflow of workflows) {
     results.push(await removeOne(workflow, client, instance, remover));
   }
-  return { results, exitCode: results.some(({ action }) => action === 'failed') ? EXIT_PARTIAL_FAILURE : EXIT_OK };
+  return { results, outcome: results.some(({ action }) => action === 'failed') ? 'partial' : 'completed' };
 }
 
 /** What the writes on one workflow came to before its lock entry is dropped: an action, or the failure that keeps it. */

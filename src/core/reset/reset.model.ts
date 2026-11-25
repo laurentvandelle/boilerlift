@@ -1,5 +1,4 @@
 import { StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { LockFile, LockFileError, LockStore } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
@@ -41,7 +40,7 @@ export interface PlanResetInput {
  */
 export type ResetPlan =
   | { kind: 'ready'; workflows: WorkflowToRemove[]; kept: KeptEntries[] }
-  | { kind: 'stopped'; error: RemovalReadError; exitCode: typeof EXIT_UNREACHABLE | typeof EXIT_API_KEY_REJECTED };
+  | { kind: 'stopped'; error: RemovalReadError };
 
 /** A reset plan whose reads went through. */
 export type ReadyReset = Extract<ResetPlan, { kind: 'ready' }>;

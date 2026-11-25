@@ -1,5 +1,4 @@
 import { StableName } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/cli/exit-codes';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**
@@ -62,8 +61,10 @@ export type RemovalResult = { stableName: StableName; id: WorkflowId; name: stri
   | { action: 'failed'; error: RemovalFailure }
 );
 
-/** What the removal did on one target. It exits 5 when a workflow failed; the others are still removed. */
+/**
+ * What the removal did on one target. Its outcome is `partial` when a workflow failed; the others are still removed.
+ */
 export interface RemovalReport {
   results: RemovalResult[];
-  exitCode: typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE;
+  outcome: 'completed' | 'partial';
 }

@@ -123,3 +123,24 @@ export function connectionExitCode(report: ConnectionReport): ExitCode {
   const failed = report.checks.find((check) => check.status === 'failed');
   return failed?.status === 'failed' ? checkFailureExitCode(failed.failure) : EXIT_OK;
 }
+
+/** The exit code of a run of writes that went to the end: 0, or 5 when one of them failed (`partial`). */
+export function outcomeExitCode(outcome: 'completed' | 'partial'): typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE {
+  switch (outcome) {
+  case 'completed':
+    return EXIT_OK;
+  case 'partial':
+    return EXIT_PARTIAL_FAILURE;
+  }
+}
+
+/** The exit code of a read that stopped a command before any write: 4 for a rejected API key, 3 otherwise. */
+export function readErrorExitCode(kind: 'unreachable' | 'key-rejected' | 'read-failed'): typeof EXIT_UNREACHABLE | typeof EXIT_API_KEY_REJECTED {
+  switch (kind) {
+  case 'key-rejected':
+    return EXIT_API_KEY_REJECTED;
+  case 'unreachable':
+  case 'read-failed':
+    return EXIT_UNREACHABLE;
+  }
+}

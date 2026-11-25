@@ -1,4 +1,4 @@
-import { readStopExitCode, readWorkflowsToRemove } from '#src/core/removal/removal';
+import { readWorkflowsToRemove } from '#src/core/removal/removal';
 import { PlanResetInput, ResetPlan } from '#src/core/reset/reset.model';
 import { decideResetScope } from '#src/core/reset/reset.rules';
 
@@ -12,7 +12,7 @@ export async function planReset({ client, managed, others, mode }: PlanResetInpu
   const { removed, kept } = decideResetScope(managed, others);
   const read = await readWorkflowsToRemove(client, removed, mode);
   if (!read.ok) {
-    return { kind: 'stopped', error: read.error, exitCode: readStopExitCode(read.error) };
+    return { kind: 'stopped', error: read.error };
   }
   return { kind: 'ready', workflows: read.value, kept };
 }

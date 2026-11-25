@@ -76,11 +76,11 @@ describe('planReset', () => {
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
 
-  test('Should stop with exit 4 when the instance rejects the API key', async () => {
+  test('Should stop on the read when the instance rejects the API key', async () => {
     const n8n = fakeN8n({ failures: [httpError('GET /api/v1/workflows/crm1', 401)] });
 
     const plan = await planReset({ client: n8n.client, managed: fakeManaged({ 'crm-import': 'crm1' }), others: [], mode: 'archive' });
 
-    expect(plan).toMatchObject({ kind: 'stopped', exitCode: 4 });
+    expect(plan).toMatchObject({ kind: 'stopped', error: { kind: 'key-rejected' } });
   });
 });

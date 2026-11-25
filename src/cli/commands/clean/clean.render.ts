@@ -2,7 +2,7 @@ import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { CleanGroups, CleanPlan, ReadyClean, TargetCleanPlan } from '#src/core/clean/clean.model';
-import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE, outcomeExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT } from '#src/core/n8n/n8n-api';
@@ -393,7 +393,7 @@ export function renderReport({ target, groups }: PlannedTarget, report: RemovalR
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: report.exitCode, stdout, stderr },
+    text: { exitCode: outcomeExitCode(report.outcome), stdout, stderr },
     payload: {
       instance: target.instance,
       stage: 'cleaned',
@@ -408,7 +408,7 @@ export function renderReport({ target, groups }: PlannedTarget, report: RemovalR
       ...otherGroupsPayload(groups, target, format),
       summary,
       lockFileUpdated: dropped,
-      exitCode: report.exitCode,
+      exitCode: outcomeExitCode(report.outcome),
     },
     outcome: summaryLine(summary),
   };

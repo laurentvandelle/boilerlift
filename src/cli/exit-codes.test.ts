@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, runEndExitCode } from '#src/cli/exit-codes';
+import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode } from '#src/cli/exit-codes';
 import { Check, CheckFailure } from '#src/core/connection/connection.model';
 import { DeployError, DeployErrorKind } from '#src/core/deliver/deploy.model';
 
@@ -58,5 +58,24 @@ describe('connectionExitCode', () => {
     ];
 
     expect(connectionExitCode({ checks, warnings: [] })).toBe(4);
+  });
+});
+
+describe('outcomeExitCode', () => {
+  test.each<['completed' | 'partial', number]>([
+    ['completed', 0],
+    ['partial', 5],
+  ])('Should exit %s with %s when the writes went to the end', (outcome, exitCode) => {
+    expect(outcomeExitCode(outcome)).toBe(exitCode);
+  });
+});
+
+describe('readErrorExitCode', () => {
+  test.each<['unreachable' | 'key-rejected' | 'read-failed', number]>([
+    ['unreachable', 3],
+    ['key-rejected', 4],
+    ['read-failed', 3],
+  ])('Should exit %s with %s when a read stops the command', (kind, exitCode) => {
+    expect(readErrorExitCode(kind)).toBe(exitCode);
   });
 });

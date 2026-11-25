@@ -1,7 +1,7 @@
 import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
-import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE, outcomeExitCode, readErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT } from '#src/core/n8n/n8n-api';
@@ -111,12 +111,13 @@ export function renderInvalidLockFile(target: ResetTarget, error: LockFileError)
 /** A read that failed: exit 3 or 4, nothing was removed, `lift ping` next. */
 export function renderStopped(target: ResetTarget, plan: Extract<ResetPlan, { kind: 'stopped' }>, mode: RemovalMode): TargetRun {
   const { error } = plan;
+  const exitCode = readErrorExitCode(error.kind);
   const ping = `lift ping --target ${target.name}`;
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), [`Nothing was ${DONE[mode]}.`]) },
-    payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
+    text: { exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), [`Nothing was ${DONE[mode]}.`]) },
+    payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode },
     outcome: `stopped: ${error.call} : ${error.detail}`,
   };
 }
@@ -326,7 +327,7 @@ export function renderReport(planned: PlannedReset, report: RemovalReport, mode:
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: report.exitCode, stdout, stderr },
+    text: { exitCode: outcomeExitCode(report.outcome), stdout, stderr },
     payload: {
       instance: target.instance,
       stage: 'reset',
@@ -341,7 +342,7 @@ export function renderReport(planned: PlannedReset, report: RemovalReport, mode:
       kept: plan.kept,
       summary,
       lockFileUpdated: dropped,
-      exitCode: report.exitCode,
+      exitCode: outcomeExitCode(report.outcome),
     },
     outcome: summaryLine(summary),
   };
