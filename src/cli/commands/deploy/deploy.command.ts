@@ -13,7 +13,7 @@ import {
   EXIT_PARTIAL_FAILURE,
   EXIT_UNREACHABLE,
   EXIT_USAGE,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { err } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
 import { deliverTargets, loadDeliverySources } from '#src/core/deliver/deliver';

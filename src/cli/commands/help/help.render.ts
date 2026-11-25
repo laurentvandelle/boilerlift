@@ -1,7 +1,7 @@
 import { CliResult, CommandDefinition, CommandOption } from '#src/cli/cli.model';
 import { GLOBAL_OPTIONS, commandOptions } from '#src/cli/commands/help/help.options';
 import { TARGETS_HELP } from '#src/cli/targets.render';
-import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
 
 /** A help text on stdout, exit 0. */
 export function renderHelp(help: string): CliResult {

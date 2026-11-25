@@ -1,5 +1,5 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';

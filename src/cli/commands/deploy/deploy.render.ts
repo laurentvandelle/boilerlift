@@ -10,7 +10,7 @@ import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
 import { workflowLink } from '#src/core/n8n/n8n-api';
-import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
 
 /** How the report is worded: the --dry-run flag, and whether the command line named targets (`-t` or `--all`). */
 export interface DeployFormat {

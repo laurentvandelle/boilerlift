@@ -1,5 +1,5 @@
 import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/cli/exit-codes';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
 import { StatusError, StatusReport } from '#src/core/status/status.model';

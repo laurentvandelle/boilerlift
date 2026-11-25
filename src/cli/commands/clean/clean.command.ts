@@ -22,7 +22,7 @@ import {
   EXIT_PARTIAL_FAILURE,
   EXIT_UNREACHABLE,
   EXIT_USAGE,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
 import { LOCK_FILE } from '#src/core/lock/lock-file';

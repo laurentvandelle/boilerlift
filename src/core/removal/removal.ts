@@ -1,5 +1,5 @@
 import { StableName } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockRemover } from '#src/core/lock/lock-file.model';

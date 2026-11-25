@@ -9,7 +9,7 @@ import {
   EXIT_OK,
   EXIT_UNREACHABLE,
   FailureExitCode,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { CredentialsWriter, SyncError, SyncInput, SyncReport } from '#src/core/credentials/credentials.model';
 import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nCredential } from '#src/core/n8n/n8n.model';

@@ -1,6 +1,6 @@
 import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import { WorkflowFile } from '#src/core/compile/workflow.model';
-import { EXIT_CREDENTIALS_MISSING, EXIT_OK, FailureExitCode } from '#src/core/common/exit-codes';
+import { EXIT_CREDENTIALS_MISSING, EXIT_OK, FailureExitCode } from '#src/cli/exit-codes';
 import { Result } from '#src/core/common/result';
 import { N8nClient } from '#src/core/n8n/n8n.model';
 

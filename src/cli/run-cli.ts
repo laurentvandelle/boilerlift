@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { CliResult, CommandContext, CommandDefinition, CommandInput, CommandOption } from '#src/cli/cli.model';
 import { COMMAND_ALIAS_OPTIONS, TARGET_OPTIONS, commandOptions } from '#src/cli/commands/help/help.options';
 import { renderCommandHelp, renderGlobalHelp, renderHelp, unknownCommand, usageError } from '#src/cli/commands/help/help.render';
-import { EXIT_UNEXPECTED } from '#src/core/common/exit-codes';
+import { EXIT_UNEXPECTED } from '#src/cli/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 
 /** Each command alias option, long and short, and the command it runs: `--version` and `-v` run version. */

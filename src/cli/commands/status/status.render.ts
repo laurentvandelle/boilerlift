@@ -2,7 +2,7 @@ import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
-import { EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_USAGE } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { workflowLink } from '#src/core/n8n/n8n-api';

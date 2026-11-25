@@ -10,7 +10,7 @@ import {
   EXIT_OK,
   EXIT_UNREACHABLE,
   EXIT_USAGE,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
 import { CREDENTIALS_DIR, knownCredentialTypes } from '#src/core/compile/credential-lists';

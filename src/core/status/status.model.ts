@@ -1,5 +1,5 @@
 import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { Result } from '#src/core/common/result';

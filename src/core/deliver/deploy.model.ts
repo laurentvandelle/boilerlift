@@ -1,6 +1,6 @@
 import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/cli/exit-codes';
 import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'recreated' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';

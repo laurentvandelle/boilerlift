@@ -9,7 +9,7 @@ import {
   EXIT_PARTIAL_FAILURE,
   EXIT_UNREACHABLE,
   FailureExitCode,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { API_KEY_HINT, DRAFT_PARAM, MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
 import { ApiFailure } from '#src/core/n8n/n8n.model';
 

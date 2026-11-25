@@ -1,6 +1,6 @@
 import { CliResult } from '#src/cli/cli.model';
 import { SYMBOLS } from '#src/cli/output.render';
-import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/cli/exit-codes';
 import { describeConfigError } from '#src/core/config/config-error';
 import { ConfigError } from '#src/core/config/config.model';
 import { CONFIG_FILE, availableTargets } from '#src/core/config/project-config';

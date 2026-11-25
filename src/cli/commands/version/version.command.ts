@@ -1,7 +1,7 @@
 import { CommandDefinition } from '#src/cli/cli.model';
 import { renderVersion } from '#src/cli/commands/version/version.render';
 import { defineCommand } from '#src/cli/define-command';
-import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
 
 export const versionCommand: CommandDefinition = defineCommand({
   name: 'version',

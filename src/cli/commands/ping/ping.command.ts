@@ -8,7 +8,7 @@ import {
   EXIT_OK,
   EXIT_UNREACHABLE,
   EXIT_USAGE,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { CONFIG_FILE } from '#src/core/config/project-config';
 import { MIN_NODE_VERSION_SHORT, checkConnection } from '#src/core/connection/check-connection';
 

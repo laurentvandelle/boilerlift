@@ -1,5 +1,5 @@
 import { Check, CheckConnectionInput, CheckName, ConnectionReport, FailedCheck } from '#src/core/connection/connection.model';
-import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_OK, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { API_KEY_HINT, API_PATH, classifyHttpError } from '#src/core/n8n/n8n-api';
 
 /** The oldest Node.js that Boilerlift runs on (`engines` in package.json). */

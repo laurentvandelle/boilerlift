@@ -1,5 +1,5 @@
 import { StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { LockFile, LockFileError, LockStore } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';

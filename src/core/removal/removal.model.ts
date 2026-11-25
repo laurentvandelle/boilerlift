@@ -1,5 +1,5 @@
 import { StableName } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/cli/exit-codes';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**

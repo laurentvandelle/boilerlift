@@ -1,5 +1,5 @@
 import { ConnectionConfig } from '#src/core/config/config.model';
-import { ExitCode, FailureExitCode } from '#src/core/common/exit-codes';
+import { ExitCode, FailureExitCode } from '#src/cli/exit-codes';
 import { N8nClient } from '#src/core/n8n/n8n.model';
 
 export type CheckName = 'node' | 'url' | 'apiKey';
