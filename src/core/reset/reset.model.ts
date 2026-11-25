@@ -17,6 +17,13 @@ export interface KeptEntries {
   count: number;
 }
 
+/** What reset removes on the instance and what it keeps, before any read: decided by `decideResetScope`. */
+export interface ResetScope {
+  /** The entries reset removes: every entry of the instance but those whose file is in another target's folder. */
+  removed: Map<StableName, WorkflowId>;
+  kept: KeptEntries[];
+}
+
 export interface PlanResetInput {
   client: N8nClient;
   /** The ids the lock file records for the instance of the target, by stable name (`managedIds`). */

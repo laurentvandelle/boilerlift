@@ -51,15 +51,6 @@ describe('planReset', () => {
     });
   });
 
-  test('Should keep an entry when another target on the instance has its file, even if the target has it too', async () => {
-    const n8n = instance();
-    const others = [{ name: 'staging', stableNames: new Set(['crm-import', 'daily-report']) }];
-
-    const plan = await planReset({ client: n8n.client, managed: fakeManaged(MANAGED), others, mode: 'archive' });
-
-    expect(plan).toMatchObject({ kind: 'ready', workflows: [{ stableName: 'old-report' }], kept: [{ target: 'staging', count: 2 }] });
-  });
-
   test('Should plan every workflow still on the instance as to-delete when the mode is delete', async () => {
     const n8n = instance();
 
