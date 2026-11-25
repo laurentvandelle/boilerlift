@@ -45,6 +45,19 @@ export interface LockWriteError {
 }
 
 /**
+ * The lock file of the project, read and saved whole: a port, wired by the command to `boilerlift.lock.json` at the
+ * project root. `read` gives its raw text, or `undefined` when there is no file. `write` saves the whole text; a disk
+ * error comes back with its `reason`, never a throw.
+ */
+export interface LockStore {
+  read(): Promise<string | undefined>;
+  write(text: string): Promise<Result<void, { reason: string }>>;
+}
+
+/** The read half of `LockStore`, for the use cases that never write the lock file (status, publish). */
+export type LockReader = Pick<LockStore, 'read'>;
+
+/**
  * Records the id of a workflow deploy has just created, under the instance it deploys to. Each call saves the whole
  * file, so the record never lags behind the instance by more than the workflow that failed to be recorded.
  */

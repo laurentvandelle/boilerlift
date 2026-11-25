@@ -1,5 +1,5 @@
 import { isStableName } from '#src/core/compile/load-workflows';
-import { LocalWorkflow, StableName, WorkflowFile, WorkflowNode } from '#src/core/compile/workflow.model';
+import { LocalWorkflow, StableName, WorkflowFile, WorkflowFileLoader, WorkflowNode } from '#src/core/compile/workflow.model';
 
 /** A valid n8n node: a manual trigger named `Start`. */
 export function fakeNode(overrides: Partial<WorkflowNode> = {}): WorkflowNode {
@@ -38,4 +38,9 @@ export function fakeLocalWorkflow(stableName: string, overrides: Partial<Omit<Lo
 /** The workflow file that `loadWorkflows` turns into `workflow`: its n8n export, at its path. */
 export function fakeWorkflowFile({ path, name, nodes, connections, settings }: LocalWorkflow): WorkflowFile {
   return { path, content: { name, nodes, connections, settings } };
+}
+
+/** A `WorkflowFileLoader` over the files of each folder, by folder; a folder it does not list reads as empty. */
+export function fakeWorkflowLoader(byFolder: Record<string, WorkflowFile[]>): WorkflowFileLoader {
+  return (folder) => Promise.resolve(byFolder[folder] ?? []);
 }

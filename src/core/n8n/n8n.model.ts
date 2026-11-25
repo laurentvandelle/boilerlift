@@ -1,4 +1,5 @@
 import { Result } from '#src/core/common/result';
+import { Target } from '#src/core/config/config.model';
 
 /** A workflow id on the instance. Only the client's response parsing (isWorkflowId in n8n-ids.ts) produces one. */
 export type WorkflowId = string & { readonly __brand: 'WorkflowId' };
@@ -136,4 +137,9 @@ export interface N8nClient {
    * the new list.
    */
   updateWorkflowTags(id: WorkflowId, tags: TagId[]): Promise<Result<ApiAnswer<N8nTag[]>, ApiFailure>>;
+}
+
+/** A selected target, with the client of its n8n instance. The use cases of `core/` run on these. */
+export interface ConnectedTarget extends Target {
+  client: N8nClient;
 }

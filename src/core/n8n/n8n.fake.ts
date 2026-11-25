@@ -4,6 +4,7 @@ import { isTagId, isWorkflowId } from '#src/core/n8n/n8n-ids';
 import {
   ApiAnswer,
   ApiFailure,
+  ConnectedTarget,
   N8nClient,
   N8nCredential,
   N8nListedWorkflow,
@@ -417,4 +418,16 @@ export function fakeN8nByOrigin(instances: Record<string, FakeN8n>): typeof fetc
     }
     return instance.fetch(input, init);
   };
+}
+
+/**
+ * A selected target, ready to run on, for the use cases of core: `name`, `client` (usually `fakeN8n().client`), the
+ * instance at `url` (without trailing slash, as `parseProjectConfig` cleans it up) and the folder `workflows`.
+ */
+export function fakeConnectedTarget(
+  name: string,
+  client: N8nClient,
+  { url = 'https://n8n.example.com', workflows = './workflows', tag = true }: { url?: string; workflows?: string; tag?: boolean } = {},
+): ConnectedTarget {
+  return { name, workflows, tag, client, connection: { url: { value: url, source: 'boilerlift.config.ts' }, apiKey: { value: 'secret', source: 'boilerlift.config.ts' } } };
 }

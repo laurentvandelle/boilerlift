@@ -4,6 +4,7 @@ import { TargetRun } from '#src/cli/targets.render';
 import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { CONFIG_FILE } from '#src/core/config/project-config';
+import { TargetDelivery } from '#src/core/deliver/deliver.model';
 import { DeployAction, DeployError, DeployReport, DeployResult, DeployWarning, UnresolvedCredential } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
@@ -145,8 +146,24 @@ export function renderSharedEntries(shared: SharedEntry[], format: { json: boole
   return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr };
 }
 
+/** The run of one target, from what `deliverTargets` returned for it. */
+export function renderDelivery(delivery: TargetDelivery, format: DeployFormat): TargetRun {
+  const { target } = delivery;
+  const where: DeployTarget = { name: target.name, instance: target.connection.url.value };
+  switch (delivery.kind) {
+  case 'invalid-files':
+    return renderInvalidFiles(where, delivery.problems);
+  case 'nothing-to-deploy':
+    return renderNothingToDeploy(where, target.workflows, format);
+  case 'invalid-lock-file':
+    return renderInvalidLockFile(where, delivery.error);
+  case 'report':
+    return renderReport(where, delivery.report, format);
+  }
+}
+
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
-export function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]): TargetRun {
+function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]): TargetRun {
   const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
   const message = 'Invalid workflow files. Nothing was sent to n8n.';
   return {
@@ -163,7 +180,7 @@ export function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]
 }
 
 /** A lock file that cannot be read: exit 1, nothing was sent, the problem and the fix on stderr. */
-export function renderInvalidLockFile(target: DeployTarget, error: LockFileError): TargetRun {
+function renderInvalidLockFile(target: DeployTarget, error: LockFileError): TargetRun {
   const message = `Invalid ${LOCK_FILE}. Nothing was sent to n8n.`;
   return {
     target: target.name,
@@ -182,7 +199,7 @@ export function renderInvalidLockFile(target: DeployTarget, error: LockFileError
 }
 
 /** No workflow file under `dir`: exit 0, nothing was sent. */
-export function renderNothingToDeploy(target: DeployTarget, dir: string, format: DeployFormat): TargetRun {
+function renderNothingToDeploy(target: DeployTarget, dir: string, format: DeployFormat): TargetRun {
   const report: DeployReport = { results: [], warnings: [], lockFile: { path: LOCK_FILE, changed: false }, exitCode: EXIT_OK };
   const message = `Nothing to deploy: no workflow in ${dir}.`;
   return {
@@ -195,7 +212,7 @@ export function renderNothingToDeploy(target: DeployTarget, dir: string, format:
 }
 
 /** The report of a deploy or a dry run on one target: its text, its JSON payload and its recap. */
-export function renderReport(target: DeployTarget, report: DeployReport, format: DeployFormat): TargetRun {
+function renderReport(target: DeployTarget, report: DeployReport, format: DeployFormat): TargetRun {
   const wording = wordingOf(format);
   const counts = summarize(report.results);
   const [summary = ''] = wording.summary(counts);
