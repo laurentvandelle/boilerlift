@@ -9,7 +9,7 @@ Turn the decisions already settled in this conversation into a decision summary.
 Rules:
 
 - **Settled decisions only.** Each line comes from the user's answers or from the code. Anything you would have to guess goes under **Open assumptions**, never into another section.
-- **The template is strict.** `boilerlift:implement-plan-local` and `boilerlift:qa` read these headings: keep their names and order, and drop a section that would be empty. Never drop **Goal**.
+- **The template is strict.** `boilerlift:implement-plan-local` and `boilerlift:report` read these headings: keep their names and order, and drop a section that would be empty. Never drop **Goal**.
 - **Decisions, not steps.** The coder plans its own steps after reading the code. One decision per bullet, concrete enough to check in a review.
 - **English**, except UI strings: copy them verbatim, in their language.
 - **Where it goes is the caller's choice** (the reply for `boilerlift:interviewing`, the pull request body for `boilerlift:ship`). Invoked directly with `/boilerlift:plan`, reply with the summary. Never enter plan mode to write it.

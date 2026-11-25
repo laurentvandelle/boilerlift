@@ -39,4 +39,4 @@ Same as 1, with no one answering.
 
 ## Trigger queries
 Should trigger: "add a backlog card for X", "write a user story for the status command", "open a bug ticket: deploy fails on n8n 1.40", "turn #14 into a proper card", "we need a spike on n8n webhooks", "create issues for this feature: [notes]".
-Should not: "ship #14" (boilerlift:ship), "interview me about this plan" (boilerlift:interviewing), "write QA scenarios for PR 31" (boilerlift:qa), "fix issue #14" (coding), "release v0.3.0" (release).
+Should not: "ship #14" (boilerlift:ship), "interview me about this plan" (boilerlift:interviewing), "write QA scenarios for PR 31" (boilerlift:report), "fix issue #14" (coding), "release v0.3.0" (release).

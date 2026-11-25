@@ -1,13 +1,13 @@
 ---
 name: "boilerlift:implement-plan-local"
-description: Implements the decision summary in an open GitHub pull request body, in the current checkout on this machine. Plans its own steps from the code, runs the repo's verify command, commits and pushes with boilerlift:commit-push, posts the boilerlift:qa scenarios on the pull request, then asks Merge or fix. On Merge, squash-merges, deletes the branch, removes the worktree, fast-forwards the base branch (main or master) in the main checkout so the next session starts up to date, and the merge closes the card through Closes #N, which the project board moves to Done. Does not create a branch, a worktree, or a pull request. Use when the user invokes /boilerlift:implement-plan-local with a pull request URL, usually as the first prompt of the auto-mode session started by /boilerlift:ship in the kept worktree.
+description: Implements the decision summary in an open GitHub pull request body, in the current checkout on this machine. Plans its own steps from the code, runs the repo's verify command, commits and pushes with boilerlift:commit-push, posts the boilerlift:report review report (what was done, a diagram, risk-ranked links, assumptions and the QA scenarios) on the pull request, then asks Merge or fix. On Merge, squash-merges, deletes the branch, removes the worktree, fast-forwards the base branch (main or master) in the main checkout so the next session starts up to date, and the merge closes the card through Closes #N, which the project board moves to Done. Does not create a branch, a worktree, or a pull request. Use when the user invokes /boilerlift:implement-plan-local with a pull request URL, usually as the first prompt of the auto-mode session started by /boilerlift:ship in the kept worktree.
 disable-model-invocation: true
 allowed-tools: "Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/preflight.py *), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/finish.py *), Bash(${CLAUDE_SKILL_DIR}/../boilerlift:create-backlog-card/scripts/backlog.py *)"
 ---
 
-Implement the decisions in one open pull request, in this checkout, get them QA'd by the user, and merge.
+Implement the decisions in one open pull request, in this checkout, report them for review and QA by the user, and merge.
 
-`boilerlift:ship` already created the branch, the worktree you are in, and the pull request, and set its backlog card (an issue in GitHub project 3) to `In progress`. The user will run the app here and QA it, so a pushed, verified branch and clear QA scenarios come first, then the merge on their word.
+`boilerlift:ship` already created the branch, the worktree you are in, and the pull request, and set its backlog card (an issue in GitHub project 3) to `In progress`. The user will run the app here and QA it, so a pushed, verified branch and a clear review report come first, then the merge on their word.
 
 ## Input
 
@@ -54,7 +54,7 @@ Pick the command:
 2. Otherwise the check command the nearest `AGENTS.md` names (test, lint, typecheck).
 3. Otherwise say no verify command was found, and continue to Commit.
 
-Run it. Fix failures and run it again. Still failing after a real fix attempt: stop. Name the failing command and the error. Do not commit, push, or run `boilerlift:qa`. Leave the changes uncommitted so the user can see them in the worktree. Then ask the user how to proceed.
+Run it. Fix failures and run it again. Still failing after a real fix attempt: stop. Name the failing command and the error. Do not commit, push, or run `boilerlift:report`. Leave the changes uncommitted so the user can see them in the worktree. Then ask the user how to proceed.
 
 ## Commit
 
@@ -74,7 +74,9 @@ ${CLAUDE_SKILL_DIR}/../boilerlift:create-backlog-card/scripts/backlog.py status 
 
 ## QA
 
-Run the `/boilerlift:qa` skill on this pull request URL, and ask it to post the result as a pull request comment. It reads the body and the diff with `gh` after the push, prints the scenarios in the chat, and posts them with `gh pr comment`. Do not execute the scenarios: the user runs them.
+Run the `/boilerlift:report` skill on this pull request URL, with no range, and ask it to post the result as a pull request comment. Pass the assumptions you took while coding (the ones listed under **Assumptions** in the final report) as caller assumptions, or none. It reads the body and the whole pull request diff with `gh` after the push, prints the report in the chat, and posts it as a new comment with `gh pr comment`. Do not execute the scenarios: the user runs them.
+
+A failed post is not a failure here: the report prints the full report and the `gh` error in the chat and ends normally. Ask the QA question whatever the post result.
 
 Then ask with AskUserQuestion, header `QA`:
 
@@ -85,11 +87,12 @@ Then ask with AskUserQuestion, header `QA`:
 
 Ask the user to describe the problem, unless they already did in the answer. Then:
 
-1. Fix it, within the decisions.
-2. Verify (same rules as above).
-3. Commit and push with `/boilerlift:commit-push` (same rules as above).
-4. Run `/boilerlift:qa` with this fix description and the post request, so it writes and posts only the scenarios the fix touches.
-5. Ask the QA question again.
+1. Record the commit before the fix: `git rev-parse HEAD` is `<before>`.
+2. Fix it, within the decisions.
+3. Verify (same rules as above).
+4. Commit and push with `/boilerlift:commit-push` (same rules as above). `git rev-parse HEAD` is now `<after>`.
+5. Run `/boilerlift:report` with the range `<before>..<after>`, this fix description, the assumptions taken during this fix, and the post request, so every section covers only the fix and QA keeps only the scenarios it touches.
+6. Ask the QA question again, whatever the post result.
 
 Repeat until the user picks Merge.
 
