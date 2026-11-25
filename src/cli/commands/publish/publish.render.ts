@@ -2,7 +2,7 @@ import { CliResult, ConnectedTarget, TargetSelection } from '#src/cli/cli.model'
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_OK, EXIT_USAGE, readErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
@@ -121,12 +121,13 @@ function renderNotReady(target: PublishTarget, plan: Exclude<PublishPlan, { kind
     return renderUnknownNames(target, plan.unknown, format);
   case 'stopped': {
     const { error } = plan;
+    const exitCode = readErrorExitCode(error.kind);
     const ping = withTarget('lift ping', target, format);
     return {
       target: target.name,
       url: target.instance,
-      text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), ['Nothing was published.']) },
-      payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
+      text: { exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), ['Nothing was published.']) },
+      payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode },
       outcome: `stopped: ${error.call} : ${error.detail}`,
     };
   }

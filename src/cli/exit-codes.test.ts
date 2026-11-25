@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode } from '#src/cli/exit-codes';
+import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode, statusExitCode } from '#src/cli/exit-codes';
 import { Check, CheckFailure } from '#src/core/connection/connection.model';
 import { DeployError, DeployErrorKind } from '#src/core/deliver/deploy.model';
 
@@ -77,5 +77,15 @@ describe('readErrorExitCode', () => {
     ['read-failed', 3],
   ])('Should exit %s with %s when a read stops the command', (kind, exitCode) => {
     expect(readErrorExitCode(kind)).toBe(exitCode);
+  });
+});
+
+describe('statusExitCode', () => {
+  test('Should exit 0 when status read everything', () => {
+    expect(statusExitCode({ workflows: [] })).toBe(0);
+  });
+
+  test('Should exit 4 when a read stopped status on a rejected API key', () => {
+    expect(statusExitCode({ workflows: [], error: { kind: 'key-rejected', call: 'GET /api/v1/workflows', detail: 'HTTP 401' } })).toBe(4);
   });
 });

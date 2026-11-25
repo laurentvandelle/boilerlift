@@ -53,7 +53,7 @@ describe('planPublish', () => {
 
     const plan = await planPublish({ workflows: [REPORT], client: n8n.client, managed: managed(), names: [] });
 
-    expect(plan).toMatchObject({ kind: 'stopped', exitCode: 3, error: { kind: 'unreachable', call: 'GET /api/v1/workflows/rep1' } });
+    expect(plan).toMatchObject({ kind: 'stopped', error: { kind: 'unreachable', call: 'GET /api/v1/workflows/rep1' } });
   });
 });
 

@@ -1,5 +1,4 @@
 import { LocalWorkflow } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 import { isSameContent } from '#src/core/deliver/normalize';
 import { MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
@@ -54,7 +53,7 @@ export function decideStatus({ managed, removed, filter }: Pick<StatusInput, 'ma
       .map(({ id, name, isArchived }): UnmanagedStatus => ({ state: 'unmanaged', id, name, isArchived }));
     statuses.push(...others);
   }
-  return { workflows: statuses, exitCode: EXIT_OK };
+  return { workflows: statuses };
 }
 
 function managedStatus(read: ManagedRead): Result<ManagedStatus, StatusError> {
@@ -82,10 +81,10 @@ function stateOf(local: LocalWorkflow, instance: N8nWorkflow): 'archived' | 'dif
 }
 
 function stopped(error: StatusError): StatusReport {
-  return { workflows: [], error, exitCode: error.kind === 'key-rejected' ? EXIT_API_KEY_REJECTED : EXIT_UNREACHABLE };
+  return { workflows: [], error };
 }
 
-/** What a failed read means for status. A rejected key exits 4; anything else exits 3, as an unreachable instance. */
+/** What a failed read means for status: a rejected key, an unreachable instance, or another failed read. */
 function describeFailure(failure: ApiFailure): StatusError {
   switch (failure.kind) {
   case 'unreachable':

@@ -1,5 +1,6 @@
 import { CheckFailure, ConnectionReport } from '#src/core/connection/connection.model';
 import { DeployErrorKind, RunEnd } from '#src/core/deliver/deploy.model';
+import { StatusReport } from '#src/core/status/status.model';
 
 // The process exit codes of every command, one name per code. Scripts read them, so a code means the same thing
 // in every command. The usage text of each command lists the codes it can return.
@@ -143,4 +144,9 @@ export function readErrorExitCode(kind: 'unreachable' | 'key-rejected' | 'read-f
   case 'read-failed':
     return EXIT_UNREACHABLE;
   }
+}
+
+/** The exit code of a status on one target: 0 whenever it could read everything, whatever the states. */
+export function statusExitCode(report: StatusReport): ExitCode {
+  return report.error === undefined ? EXIT_OK : readErrorExitCode(report.error.kind);
 }

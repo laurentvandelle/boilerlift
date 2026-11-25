@@ -9,7 +9,7 @@ import { ManagedStatus, StatusReport } from '#src/core/status/status.model';
  */
 export function decidePublish(report: StatusReport, names: string[]): PublishPlan {
   if (report.error !== undefined) {
-    return { kind: 'stopped', error: report.error, exitCode: report.exitCode };
+    return { kind: 'stopped', error: report.error };
   }
   const statuses = report.workflows.flatMap((status) => (status.state === 'unmanaged' || status.state === 'removed' ? [] : [status]));
   if (names.length === 0) {

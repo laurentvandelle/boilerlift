@@ -2,7 +2,7 @@ import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
-import { EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_USAGE, statusExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { workflowLink } from '#src/core/n8n/n8n-api';
@@ -143,7 +143,7 @@ function renderStatus(target: StatusTarget, report: StatusReport, format: Status
       workflows: report.workflows.map((status) => workflowPayload(status, target, format)),
       summary,
       error: error === undefined ? null : { kind: error.kind, call: error.call, detail: error.detail, next: ping },
-      exitCode: report.exitCode,
+      exitCode: statusExitCode(report),
     },
     outcome: error === undefined ? summaryLine(summary) : `stopped: ${error.call} : ${error.detail}`,
   };
@@ -175,7 +175,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
   const { error } = report;
   if (error !== undefined) {
     const stop = stopped(error.call, error.detail, [next(withTarget('lift ping', target, format))]);
-    return { exitCode: report.exitCode, stdout: sections(top, lead), stderr: sections(stop) };
+    return { exitCode: statusExitCode(report), stdout: sections(top, lead), stderr: sections(stop) };
   }
   const list = rows(
     report.workflows.map((status) => {
@@ -183,7 +183,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
       return { symbol: SYMBOL_OF[status.state], name: titleOf(status), state: detailOf(status, target), followUps: command === null ? [] : [next(command)] };
     }),
   );
-  return { exitCode: report.exitCode, stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
+  return { exitCode: statusExitCode(report), stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
 }
 
 /** A project workflow by its stable name; another one by its name in n8n. */

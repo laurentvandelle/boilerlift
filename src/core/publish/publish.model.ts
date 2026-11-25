@@ -2,7 +2,7 @@ import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src
 import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/cli/exit-codes';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
-import { StatusError, StatusReport } from '#src/core/status/status.model';
+import { StatusError } from '#src/core/status/status.model';
 
 /** The local fields of a workflow of the project, as publish reports it. */
 export interface PublishedWorkflow {
@@ -36,12 +36,12 @@ export interface UnknownName {
  * What publish found on one target, from reads only:
  * - `ready`: the workflows of the plan, in stable-name order; empty when nothing is waiting.
  * - `unknown-names`: names that match no deployed workflow. Nothing is published, on any target.
- * - `stopped`: a read failed (status' error and exit code). Nothing is published, on any target.
+ * - `stopped`: a read failed (status' error). Nothing is published, on any target.
  */
 export type PublishPlan =
   | { kind: 'ready'; workflows: PlannedPublish[] }
   | { kind: 'unknown-names'; unknown: UnknownName[] }
-  | { kind: 'stopped'; error: StatusError; exitCode: Exclude<StatusReport['exitCode'], typeof EXIT_OK> };
+  | { kind: 'stopped'; error: StatusError };
 
 export interface PlanPublishInput {
   workflows: LocalWorkflow[];
