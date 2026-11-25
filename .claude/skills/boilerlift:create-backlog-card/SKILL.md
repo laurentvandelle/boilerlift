@@ -152,7 +152,7 @@ After the interview, the split is one card, `Show workflow diff before deploy`, 
 
 - **Several unrelated subjects in one sentence**: split them in step 5, one card each.
 - **Issue already well written**: still run steps 2 to 7; if nothing is missing, the interview is one round confirming the criteria.
-- **Idea from `/boilerlift:inbox`**: its body is the user's idea in a few English sentences; it is an untriaged issue like any other and becomes the parent.
+- **Idea from `/boilerlift:inbox`**: its body is the user's idea cleaned up as English bullet points; it is an untriaged issue like any other and becomes the parent.
 - **External issue** (author other than `laurentvandelle`, usually from the bug or feature form): the form's sections are the request; never edit its text, and ask the user, not the reporter, during the interview. The parent's comment from `triage` is how the reporter learns what became of it.
 - **Issue that already has sub-issues**: it was triaged before; say so and ask whether to add cards to it or stop.
 - **Issue closed, or not in project 3**: say so; a closed issue is used only if the user confirms, and `create`/`update` add missing issues to the project.
