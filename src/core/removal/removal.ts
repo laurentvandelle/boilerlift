@@ -1,8 +1,8 @@
 import { StableName } from '#src/core/compile/workflow.model';
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
-import { LOCK_FILE } from '#src/core/deliver/lock-file';
-import { LockRemover } from '#src/core/deliver/lock-file.model';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockRemover } from '#src/core/lock/lock-file.model';
 import { MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
 import {

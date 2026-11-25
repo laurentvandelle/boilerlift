@@ -29,8 +29,8 @@ import { ProjectConfig } from '#src/core/config/config.model';
 import { CONFIG_FILE, checkWorkflowFolders, targetTagName } from '#src/core/config/project-config';
 import { deploy, previewDeploy } from '#src/core/deliver/deploy';
 import { DeployInput, DeployReport } from '#src/core/deliver/deploy.model';
-import { LOCK_FILE, lockWriter, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
-import { LockWriter } from '#src/core/deliver/lock-file.model';
+import { LOCK_FILE, lockWriter, managedIds, parseLockFile } from '#src/core/lock/lock-file';
+import { LockWriter } from '#src/core/lock/lock-file.model';
 import { findSharedEntries } from '#src/core/deliver/shared-entries';
 import { CREDENTIAL_LIST_SCOPE, MIN_N8N_VERSION } from '#src/core/n8n/n8n-api';
 

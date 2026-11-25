@@ -16,7 +16,7 @@ const noBarrelOrRelative = {
 };
 
 /** The core/ folders: cli/ and the commands may import any of them (src/AGENTS.md). */
-const CORE = ['compile', 'deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'credentials', 'config', 'n8n', 'connection', 'common'];
+const CORE = ['compile', 'deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'lock', 'credentials', 'config', 'n8n', 'connection', 'common'];
 
 /** The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports them (src/services/AGENTS.md). */
 const SERVICES = ['services-http', 'services-n8n'];
@@ -179,6 +179,7 @@ export default tseslint.config(
         { type: 'clean', pattern: 'src/core/clean' },
         { type: 'reset', pattern: 'src/core/reset' },
         { type: 'removal', pattern: 'src/core/removal' },
+        { type: 'lock', pattern: 'src/core/lock' },
         { type: 'credentials', pattern: 'src/core/credentials' },
         { type: 'config', pattern: 'src/core/config' },
         { type: 'n8n', pattern: 'src/core/n8n' },
@@ -226,34 +227,40 @@ export default tseslint.config(
             },
             {
               from: { element: { type: 'deliver' } },
-              allow: { to: { element: { type: ['deliver', 'compile', 'config', 'n8n'] } } },
+              allow: { to: { element: { type: ['deliver', 'lock', 'compile', 'config', 'n8n'] } } },
             },
             {
               // status/ reads where each workflow stands: the lock file and the comparison of deliver/, never its writes.
               from: { element: { type: 'status' } },
-              allow: { to: { element: { type: ['status', 'deliver', 'compile', 'config', 'n8n'] } } },
+              allow: { to: { element: { type: ['status', 'deliver', 'lock', 'compile', 'config', 'n8n'] } } },
             },
             {
               // publish/ plans from what status/ reads, then publishes the drafts through the n8n/ port.
               from: { element: { type: 'publish' } },
-              allow: { to: { element: { type: ['publish', 'status', 'compile', 'config', 'n8n'] } } },
+              allow: { to: { element: { type: ['publish', 'status', 'lock', 'compile', 'config', 'n8n'] } } },
             },
             {
               // clean/ works out the removed workflows by the ids of the lock file; removal/ reads and removes them.
               from: { element: { type: 'clean' } },
-              allow: { to: { element: { type: ['clean', 'removal', 'deliver', 'compile', 'config', 'n8n'] } } },
+              allow: { to: { element: { type: ['clean', 'removal', 'lock', 'compile', 'config', 'n8n'] } } },
             },
             {
               // reset/ works out every workflow deployed for a target's folder, plus the orphans; removal/ reads and
               // removes them.
               from: { element: { type: 'reset' } },
-              allow: { to: { element: { type: ['reset', 'removal', 'deliver', 'compile', 'config', 'n8n'] } } },
+              allow: { to: { element: { type: ['reset', 'removal', 'lock', 'compile', 'config', 'n8n'] } } },
             },
             {
               // removal/ is what clean and reset share: it reads managed workflows by their recorded ids, archives or
-              // deletes them through the n8n/ port, and drops their entries through the lock remover of deliver/.
+              // deletes them through the n8n/ port, and drops their entries through the lock remover of lock/.
               from: { element: { type: 'removal' } },
-              allow: { to: { element: { type: ['removal', 'deliver', 'compile', 'n8n'] } } },
+              allow: { to: { element: { type: ['removal', 'lock', 'compile', 'n8n'] } } },
+            },
+            {
+              // lock/ reads and writes boilerlift.lock.json, the n8n id of each stable name per instance, for every
+              // command that finds its workflows by that record. It knows the ids (n8n/) and stable names (compile/), no stage.
+              from: { element: { type: 'lock' } },
+              allow: { to: { element: { type: ['lock', 'compile', 'n8n'] } } },
             },
             {
               // credentials/ is creds sync: it lists the credentials of an instance, writes them through a port, and
@@ -319,13 +326,18 @@ export default tseslint.config(
             // 5. The allowlist already blocks these edges. These policies only name the rule in the error.
             {
               from: { element: { type: 'compile' } },
-              disallow: { to: { element: { type: ['deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'credentials', 'n8n', 'connection'] } } },
+              disallow: { to: { element: { type: ['deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'lock', 'credentials', 'n8n', 'connection'] } } },
               message: 'compile/ imports only compile/, config/ and common/: it never imports deliver/ and makes no network call (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: ['config', 'n8n', 'common'] } },
-              disallow: { to: { element: { type: ['compile', 'deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'credentials'] } } },
-              message: 'A shared core/ folder imports neither compile/, deliver/, status/, publish/, clean/, reset/, removal/ nor credentials/ (src/core/AGENTS.md).',
+              disallow: { to: { element: { type: ['compile', 'deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'lock', 'credentials'] } } },
+              message: 'A shared core/ folder imports neither compile/, deliver/, status/, publish/, clean/, reset/, removal/, lock/ nor credentials/ (src/core/AGENTS.md).',
+            },
+            {
+              from: { element: { type: 'lock' } },
+              disallow: { to: { element: { type: ['deliver', 'status', 'publish', 'clean', 'reset', 'removal', 'credentials', 'config', 'connection'] } } },
+              message: 'lock/ imports only compile/, n8n/ and common/: every command reads the lock file, so it knows no stage (src/core/AGENTS.md).',
             },
             {
               from: { element: { type: 'deliver' } },

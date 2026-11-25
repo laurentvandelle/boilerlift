@@ -6,7 +6,7 @@ import { loadWorkflows, stableNamesOf } from '#src/core/compile/load-workflows';
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
-import { LOCK_FILE, managedIds, parseLockFile, removedEntries } from '#src/core/deliver/lock-file';
+import { LOCK_FILE, managedIds, parseLockFile, removedEntries } from '#src/core/lock/lock-file';
 import { readStatus } from '#src/core/status/status';
 import { StatusFilter } from '#src/core/status/status.model';
 

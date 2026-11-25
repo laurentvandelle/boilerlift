@@ -25,8 +25,8 @@ import {
 } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
-import { LOCK_FILE, lockRemover, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
-import { LockFile } from '#src/core/deliver/lock-file.model';
+import { LOCK_FILE, lockRemover, managedIds, parseLockFile } from '#src/core/lock/lock-file';
+import { LockFile } from '#src/core/lock/lock-file.model';
 import { applyRemoval } from '#src/core/removal/removal';
 import { RemovalMode } from '#src/core/removal/removal.model';
 import { OtherTarget } from '#src/core/reset/reset.model';

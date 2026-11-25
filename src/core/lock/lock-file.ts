@@ -2,8 +2,7 @@ import { isStableName } from '#src/core/compile/load-workflows';
 import { StableName } from '#src/core/compile/workflow.model';
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
-import { DeployError } from '#src/core/deliver/deploy.model';
-import { LockEntry, LockFile, LockFileError, LockRemover, LockWriter } from '#src/core/deliver/lock-file.model';
+import { LockEntry, LockFile, LockFileError, LockRemover, LockWriteError, LockWriter } from '#src/core/lock/lock-file.model';
 import { isWorkflowId } from '#src/core/n8n/n8n-ids';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
@@ -124,7 +123,7 @@ export function lockWriter(
 ): LockWriter {
   let current = lock;
   return {
-    record: async (stableName, id): Promise<Result<void, DeployError>> => {
+    record: async (stableName, id): Promise<Result<void, LockWriteError>> => {
       const next = withEntry(current, instance, stableName, id);
       const saved = await save(serializeLockFile(next));
       if (!saved.ok) {

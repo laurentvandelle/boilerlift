@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { planClean } from '#src/core/clean/clean';
 import { CleanPlan } from '#src/core/clean/clean.model';
 import { fakeLocalWorkflow, fakeStableName } from '#src/core/compile/workflow.fake';
-import { fakeManaged } from '#src/core/deliver/lock-file.fake';
+import { fakeManaged } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, fakeN8n, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { WorkflowToRemove } from '#src/core/removal/removal.model';
 

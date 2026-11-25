@@ -14,7 +14,7 @@ import {
 import { deployCommand } from '#src/cli/commands/deploy/deploy.command';
 import { fakeCredentialEntry, fakeWorkflowFileUsing } from '#src/core/compile/credential.fake';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
-import { fakeLockText } from '#src/core/deliver/lock-file.fake';
+import { fakeLockText } from '#src/core/lock/lock-file.fake';
 import { isRecord } from '#src/core/common/is-record';
 import { FakeN8n, fakeCredential, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, invalidResponse, unreachable } from '#src/core/n8n/n8n.fake';
 

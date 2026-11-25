@@ -3,7 +3,7 @@ import { CommandContext, CommandInput } from '#src/cli/cli.model';
 import { FakeLockFile, fakeAnswer, fakeContext, fakeLockFile, fakeProjectConfig, fakeSingleTarget } from '#src/cli/cli.fake';
 import { cleanCommand } from '#src/cli/commands/clean/clean.command';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
-import { fakeLockText } from '#src/core/deliver/lock-file.fake';
+import { fakeLockText } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, fakeN8n, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 
 const TEXT: CommandInput = { positionals: [], values: {} };

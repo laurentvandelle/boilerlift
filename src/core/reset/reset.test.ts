@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
-import { fakeManaged } from '#src/core/deliver/lock-file.fake';
+import { fakeManaged } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, fakeN8n, fakeN8nWorkflow, httpError } from '#src/core/n8n/n8n.fake';
 import { planReset } from '#src/core/reset/reset';
 

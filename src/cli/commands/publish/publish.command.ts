@@ -18,7 +18,7 @@ import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
-import { LOCK_FILE, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
+import { LOCK_FILE, managedIds, parseLockFile } from '#src/core/lock/lock-file';
 import { applyPublish, planPublish } from '#src/core/publish/publish';
 
 const DESCRIPTION = `Publishes deployed drafts on the n8n instance of a target: the draft becomes the published
