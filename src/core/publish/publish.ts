@@ -6,10 +6,11 @@ import { readStatus } from '#src/core/status/status';
 
 /**
  * Works out what publish would do on one target, with the reads of `readStatus` only (the workflows of the project,
- * found by the ids of the lock file, ADR 0009). What it publishes is decided by `decidePublish` (`publish.rules.ts`).
+ * found by the ids of the lock file, ADR 0009), which resolve its `credential()` markers first. What it publishes is decided by `decidePublish` (`publish.rules.ts`).
  */
-export async function planPublish({ workflows, client, managed, names }: PlanPublishInput): Promise<PublishPlan> {
-  const report = await readStatus({ workflows, client, managed, removed: new Map(), filter: { managed: true, unmanaged: false, archived: false } });
+export async function planPublish({ workflows, client, managed, names, target, credentials }: PlanPublishInput): Promise<PublishPlan> {
+  const filter = { managed: true, unmanaged: false, archived: false };
+  const report = await readStatus({ workflows, client, managed, removed: new Map(), filter, target, credentials, command: 'publish' });
   return decidePublish(report, names);
 }
 

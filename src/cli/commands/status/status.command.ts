@@ -2,10 +2,12 @@ import { CommandDefinition } from '#src/cli/cli.model';
 import { StatusFormat, renderInvalidManaged, renderTargetStatus } from '#src/cli/commands/status/status.render';
 import { defineCommand } from '#src/cli/define-command';
 import { renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_CREDENTIALS_MISSING, EXIT_CREDENTIAL_SCOPE_MISSING, EXIT_OK, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/cli/exit-codes';
+import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 import { readStatusTargets } from '#src/core/status/status-targets';
 import { StatusFilter } from '#src/core/status/status.model';
 
@@ -21,6 +23,9 @@ const DESCRIPTION = `Shows where each workflow of a target stands on its n8n ins
   not in my project: a workflow of the instance that ./${LOCK_FILE} does not record.
 A workflow of the project gets the first of these states that holds, in this order. Status cannot
 tell whether the local file or the n8n draft changed: both show as "differs from n8n".
+A node that picks a credential with credential('key') is compared with the n8n id and name of
+that key in ./${credentialsFilePath('<target>')}, as deploy sends it. A key that does not resolve
+stops status, as it stops deploy.
 
 Status only reads: it changes nothing on the instance or in ./${LOCK_FILE}. Your workflows are found
 by the ids ./${LOCK_FILE} records, never by name or tag. By default it lists every workflow of the
@@ -41,6 +46,8 @@ export const statusCommand: CommandDefinition = defineCommand({
       ],
       [EXIT_UNREACHABLE, 'The n8n instance cannot be reached, or a read failed'],
       [EXIT_API_KEY_REJECTED, 'The API key is rejected'],
+      [EXIT_CREDENTIALS_MISSING, 'Workflows use credentials the target does not provide'],
+      [EXIT_CREDENTIAL_SCOPE_MISSING, `Workflows use credential(), and the API key lacks the ${CREDENTIAL_LIST_SCOPE} scope`],
     ],
   },
   allowPositionals: false,
@@ -53,7 +60,7 @@ export const statusCommand: CommandDefinition = defineCommand({
     },
     json: { type: 'boolean', description: 'Print the status as JSON', format: true },
   },
-  needs: ['targets', 'isDirectory', 'loadWorkflowFiles', 'readLockFile'],
+  needs: ['targets', 'isDirectory', 'loadCredentialsFiles', 'loadWorkflowFiles', 'readLockFile'],
   prepare: async ({ format, options }, { targets: { config, selected }, isDirectory }) => {
     const managed = options.text('managed');
     if (managed !== undefined && managed !== 'true' && managed !== 'false') {
@@ -69,9 +76,9 @@ export const statusCommand: CommandDefinition = defineCommand({
     return ok(filter);
   },
   modes: {},
-  default: async (filter, { targets, loadWorkflowFiles, readLockFile }, { target: selection }) => {
+  default: async (filter, { targets, loadCredentialsFiles, loadWorkflowFiles, readLockFile }, { target: selection }) => {
     const format: StatusFormat = { named: selection.kind !== 'default', managed: filter.managed };
-    const statuses = await readStatusTargets({ config: targets.config, targets: targets.selected, filter }, { loadWorkflowFiles, lock: { read: () => readLockFile(LOCK_FILE) } });
+    const statuses = await readStatusTargets({ config: targets.config, targets: targets.selected, filter }, { loadCredentialsFiles, loadWorkflowFiles, lock: { read: () => readLockFile(LOCK_FILE) } });
     return statuses.map((status) => renderTargetStatus(status, format));
   },
   render: (runs, { format, target }) => renderTargets(runs, { json: format.json, all: target.kind === 'all' }),

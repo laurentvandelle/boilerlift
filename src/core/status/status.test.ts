@@ -3,9 +3,10 @@ import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
 import { fakeManaged } from '#src/core/lock/lock-file.fake';
 import { fakeN8n, fakeN8nWorkflow, httpError } from '#src/core/n8n/n8n.fake';
 import { readStatus } from '#src/core/status/status';
-import { StatusFilter } from '#src/core/status/status.model';
+import { StatusFilter, StatusInput } from '#src/core/status/status.model';
 
 const ALL: StatusFilter = { managed: true, unmanaged: true, archived: false };
+const PROD: Pick<StatusInput, 'target' | 'credentials' | 'command'> = { target: 'prod', credentials: [], command: 'status' };
 const CRM = fakeLocalWorkflow('crm-import', { name: 'CRM import' });
 const REPORT = fakeLocalWorkflow('daily-report', { name: 'Daily report' });
 const HAND_MADE = fakeLocalWorkflow('hand-made', { name: 'Hand made' });
@@ -14,7 +15,7 @@ describe('readStatus', () => {
   test('Should report a workflow missing with its recorded id when that id answers 404', async () => {
     const n8n = fakeN8n();
 
-    const report = await readStatus({ workflows: [CRM], client: n8n.client, managed: fakeManaged({ 'crm-import': 'gone' }), removed: fakeManaged(), filter: ALL });
+    const report = await readStatus({ workflows: [CRM], client: n8n.client, managed: fakeManaged({ 'crm-import': 'gone' }), removed: fakeManaged(), filter: ALL, ...PROD });
 
     expect(report.workflows).toEqual([expect.objectContaining({ stableName: 'crm-import', state: 'missing', previousId: 'gone' })]);
   });
@@ -27,7 +28,7 @@ describe('readStatus', () => {
       client: n8n.client,
       managed: fakeManaged({ 'crm-import': 'crm1' }),
       removed: fakeManaged(),
-      filter: { ...ALL, unmanaged: false },
+      filter: { ...ALL, unmanaged: false }, ...PROD,
     });
 
     expect(report.workflows).toEqual([expect.objectContaining({ stableName: 'crm-import' })]);
@@ -42,7 +43,7 @@ describe('readStatus', () => {
       client: n8n.client,
       managed: fakeManaged({ 'crm-import': 'crm1' }),
       removed: fakeManaged(),
-      filter: { ...ALL, managed: false },
+      filter: { ...ALL, managed: false }, ...PROD,
     });
 
     expect(report.workflows).toEqual([expect.objectContaining({ state: 'unmanaged', id: 'h1' })]);
@@ -57,7 +58,7 @@ describe('readStatus', () => {
       client: n8n.client,
       managed: fakeManaged({ 'crm-import': 'crm1', 'daily-report': 'old1' }),
       removed: fakeManaged({ 'daily-report': 'old1' }),
-      filter: ALL,
+      filter: ALL, ...PROD,
     });
 
     expect(report.workflows).toEqual([
@@ -70,7 +71,7 @@ describe('readStatus', () => {
   test('Should only read when it reports where every workflow stands', async () => {
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(CRM, { id: 'crm1', isArchived: true }), fakeN8nWorkflow(REPORT, { id: 'rep1' })] });
 
-    await readStatus({ workflows: [CRM, REPORT], client: n8n.client, managed: fakeManaged({ 'crm-import': 'crm1', 'daily-report': 'gone' }), removed: fakeManaged(), filter: ALL });
+    await readStatus({ workflows: [CRM, REPORT], client: n8n.client, managed: fakeManaged({ 'crm-import': 'crm1', 'daily-report': 'gone' }), removed: fakeManaged(), filter: ALL, ...PROD });
 
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
@@ -78,7 +79,7 @@ describe('readStatus', () => {
   test('Should stop reading, without listing the workflows, with key-rejected when the instance rejects the API key', async () => {
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(CRM, { id: 'crm1' })], failures: [httpError('GET /api/v1/workflows/crm1', 401)] });
 
-    const report = await readStatus({ workflows: [CRM], client: n8n.client, managed: fakeManaged({ 'crm-import': 'crm1' }), removed: fakeManaged(), filter: ALL });
+    const report = await readStatus({ workflows: [CRM], client: n8n.client, managed: fakeManaged({ 'crm-import': 'crm1' }), removed: fakeManaged(), filter: ALL, ...PROD });
 
     expect(report).toEqual({
       workflows: [],

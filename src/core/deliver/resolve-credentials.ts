@@ -4,8 +4,7 @@ import { CredentialEntry, CredentialUse } from '#src/core/compile/credential.mod
 import { LocalWorkflow, WorkflowNode } from '#src/core/compile/workflow.model';
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
-import { describeFailure } from '#src/core/deliver/deploy-failure';
-import { DeployError, DeployInput, UnresolvedCredential } from '#src/core/deliver/deploy.model';
+import { CredentialResolution, ResolutionError, UnresolvedCredential } from '#src/core/deliver/deploy.model';
 import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 import { N8nCredential } from '#src/core/n8n/n8n.model';
 
@@ -14,9 +13,10 @@ import { N8nCredential } from '#src/core/n8n/n8n.model';
  * list of the target, under the type that list gives it. Reads only. When no workflow uses a marker, it makes no call.
  * Otherwise it lists the credentials of the instance once (every page), and fails before any write when the API key
  * cannot list them (403), or when a key is missing on the target: not in its list, its id gone from the instance, or
- * its type changed there. A credential renamed in n8n keeps its id: it resolves, under its current name.
+ * its type changed there. A credential renamed in n8n keeps its id: it resolves, under its current name. Deploy, status
+ * and publish share it, so all three compare the same resolved content; each hint names `command` to run again.
  */
-export async function resolveCredentials({ workflows, client, target, credentials }: DeployInput): Promise<Result<LocalWorkflow[], DeployError>> {
+export async function resolveCredentials({ workflows, client, target, credentials, command }: CredentialResolution): Promise<Result<LocalWorkflow[], ResolutionError>> {
   const uses = findCredentialUses(workflows.map((workflow) => ({ path: workflow.path, content: workflow })));
   if (uses.length === 0) {
     return ok(workflows);
@@ -29,10 +29,10 @@ export async function resolveCredentials({ workflows, client, target, credential
         kind: 'credential-scope-missing',
         call: failure.call,
         detail: `HTTP 403${failure.message === undefined ? '' : `: ${failure.message}`}: the API key lacks the ${CREDENTIAL_LIST_SCOPE} scope`,
-        hint: `Give the API key of the target the ${CREDENTIAL_LIST_SCOPE} scope in n8n → Settings → n8n API, or create a key that has it, then run deploy again`,
+        hint: `Give the API key of the target the ${CREDENTIAL_LIST_SCOPE} scope in n8n → Settings → n8n API, or create a key that has it, then run ${command} again`,
       });
     }
-    return err(describeFailure(failure));
+    return err({ kind: 'list-failed', failure });
   }
   const live = new Map(listed.value.body.map((credential) => [credential.id, credential]));
   const byKey = new Map(credentials.map((entry) => [entry.key, entry]));
@@ -43,7 +43,7 @@ export async function resolveCredentials({ workflows, client, target, credential
       kind: 'credentials-missing',
       call: listed.value.call,
       detail: `${missing.length} ${missing.length === 1 ? 'credential' : 'credentials'} missing on target ${target}: ${missing.map(({ key }) => key).join(', ')}`,
-      hint: `Run lift creds sync --target ${target} to update ${file}, or create the missing credentials in n8n first, then run deploy again`,
+      hint: `Run lift creds sync --target ${target} to update ${file}, or create the missing credentials in n8n first, then run ${command} again`,
       missing,
     });
   }

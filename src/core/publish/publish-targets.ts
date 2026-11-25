@@ -1,3 +1,5 @@
+import { CREDENTIALS_DIR, targetCredentials } from '#src/core/compile/credential-lists';
+import { CredentialsFile } from '#src/core/compile/credential.model';
 import { loadWorkflows } from '#src/core/compile/load-workflows';
 import { everyTargetReady } from '#src/core/common/every-target-ready';
 import { managedIds, readLock } from '#src/core/lock/lock-file';
@@ -11,9 +13,11 @@ import { PublishPorts, PublishRun, PublishTargetsInput, ReadyPublish, TargetPubl
  * draft is waiting somewhere (`needs-confirmation`). Reads only.
  */
 export async function planPublishTargets({ targets, names }: PublishTargetsInput, ports: PublishPorts): Promise<PublishRun> {
+  // Read once, before the workflow files: the lists give `credential()` its types.
+  const credentials = await ports.loadCredentialsFiles(CREDENTIALS_DIR);
   const plans: TargetPublishPlan[] = [];
   for (const target of targets) {
-    plans.push(await planTarget(target, names, ports));
+    plans.push(await planTarget(target, names, credentials, ports));
   }
   const ready = everyTargetReady(plans);
   if (!ready.ok) {
@@ -42,7 +46,12 @@ export function isPublishConfirmed(answer: string | undefined): boolean {
 }
 
 /** Reads the files, the lock file and the instance of one target, and works out what publish would do there. */
-async function planTarget(target: ConnectedTarget, names: string[], { loadWorkflowFiles, lock: store }: PublishPorts): Promise<TargetPublishPlan> {
+async function planTarget(
+  target: ConnectedTarget,
+  names: string[],
+  credentials: readonly CredentialsFile[],
+  { loadWorkflowFiles, lock: store }: PublishPorts,
+): Promise<TargetPublishPlan> {
   const loaded = loadWorkflows(await loadWorkflowFiles(target.workflows));
   if (!loaded.ok) {
     return { kind: 'invalid-files', target, problems: loaded.error };
@@ -51,6 +60,13 @@ async function planTarget(target: ConnectedTarget, names: string[], { loadWorkfl
   if (!lock.ok) {
     return { kind: 'invalid-lock-file', target, error: lock.error };
   }
-  const plan = await planPublish({ workflows: loaded.value, client: target.client, managed: managedIds(lock.value, target.connection.url.value), names });
+  const plan = await planPublish({
+    workflows: loaded.value,
+    client: target.client,
+    managed: managedIds(lock.value, target.connection.url.value),
+    names,
+    target: target.name,
+    credentials: targetCredentials(credentials, target.name),
+  });
   return plan.kind === 'ready' ? { kind: 'ready', target, workflows: plan.workflows } : { kind: 'not-ready', target, plan };
 }

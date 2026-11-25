@@ -37,7 +37,7 @@ describe('planPublish', () => {
   test('Should plan the drafts waiting to be published, and report the differing workflows, when no name is given', async () => {
     const n8n = instance();
 
-    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: [] });
+    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: [], target: 'prod', credentials: [] });
 
     expect(plan).toEqual({
       kind: 'ready',
@@ -51,7 +51,7 @@ describe('planPublish', () => {
   test('Should stop with the failed read when the instance cannot be reached', async () => {
     const n8n = fakeN8n({ failures: [unreachable('GET /api/v1/workflows/rep1', 'connection refused')] });
 
-    const plan = await planPublish({ workflows: [REPORT], client: n8n.client, managed: managed(), names: [] });
+    const plan = await planPublish({ workflows: [REPORT], client: n8n.client, managed: managed(), names: [], target: 'prod', credentials: [] });
 
     expect(plan).toMatchObject({ kind: 'stopped', error: { kind: 'unreachable', call: 'GET /api/v1/workflows/rep1' } });
   });
@@ -60,7 +60,7 @@ describe('planPublish', () => {
 describe('applyPublish', () => {
   test('Should make the draft the published version when it publishes a workflow', async () => {
     const n8n = instance();
-    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: [] });
+    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: [], target: 'prod', credentials: [] });
 
     const report = await applyPublish(plan.kind === 'ready' ? plan.workflows : [], n8n.client);
 
@@ -87,7 +87,7 @@ describe('applyPublish', () => {
         [fakeStableName('daily-report'), fakeWorkflowId('rep1')],
         [fakeStableName('other'), fakeWorkflowId('oth1')],
       ]),
-      names: [],
+      names: [], target: 'prod', credentials: [],
     });
 
     const report = await applyPublish(plan.kind === 'ready' ? plan.workflows : [], n8n.client);
@@ -107,7 +107,7 @@ describe('applyPublish', () => {
 
   test('Should end partial and publish nothing for it when a named workflow is refused', async () => {
     const n8n = instance();
-    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: ['crm-import'] });
+    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: ['crm-import'], target: 'prod', credentials: [] });
 
     const report = await applyPublish(plan.kind === 'ready' ? plan.workflows : [], n8n.client);
 

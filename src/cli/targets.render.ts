@@ -1,11 +1,13 @@
 import { CliResult } from '#src/cli/cli.model';
 import { SYMBOLS, next, rows, sections } from '#src/cli/output.render';
 import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/cli/exit-codes';
+import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { describeConfigError } from '#src/core/config/config-error';
 import { ConfigError } from '#src/core/config/config.model';
 import { CONFIG_FILE, availableTargets } from '#src/core/config/project-config';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { CredentialError, UnresolvedCredential } from '#src/core/deliver/deploy.model';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_PATH } from '#src/core/n8n/n8n-api';
 
@@ -86,6 +88,49 @@ export function renderInvalidLockFile(target: TargetPlace, error: LockFileError,
     payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
     outcome,
   };
+}
+
+/** Why a credential is missing on `target`, as the line under the stop says it. */
+function missingReason(target: string, credential: UnresolvedCredential): string {
+  const file = credentialsFilePath(target);
+  switch (credential.reason) {
+  case 'not-listed':
+    return `not in ${file}`;
+  case 'gone':
+    return `id ${credential.id ?? ''} in ${file}, gone from the instance`;
+  case 'type-changed':
+    return `id ${credential.id ?? ''} in ${file}, of another type on the instance`;
+  }
+}
+
+/**
+ * One line per credential missing on `target`, under the stop of deploy, status or publish: its key, type, reason and
+ * the workflows that use it.
+ */
+export function missingCredentialLines(target: string, missing: readonly UnresolvedCredential[]): string[] {
+  return missing.map((credential) => `${credential.key} (${credential.type ?? 'type unknown'})  ${missingReason(target, credential)}; used by ${credential.workflows.join(', ')}`);
+}
+
+/** Each missing credential as the --json `error.missing` lists it. */
+export function missingCredentialsPayload(missing: readonly UnresolvedCredential[]): Record<string, unknown>[] {
+  return missing.map(({ key, type, reason, id, workflows }) => ({ key, type: type ?? null, reason, id: id ?? null, workflows }));
+}
+
+/**
+ * The lines under the stop of a credential error in status or publish: each missing credential, then the hint. With
+ * the --json `error` (its `next`: `lift creds sync` for missing credentials, null for a missing scope).
+ */
+export function credentialStop(target: string, error: CredentialError): { lines: string[]; payload: Record<string, unknown> } {
+  const { kind, call, detail, hint } = error;
+  switch (error.kind) {
+  case 'credentials-missing':
+    return {
+      lines: [...missingCredentialLines(target, error.missing), next(hint)],
+      payload: { kind, call, detail, hint, missing: missingCredentialsPayload(error.missing), next: `lift creds sync --target ${target}` },
+    };
+  case 'credential-scope-missing':
+    return { lines: [next(hint)], payload: { kind, call, detail, hint, next: null } };
+  }
 }
 
 /** Targets that cannot be used: exit 1, nothing ran. With --json, the error and the declared targets on stdout too. */

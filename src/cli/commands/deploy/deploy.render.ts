@@ -1,10 +1,9 @@
 import { CliResult } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped, warning } from '#src/cli/output.render';
-import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
-import { credentialsFilePath } from '#src/core/compile/credential-lists';
+import { TargetRun, missingCredentialLines, missingCredentialsPayload, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
 import { CONFIG_FILE } from '#src/core/config/project-config';
 import { TargetDelivery } from '#src/core/deliver/deliver.model';
-import { DeployAction, DeployError, DeployReport, DeployResult, DeployWarning, UnresolvedCredential } from '#src/core/deliver/deploy.model';
+import { DeployAction, DeployError, DeployReport, DeployResult, DeployWarning } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
 import { workflowLink } from '#src/core/n8n/n8n-api';
@@ -292,28 +291,9 @@ function renderText(target: DeployTarget, report: DeployReport, wording: Wording
   return { exitCode: runEndExitCode(report), stdout: sections(top, list, [summary, ...tag, ...notes], steps), stderr: recap(report, wording) };
 }
 
-/** Why a credential is missing, as the line under the stop says it. */
-function missingReason(target: DeployTarget, credential: UnresolvedCredential): string {
-  const file = credentialsFilePath(target.name);
-  switch (credential.reason) {
-  case 'not-listed':
-    return `not in ${file}`;
-  case 'gone':
-    return `id ${credential.id ?? ''} in ${file}, gone from the instance`;
-  case 'type-changed':
-    return `id ${credential.id ?? ''} in ${file}, of another type on the instance`;
-  }
-}
-
 /** One line per missing credential of a `credentials-missing` stop, under the stop: its key, type, reason and workflows. */
 function missingLines(target: DeployTarget, error: DeployError): string[] {
-  if (error.kind !== 'credentials-missing') {
-    return [];
-  }
-  return error.missing.map(
-    (credential) =>
-      `${credential.key} (${credential.type ?? 'type unknown'})  ${missingReason(target, credential)}; used by ${credential.workflows.join(', ')}`,
-  );
+  return error.kind === 'credentials-missing' ? missingCredentialLines(target.name, error.missing) : [];
 }
 
 /** The `error` of the --json report. A `credentials-missing` stop also lists each missing credential. */
@@ -322,8 +302,7 @@ function errorPayload(error: DeployError): Record<string, unknown> {
   if (error.kind !== 'credentials-missing') {
     return { call, detail, hint };
   }
-  const missing = error.missing.map(({ key, type, reason, id, workflows }) => ({ key, type: type ?? null, reason, id: id ?? null, workflows }));
-  return { kind: error.kind, call, detail, hint, missing };
+  return { kind: error.kind, call, detail, hint, missing: missingCredentialsPayload(error.missing) };
 }
 
 /** The stderr recap: which workflows need attention and what to do next. Empty when everything went through. */
