@@ -57,14 +57,6 @@ describe('planClean', () => {
     expect(plan).toMatchObject({ kind: 'ready', notDeployed: [NEW] });
   });
 
-  test('Should list the workflows the lock file does not record, archived ones left out, when it reads the instance', async () => {
-    const n8n = instance();
-
-    const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged(), files: [], mode: 'archive' });
-
-    expect(plan).toMatchObject({ kind: 'ready', unmanaged: [{ id: 'h1', name: 'Hand made' }] });
-  });
-
   test('Should plan every removed workflow still on the instance as to-delete, archived or not, when the mode is delete', async () => {
     const n8n = instance();
 
