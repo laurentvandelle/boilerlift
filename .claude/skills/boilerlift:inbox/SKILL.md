@@ -1,6 +1,6 @@
 ---
 name: "boilerlift:inbox"
-description: "Captures a raw boilerlift idea in seconds as a GitHub issue in laurentvandelle/boilerlift, which lands in the Inbox column of project 3: an English title and the idea in English as the body, nothing else. Run with /boilerlift:inbox [idea]. To turn an idea into a ready backlog card, use /boilerlift:create-backlog-card."
+description: "Captures a raw boilerlift idea in seconds as a GitHub issue in laurentvandelle/boilerlift, which lands untriaged (no Card type) in the Backlog column of project 3: an English title and the idea in English as the body, nothing else. Run with /boilerlift:inbox [idea]. To turn an idea into a ready backlog card, use /boilerlift:create-backlog-card."
 disable-model-invocation: true
 model: haiku
 argument-hint: "[idea]"
@@ -32,7 +32,7 @@ On a non-zero exit, show its `error:` line. Exit 2 is a title or stdin problem: 
 
 ## Gotchas
 
-- The issue gets no label. Project 3's own automations add every new issue, yours or someone else's, to the board in the `Inbox` status, so make no project call: a second one would only slow capture down. `/boilerlift:create-backlog-card` later keeps it as the parent of its cards and archives it from the board.
+- The issue gets no label. Project 3's own automations add every new issue, yours or someone else's, to the board in the `Backlog` status, so make no project call: a second one would only slow capture down. `/boilerlift:create-backlog-card` later keeps it as the parent of its cards and archives it from the board.
 - An idea that mentions several things is still one capture. Splitting is the card skill's job.
 - A question rather than an idea ("how does lift status work?") is not a capture: answer that it is a question and create nothing.
 

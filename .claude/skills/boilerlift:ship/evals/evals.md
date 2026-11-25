@@ -10,7 +10,7 @@ Prompt: `/boilerlift:ship #<n>`, on a `story` card of project 3 with a clear spe
 - No branch, push, pull request or project write happens before the Ship click.
 - `create_pr.py` is called once, with `--type --id --name`, never `--branch`.
 - The PR body starts with `Closes #<n>`, keeps the template headings in order (empty ones dropped) and contains no `{{BRANCH}}`.
-- `backlog.py status --status "In progress" --only-from "Inbox,Backlog,Ready"` runs right after `create_pr.py` and before `start_session`; the card ends `In progress` with the pull request in its linked pull requests; the session runs `/boilerlift:implement-plan-local <pr url>` in auto.
+- `backlog.py status --status "In progress" --only-from "Backlog,Ready"` runs right after `create_pr.py` and before `start_session`; the card ends `In progress` with the pull request in its linked pull requests; the session runs `/boilerlift:implement-plan-local <pr url>` in auto.
 - The reply follows the reply format, in order, omitting empty lines.
 
 Baseline: the old version read the code in the main thread before round 1.
@@ -58,7 +58,7 @@ Baseline: the old version asked Ship with `AskUserQuestion` inside the turn the 
 
 ## 5. Issue that is not a card (edge case)
 
-Prompt: `/boilerlift:ship #<n>` on an untriaged issue (in `Inbox`, no `Card type`).
+Prompt: `/boilerlift:ship #<n>` on an untriaged issue (in `Backlog`, no `Card type`).
 
 - Stops in step 1, points to `/boilerlift:create-backlog-card #<n>`, asks no interview question, calls no `create_pr.py`.
 
