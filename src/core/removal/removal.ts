@@ -1,5 +1,4 @@
 import { StableName } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/cli/exit-codes';
 import { Result, err, ok } from '#src/core/common/result';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockRemover } from '#src/core/lock/lock-file.model';
@@ -45,11 +44,6 @@ export async function readWorkflowsToRemove(
     }
   }
   return ok(found);
-}
-
-/** The exit code of a read that stopped a removal before any write: 4 for a rejected API key, 3 otherwise. */
-export function readStopExitCode(error: RemovalReadError): typeof EXIT_UNREACHABLE | typeof EXIT_API_KEY_REJECTED {
-  return error.kind === 'key-rejected' ? EXIT_API_KEY_REJECTED : EXIT_UNREACHABLE;
 }
 
 /**
