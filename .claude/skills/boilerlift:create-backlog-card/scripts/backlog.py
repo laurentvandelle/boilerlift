@@ -12,6 +12,9 @@ Subcommands:
                                    Card type=T, Status=Ready only when Status is empty or Backlog
   link   --parent N --issue M [--dry-run]
                                    attach issue M as a sub-issue of issue N (finishes a create that failed there)
+  block  --issue M --blocked-by N[,K] [--dry-run]
+                                   mark issue M as blocked by issues N and K (GitHub shows M as blocking on their side);
+                                   links that already exist are skipped
   triage --issue N --cards 35,36 [--dry-run]
                                    comment the cards on parent issue N, then archive its board item
   close  --issue N --reason "not planned"|duplicate [--duplicate-of M] --comment-file F [--dry-run]
@@ -20,7 +23,7 @@ Subcommands:
                                    set the card's Status; skipped when the current Status is not in --only-from
   setup-type-field [--dry-run]     create the single-select field "Card type" (run only after the user agrees)
 
---issue, --parent, --cards and --duplicate-of take a number, #N, or an issue URL of the repository.
+--issue, --parent, --cards, --blocked-by and --duplicate-of take a number, #N, or an issue URL of the repository.
 
 Examples:
   backlog.py context
@@ -124,6 +127,19 @@ def status_allowed(current: str | None, only_from: list[str]) -> bool:
     return current.lower() in {s.lower() for s in only_from}
 
 
+def blockers_to_add(issue: int, wanted: list[int], existing: list[int]) -> list[int]:
+    """The blockers of `issue` still to link, in the given order, without repeats or existing links."""
+    if not wanted:
+        raise Fail(2, "--blocked-by needs at least one issue")
+    if issue in wanted:
+        raise Fail(2, f"issue #{issue} cannot block itself")
+    todo: list[int] = []
+    for n in wanted:
+        if n not in existing and n not in todo:
+            todo.append(n)
+    return todo
+
+
 def triage_comment(cards: list[int]) -> str:
     lines = "\n".join(f"- #{n}" for n in cards)
     noun = "card" if len(cards) == 1 else "cards"
@@ -133,8 +149,9 @@ def triage_comment(cards: list[int]) -> str:
 
 ITEM_QUERY = """
 query($owner:String!,$name:String!,$num:Int!){repository(owner:$owner,name:$name){issue(number:$num){
- number databaseId title body url state stateReason author{login} labels(first:30){nodes{name}}
+ id number databaseId title body url state stateReason author{login} labels(first:30){nodes{name}}
  parent{number url}
+ blockedBy(first:50){nodes{number}}
  closedByPullRequestsReferences(first:10,includeClosedPrs:false){nodes{url state headRefName}}
  projectItems(first:20){nodes{id project{number owner{... on User{login}}}
   fieldValues(first:30){nodes{... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2SingleSelectField{name}}}}}}}}}}
@@ -154,10 +171,11 @@ def read_issue(num: int) -> dict:
             item = {"id": node["id"], "type": values.get(TYPE_FIELD), "status": values.get("Status")}
     prs = [{"url": n["url"], "branch": n["headRefName"]}
            for n in issue["closedByPullRequestsReferences"]["nodes"] if n["state"] == "OPEN"]
-    return {"number": issue["number"], "database_id": issue["databaseId"], "title": issue["title"],
+    return {"number": issue["number"], "node_id": issue["id"], "database_id": issue["databaseId"], "title": issue["title"],
             "body": issue["body"], "url": issue["url"], "state": issue["state"],
             "author": (issue["author"] or {}).get("login"), "labels": [l["name"] for l in issue["labels"]["nodes"]],
-            "parent": issue["parent"], "open_prs": prs, "project_item": item}
+            "parent": issue["parent"], "blocked_by": [n["number"] for n in issue["blockedBy"]["nodes"]],
+            "open_prs": prs, "project_item": item}
 
 
 def set_field(p: dict, item_id: str, field: dict, option: str) -> None:
@@ -268,6 +286,32 @@ def cmd_link(a) -> dict:
     return {"linked": True, "parent": parent, "issue": child}
 
 
+ADD_BLOCKED_BY = """
+mutation($issue:ID!,$blocker:ID!){addBlockedBy(input:{issueId:$issue,blockingIssueId:$blocker}){issue{number}}}
+"""
+
+
+def cmd_block(a) -> dict:
+    num = issue_number(a.issue)
+    wanted = [issue_number(b) for b in a.blocked_by.split(",") if b.strip()]
+    issue = read_issue(num)
+    todo = blockers_to_add(num, wanted, issue["blocked_by"])
+    blockers = {n: read_issue(n) for n in todo}  # exit 4 before any link is written
+    if a.dry_run:
+        return {"dry_run": True, "issue": issue["url"], "would_add_blocked_by": todo,
+                "already": [n for n in wanted if n in issue["blocked_by"]]}
+    added: list[int] = []
+    for n in todo:
+        try:
+            gh("api", "graphql", "-f", f"query={ADD_BLOCKED_BY}", "-f", f"issue={issue['node_id']}",
+               "-f", f"blocker={blockers[n]['node_id']}", parse=False)
+        except Fail as e:
+            rest = ",".join(str(m) for m in todo if m not in added)
+            raise Fail(e.code, f"#{num} not marked blocked by #{n} ({e}) -- rerun with: block --issue {num} --blocked-by {rest}")
+        added.append(n)
+    return {"issue": issue["url"], "blocked_by": issue["blocked_by"] + added, "added": added}
+
+
 def cmd_triage(a) -> dict:
     num = issue_number(a.issue)
     cards = [issue_number(c) for c in a.cards.split(",") if c.strip()]
@@ -348,6 +392,8 @@ def main() -> int:
         s.set_defaults(fn=fn)
     ln = sub.add_parser("link"); ln.add_argument("--parent", required=True); ln.add_argument("--issue", required=True)
     ln.add_argument("--dry-run", action="store_true"); ln.set_defaults(fn=cmd_link)
+    bl = sub.add_parser("block"); bl.add_argument("--issue", required=True); bl.add_argument("--blocked-by", required=True)
+    bl.add_argument("--dry-run", action="store_true"); bl.set_defaults(fn=cmd_block)
     tr = sub.add_parser("triage"); tr.add_argument("--issue", required=True); tr.add_argument("--cards", required=True)
     tr.add_argument("--dry-run", action="store_true"); tr.set_defaults(fn=cmd_triage)
     cl = sub.add_parser("close"); cl.add_argument("--issue", required=True)

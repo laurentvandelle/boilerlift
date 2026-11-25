@@ -60,6 +60,30 @@ class StatusAllowedTest(unittest.TestCase):
         self.assertTrue(allowed)
 
 
+class BlockersToAddTest(unittest.TestCase):
+    def test_should_keep_the_order_and_drop_repeats_when_given_several_blockers(self):
+        todo = backlog.blockers_to_add(40, [38, 36, 38], [])
+
+        self.assertEqual(todo, [38, 36])
+
+    def test_should_skip_a_blocker_when_the_link_already_exists(self):
+        todo = backlog.blockers_to_add(40, [36, 38], [36])
+
+        self.assertEqual(todo, [38])
+
+    def test_should_refuse_when_the_issue_blocks_itself(self):
+        with self.assertRaises(backlog.Fail) as ctx:
+            backlog.blockers_to_add(40, [36, 40], [])
+
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_should_refuse_when_no_blocker_is_given(self):
+        with self.assertRaises(backlog.Fail) as ctx:
+            backlog.blockers_to_add(40, [], [])
+
+        self.assertEqual(ctx.exception.code, 2)
+
+
 class TriageCommentTest(unittest.TestCase):
     def test_should_list_every_card_when_there_are_several(self):
         comment = backlog.triage_comment([35, 36])
