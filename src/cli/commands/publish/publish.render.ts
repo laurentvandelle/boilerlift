@@ -3,8 +3,8 @@ import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
 import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
-import { LOCK_FILE } from '#src/core/deliver/lock-file';
-import { LockFileError } from '#src/core/deliver/lock-file.model';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
 import { PlannedPublish, PublishPlan, PublishReport, PublishResult, UnknownName } from '#src/core/publish/publish.model';
 

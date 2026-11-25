@@ -1,6 +1,5 @@
 import { StableName } from '#src/core/compile/workflow.model';
 import { Result } from '#src/core/common/result';
-import { DeployError } from '#src/core/deliver/deploy.model';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 
 /** One workflow in the lock file: the id n8n gave it when deploy created it. */
@@ -33,11 +32,24 @@ export type LockFileError =
   | { kind: 'invalid-id'; detail: string };
 
 /**
+ * A lock file save that failed after deploy created a workflow. It has the shape of the `lock-write-failed` member of
+ * `DeployError`, so deploy returns it as is.
+ */
+export interface LockWriteError {
+  kind: 'lock-write-failed';
+  /** The write that failed, `write boilerlift.lock.json`. */
+  call: string;
+  detail: string;
+  /** How to record the id by hand. */
+  hint: string;
+}
+
+/**
  * Records the id of a workflow deploy has just created, under the instance it deploys to. Each call saves the whole
  * file, so the record never lags behind the instance by more than the workflow that failed to be recorded.
  */
 export interface LockWriter {
-  record(stableName: StableName, id: WorkflowId): Promise<Result<void, DeployError>>;
+  record(stableName: StableName, id: WorkflowId): Promise<Result<void, LockWriteError>>;
 }
 
 /**

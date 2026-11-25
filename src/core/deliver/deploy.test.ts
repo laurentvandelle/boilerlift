@@ -4,7 +4,7 @@ import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { planToReport } from '#src/core/deliver/apply-plan';
 import { deploy } from '#src/core/deliver/deploy';
 import { DeployReport } from '#src/core/deliver/deploy.model';
-import { fakeLockWriter, fakeManaged } from '#src/core/deliver/lock-file.fake';
+import { fakeLockWriter, fakeManaged } from '#src/core/lock/lock-file.fake';
 import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { FakeN8n, FakeN8nOptions, fakeN8n, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { ApiFailure, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';

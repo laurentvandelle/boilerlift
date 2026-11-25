@@ -2,8 +2,8 @@ import { LocalWorkflow } from '#src/core/compile/workflow.model';
 import { describeFailure, isFatal, runEnd } from '#src/core/deliver/deploy-failure';
 import { DeployError, DeployPlan, DeployReport, DeployResult, PlannedStep, ResultAction } from '#src/core/deliver/deploy.model';
 import { isSameContent } from '#src/core/deliver/normalize';
-import { LOCK_FILE } from '#src/core/deliver/lock-file';
-import { LockWriter } from '#src/core/deliver/lock-file.model';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockWriter } from '#src/core/lock/lock-file.model';
 import { ApiAnswer, ApiFailure, N8nClient, N8nWorkflowBody, WorkflowId } from '#src/core/n8n/n8n.model';
 import { Result, err, ok } from '#src/core/common/result';
 

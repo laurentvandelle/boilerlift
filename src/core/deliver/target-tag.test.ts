@@ -3,7 +3,7 @@ import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { deploy, previewDeploy } from '#src/core/deliver/deploy';
 import { DeployReport } from '#src/core/deliver/deploy.model';
-import { FakeLockWriter, fakeLockWriter, fakeManaged } from '#src/core/deliver/lock-file.fake';
+import { FakeLockWriter, fakeLockWriter, fakeManaged } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, FakeN8nOptions, fakeN8n, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 

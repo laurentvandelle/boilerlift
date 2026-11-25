@@ -1,8 +1,8 @@
 import { fakeStableName } from '#src/core/compile/workflow.fake';
 import { StableName } from '#src/core/compile/workflow.model';
 import { err, ok } from '#src/core/common/result';
-import { emptyLockFile, lockWriter, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
-import { LockWriter } from '#src/core/deliver/lock-file.model';
+import { emptyLockFile, lockWriter, managedIds, parseLockFile } from '#src/core/lock/lock-file';
+import { LockWriter } from '#src/core/lock/lock-file.model';
 import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 import { WorkflowId } from '#src/core/n8n/n8n.model';
 

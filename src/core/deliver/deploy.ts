@@ -1,6 +1,6 @@
 import { applyPlan, planToReport } from '#src/core/deliver/apply-plan';
 import { DeployInput, DeployReport } from '#src/core/deliver/deploy.model';
-import { LockWriter } from '#src/core/deliver/lock-file.model';
+import { LockWriter } from '#src/core/lock/lock-file.model';
 import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { addTargetTag, previewTargetTag } from '#src/core/deliver/target-tag';
 

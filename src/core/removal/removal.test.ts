@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { fakeLocalWorkflow, fakeStableName } from '#src/core/compile/workflow.fake';
 import { err, ok } from '#src/core/common/result';
-import { lockRemover, managedIds, parseLockFile } from '#src/core/deliver/lock-file';
-import { LockRemover } from '#src/core/deliver/lock-file.model';
-import { FAKE_INSTANCE, fakeLockText, fakeManaged } from '#src/core/deliver/lock-file.fake';
+import { lockRemover, managedIds, parseLockFile } from '#src/core/lock/lock-file';
+import { LockRemover } from '#src/core/lock/lock-file.model';
+import { FAKE_INSTANCE, fakeLockText, fakeManaged } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, fakeN8n, fakeN8nWorkflow, fakeWorkflowId, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 import { applyRemoval, readWorkflowsToRemove } from '#src/core/removal/removal';
 import { RemovalMode, WorkflowToRemove } from '#src/core/removal/removal.model';

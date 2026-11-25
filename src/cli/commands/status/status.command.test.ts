@@ -11,7 +11,7 @@ import {
 } from '#src/cli/cli.fake';
 import { statusCommand } from '#src/cli/commands/status/status.command';
 import { fakeLocalWorkflow, fakeNode, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
-import { fakeLockText } from '#src/core/deliver/lock-file.fake';
+import { fakeLockText } from '#src/core/lock/lock-file.fake';
 import { FakeN8n, fakeN8n, fakeN8nByOrigin, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
 
 const TEXT = { positionals: [], values: {} };

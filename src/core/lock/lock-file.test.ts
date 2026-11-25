@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { err, ok } from '#src/core/common/result';
 import { fakeStableName } from '#src/core/compile/workflow.fake';
-import { emptyLockFile, lockRemover, managedIds, parseLockFile, removedEntries, serializeLockFile, withEntry } from '#src/core/deliver/lock-file';
-import { LockFile } from '#src/core/deliver/lock-file.model';
-import { FAKE_INSTANCE, fakeLockText, fakeManaged } from '#src/core/deliver/lock-file.fake';
+import { emptyLockFile, lockRemover, managedIds, parseLockFile, removedEntries, serializeLockFile, withEntry } from '#src/core/lock/lock-file';
+import { LockFile } from '#src/core/lock/lock-file.model';
+import { FAKE_INSTANCE, fakeLockText, fakeManaged } from '#src/core/lock/lock-file.fake';
 import { fakeWorkflowId } from '#src/core/n8n/n8n.fake';
 
 /** A lock file that parses, or a failed test. */
