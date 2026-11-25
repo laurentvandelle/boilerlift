@@ -217,6 +217,7 @@ export default tseslint.config(
         { category: 'define-command', pattern: 'src/cli/define-command.ts' },
         { category: 'targets-render', pattern: 'src/cli/targets.render.ts' },
         { category: 'output-render', pattern: 'src/cli/output.render.ts' },
+        { category: 'exit-codes', pattern: 'src/cli/exit-codes.ts' },
         { category: 'targets-need', pattern: 'src/cli/targets-need.ts' },
         { category: 'node-context', pattern: 'src/cli/node-context.ts' },
         { category: 'fake', pattern: 'src/**/*.fake.ts' },
@@ -238,8 +239,8 @@ export default tseslint.config(
           policies: [
             // 1. npm packages and Node core: allowed unless a later policy says otherwise.
             { allow: { to: { module: { origin: ['external', 'core'] } } } },
-            // 2. core/common/ holds what several folders use: the exit codes of every command, the one Result type and the
-            // shared type guards (isRecord). Every folder may import it.
+            // 2. core/common/ holds what several folders use: the one Result type and the shared type guards (isRecord).
+            // Every folder may import it.
             { allow: { to: { element: { type: 'common' } } } },
             // 3. One allow per layer: itself plus the layers it may use (src/core/AGENTS.md).
             // compile/ reads and validates workflow files, with no network. deliver/ sends them to n8n and may
@@ -329,8 +330,9 @@ export default tseslint.config(
               // defineCommand builds each command's CommandDefinition, with option values typed by its options.
               // targets.render.ts lays out the output of a command that runs on targets (--target, --all).
               // output.render.ts holds the style every human output follows: sections, rows, symbols and colour.
+              // exit-codes.ts holds every exit code, and maps what core returns to one.
               from: { element: { type: 'cli-command' } },
-              allow: { to: { file: { categories: ['cli-model', 'define-command', 'targets-render', 'output-render'] } } },
+              allow: { to: { file: { categories: ['cli-model', 'define-command', 'targets-render', 'output-render', 'exit-codes'] } } },
             },
             {
               from: { element: { type: 'cli-command' } },
@@ -372,7 +374,7 @@ export default tseslint.config(
             {
               from: { element: { type: 'deliver' } },
               disallow: { to: { element: { type: 'connection' } } },
-              message: 'deliver/ does not import connection/, the checks behind ping: exit codes come from core/common/.',
+              message: 'deliver/ does not import connection/, the checks behind ping.',
             },
             // 6. n8n-client.ts is the fetch adapter. Only services/n8n/ and cli/targets-need.ts, which builds the client of each
             // target from ctx.fetch, import it. Every other folder uses the N8nClient port.

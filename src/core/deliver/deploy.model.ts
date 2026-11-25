@@ -1,6 +1,5 @@
 import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE, ExitCode } from '#src/cli/exit-codes';
 import { N8nClient, N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
 
 export type DeployAction = 'created' | 'recreated' | 'updated' | 'skipped' | 'restored' | 'failed' | 'not-processed';
@@ -54,8 +53,8 @@ export type DeployResult = {
 } & ResultAction;
 
 /**
- * What went wrong with a deploy, tagged by `kind`. `EFFECTS` in deploy-failure.ts derives from the kind whether it
- * stops the run and its exit code.
+ * What went wrong with a deploy, tagged by `kind`. `STOPS_RUN` in deploy-failure.ts derives from the kind whether it
+ * stops the run.
  * - `unreachable`: the instance gives no answer, or an answer that is not the n8n public API. Stops the run.
  * - `key-rejected`: the instance rejects the API key. Stops the run.
  * - `drafts-unsupported`: the instance is older than MIN_N8N_VERSION. Stops the run before any write.
@@ -99,7 +98,7 @@ export type DeployError =
  * deploy did, or for a dry run as what deploy would do.
  * - `restored`: the recorded workflow was archived in n8n, and deploy restores it as an unpublished draft.
  * - `tag-failed`: the workflow was delivered, but the target tag `tag` could not be found, created or added to it:
- *   `call` failed with `detail`. It changes neither the action nor the exit code.
+ *   `call` failed with `detail`. It changes neither the action nor the outcome.
  */
 export type DeployWarning =
   | { kind: 'restored'; stableName: StableName; id: WorkflowId }
@@ -115,12 +114,12 @@ export interface TargetTagStatus {
 }
 
 /**
- * How a run ended. A run that went to the end exits 0, or 5 when a workflow failed. A run stopped by a failure
- * carries it, and exits with its code.
+ * How a run ended, tagged by `outcome`: it went to the end (`completed`), it went to the end but a workflow failed
+ * (`partial`), or a failure stopped it (`stopped`), which it carries.
  */
 export type RunEnd =
-  | { error?: undefined; exitCode: typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE }
-  | { error: DeployError; exitCode: ExitCode };
+  | { outcome: 'completed' | 'partial'; error?: undefined }
+  | { outcome: 'stopped'; error: DeployError };
 
 /**
  * The lock file of a report. `changed` is true when deploy wrote it, or for a dry run when deploy would write it:

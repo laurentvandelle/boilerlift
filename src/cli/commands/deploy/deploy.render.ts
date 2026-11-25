@@ -10,7 +10,7 @@ import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
 import { workflowLink } from '#src/core/n8n/n8n-api';
-import { EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_OK, EXIT_USAGE, runEndExitCode } from '#src/cli/exit-codes';
 
 /** How the report is worded: the --dry-run flag, and whether the command line named targets (`-t` or `--all`). */
 export interface DeployFormat {
@@ -200,7 +200,7 @@ function renderInvalidLockFile(target: DeployTarget, error: LockFileError): Targ
 
 /** No workflow file under `dir`: exit 0, nothing was sent. */
 function renderNothingToDeploy(target: DeployTarget, dir: string, format: DeployFormat): TargetRun {
-  const report: DeployReport = { results: [], warnings: [], lockFile: { path: LOCK_FILE, changed: false }, exitCode: EXIT_OK };
+  const report: DeployReport = { results: [], warnings: [], lockFile: { path: LOCK_FILE, changed: false }, outcome: 'completed' };
   const message = `Nothing to deploy: no workflow in ${dir}.`;
   return {
     target: target.name,
@@ -321,13 +321,13 @@ function renderText(target: DeployTarget, report: DeployReport, wording: Wording
   const { error } = report;
   if (error !== undefined && report.results.length === 0) {
     const stop = stopped(error.call, error.detail, [...missingLines(target, error), next(error.hint)]);
-    return { exitCode: report.exitCode, stdout: sections(top, list), stderr: sections(stop, ['Nothing was written to n8n.']) };
+    return { exitCode: runEndExitCode(report), stdout: sections(top, list), stderr: sections(stop, ['Nothing was written to n8n.']) };
   }
   const counts = summarize(report.results);
   const [summary = '', ...notes] = wording.summary(counts);
   const tag = report.tag !== undefined && report.tag.added > 0 ? [wording.tag(report.tag.name, report.tag.added)] : [];
   const steps = [...wording.next(counts, publishCommand(target, format)), ...(report.lockFile.changed ? [wording.lockFile] : [])];
-  return { exitCode: report.exitCode, stdout: sections(top, list, [summary, ...tag, ...notes], steps), stderr: recap(report, wording) };
+  return { exitCode: runEndExitCode(report), stdout: sections(top, list, [summary, ...tag, ...notes], steps), stderr: recap(report, wording) };
 }
 
 /** Why a credential is missing, as the line under the stop says it. */
@@ -410,6 +410,6 @@ function jsonPayload(target: DeployTarget, report: DeployReport, wording: Wordin
     tag: report.tag ?? null,
     error: error === undefined ? null : errorPayload(error),
     next: !wording.dryRun && deliveredDrafts(summary) ? publishCommand(target, format) : null,
-    exitCode: report.exitCode,
+    exitCode: runEndExitCode(report),
   };
 }

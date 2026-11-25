@@ -1,3 +1,5 @@
+import { DeployErrorKind, RunEnd } from '#src/core/deliver/deploy.model';
+
 // The process exit codes of every command, one name per code. Scripts read them, so a code means the same thing
 // in every command. The usage text of each command lists the codes it can return.
 
@@ -67,3 +69,38 @@ export type ExitCode =
 
 /** The exit code of a failure: any code but EXIT_OK. */
 export type FailureExitCode = Exclude<ExitCode, typeof EXIT_OK>;
+
+// What core returns, mapped to the exit code of the process. Core tags its outcomes and errors; only this file says
+// which code each one exits with, so a new kind fails the type check here.
+
+/** The exit code of a deploy error that stops the run. */
+export function deployErrorExitCode(kind: DeployErrorKind): FailureExitCode {
+  switch (kind) {
+  case 'unreachable':
+    return EXIT_UNREACHABLE;
+  case 'key-rejected':
+    return EXIT_API_KEY_REJECTED;
+  case 'drafts-unsupported':
+    return EXIT_DRAFTS_UNSUPPORTED;
+  case 'credential-scope-missing':
+    return EXIT_CREDENTIAL_SCOPE_MISSING;
+  case 'credentials-missing':
+    return EXIT_CREDENTIALS_MISSING;
+  case 'workflow-failed':
+    return EXIT_PARTIAL_FAILURE;
+  case 'lock-write-failed':
+    return EXIT_LOCK_WRITE_FAILED;
+  }
+}
+
+/** The exit code of a deploy or a dry run on one target: 0, 5 when a workflow failed, or the code of the stop. */
+export function runEndExitCode(end: RunEnd): ExitCode {
+  switch (end.outcome) {
+  case 'completed':
+    return EXIT_OK;
+  case 'partial':
+    return EXIT_PARTIAL_FAILURE;
+  case 'stopped':
+    return deployErrorExitCode(end.error.kind);
+  }
+}

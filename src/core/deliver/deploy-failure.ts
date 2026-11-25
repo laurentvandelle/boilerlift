@@ -1,40 +1,29 @@
 import { DeployError, DeployErrorKind, DeployResult, RunEnd } from '#src/core/deliver/deploy.model';
-import {
-  EXIT_API_KEY_REJECTED,
-  EXIT_CREDENTIALS_MISSING,
-  EXIT_CREDENTIAL_SCOPE_MISSING,
-  EXIT_DRAFTS_UNSUPPORTED,
-  EXIT_LOCK_WRITE_FAILED,
-  EXIT_OK,
-  EXIT_PARTIAL_FAILURE,
-  EXIT_UNREACHABLE,
-  FailureExitCode,
-} from '#src/cli/exit-codes';
 import { API_KEY_HINT, DRAFT_PARAM, MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
 import { ApiFailure } from '#src/core/n8n/n8n.model';
 
-/** What each kind of deploy error does to the run: whether it stops it, and the exit code. The one place that says so. */
-const EFFECTS: Record<DeployErrorKind, { stopsRun: boolean; exitCode: FailureExitCode }> = {
-  unreachable: { stopsRun: true, exitCode: EXIT_UNREACHABLE },
-  'key-rejected': { stopsRun: true, exitCode: EXIT_API_KEY_REJECTED },
-  'drafts-unsupported': { stopsRun: true, exitCode: EXIT_DRAFTS_UNSUPPORTED },
-  'credential-scope-missing': { stopsRun: true, exitCode: EXIT_CREDENTIAL_SCOPE_MISSING },
-  'credentials-missing': { stopsRun: true, exitCode: EXIT_CREDENTIALS_MISSING },
-  'workflow-failed': { stopsRun: false, exitCode: EXIT_PARTIAL_FAILURE },
-  'lock-write-failed': { stopsRun: true, exitCode: EXIT_LOCK_WRITE_FAILED },
+/** Whether each kind of deploy error stops the run. The one place that says so. */
+const STOPS_RUN: Record<DeployErrorKind, boolean> = {
+  unreachable: true,
+  'key-rejected': true,
+  'drafts-unsupported': true,
+  'credential-scope-missing': true,
+  'credentials-missing': true,
+  'workflow-failed': false,
+  'lock-write-failed': true,
 };
 
 /** A failure that stops the whole run: anything but a per-workflow failure. */
 export function isFatal(error: DeployError): boolean {
-  return EFFECTS[error.kind].stopsRun;
+  return STOPS_RUN[error.kind];
 }
 
-/** How a run ends: stopped by `fatal` with its exit code, or else exit 5 when an item failed, or 0. */
+/** How a run ends: stopped by `fatal`, or else partial when an item failed, or completed. */
 export function runEnd(items: { action: DeployResult['action'] }[], fatal: DeployError | undefined): RunEnd {
   if (fatal !== undefined) {
-    return { error: fatal, exitCode: EFFECTS[fatal.kind].exitCode };
+    return { outcome: 'stopped', error: fatal };
   }
-  return { exitCode: items.some(({ action }) => action === 'failed') ? EXIT_PARTIAL_FAILURE : EXIT_OK };
+  return { outcome: items.some(({ action }) => action === 'failed') ? 'partial' : 'completed' };
 }
 
 /**
