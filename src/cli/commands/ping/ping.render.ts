@@ -1,5 +1,6 @@
 import { Row, SYMBOLS, header, next, rows, sections, warning } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
+import { connectionExitCode } from '#src/cli/exit-codes';
 import { Target } from '#src/core/config/config.model';
 import { CHECK_LABELS } from '#src/core/connection/check-connection';
 import { Check, ConnectionReport } from '#src/core/connection/connection.model';
@@ -23,16 +24,17 @@ export function renderTargetReport(target: Target, report: ConnectionReport): Ta
       followUps: check.status === 'failed' ? [next(check.hint)] : [],
     })),
   );
+  const exitCode = connectionExitCode(report);
   const failures = report.checks.filter((check) => check.status === 'failed').length;
   const summary =
     failures === 0
       ? 'All checks passed.'
-      : `${failures} check${failures === 1 ? '' : 's'} failed. Exit code ${report.exitCode}.`;
+      : `${failures} check${failures === 1 ? '' : 's'} failed. Exit code ${exitCode}.`;
   return {
     target: target.name,
     url: url.value,
     text: {
-      exitCode: report.exitCode,
+      exitCode,
       stdout: sections(top, checks, [summary]),
       stderr: failures === 0 ? '' : sections([summary]),
     },
@@ -46,7 +48,7 @@ export function renderTargetReport(target: Target, report: ConnectionReport): Ta
         ...(check.status === 'failed' ? { hint: check.hint } : {}),
       })),
       warnings: report.warnings,
-      exitCode: report.exitCode,
+      exitCode,
     },
     outcome: summary,
   };

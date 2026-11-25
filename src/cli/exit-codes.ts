@@ -1,3 +1,4 @@
+import { CheckFailure, ConnectionReport } from '#src/core/connection/connection.model';
 import { DeployErrorKind, RunEnd } from '#src/core/deliver/deploy.model';
 
 // The process exit codes of every command, one name per code. Scripts read them, so a code means the same thing
@@ -103,4 +104,22 @@ export function runEndExitCode(end: RunEnd): ExitCode {
   case 'stopped':
     return deployErrorExitCode(end.error.kind);
   }
+}
+
+/** The exit code of a failed ping check. */
+export function checkFailureExitCode(failure: CheckFailure): FailureExitCode {
+  switch (failure) {
+  case 'node-too-old':
+    return EXIT_NODE_TOO_OLD;
+  case 'unreachable':
+    return EXIT_UNREACHABLE;
+  case 'key-rejected':
+    return EXIT_API_KEY_REJECTED;
+  }
+}
+
+/** The exit code of a ping on one target: the code of its failed check, or 0 when every check passed. */
+export function connectionExitCode(report: ConnectionReport): ExitCode {
+  const failed = report.checks.find((check) => check.status === 'failed');
+  return failed?.status === 'failed' ? checkFailureExitCode(failed.failure) : EXIT_OK;
 }
