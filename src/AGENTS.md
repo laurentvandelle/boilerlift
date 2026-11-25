@@ -15,6 +15,7 @@
 - `index.ts` is the package entry point: what workflow files and `boilerlift.config.ts` import from `'boilerlift'` (`defineWorkflow`, `defineConfig` and their types). Everything it exports is public API.
 - Imports across folders use the `#src/` alias (`#src/cli/cli.model`). Relative imports fail lint. Node.js resolves the alias at runtime through `package.json` `imports` (`#src/*` → `./dist/*.js`). `tsconfig.json` `paths` maps it to `src/` for type-checking and lint, and `vitest.config.mts` maps it in tests. The alias must start with `#`: Node.js rejects other prefixes such as `@/`.
 - Type files are named `*.model.ts` and hold types only.
+- Rule files are named `*.rules.ts` and hold pure functions only: no port, no I/O, no `async`. No check enforces this.
 - Exported functions declare their return type (`@typescript-eslint/explicit-function-return-type`). Lint enforces it: `lint:check` fails on warnings.
 
 ## Errors and states
