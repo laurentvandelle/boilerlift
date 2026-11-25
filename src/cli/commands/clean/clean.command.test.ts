@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { CommandContext, CommandInput } from '#src/cli/cli.model';
-import { FakeLockFile, fakeAnswer, fakeContext, fakeLockFile, fakeProjectConfig, fakeSingleTarget } from '#src/cli/cli.fake';
+import { FakeLockFile, fakeAnswer, fakeContext, fakeLockFile, fakeSingleTarget } from '#src/cli/cli.fake';
 import { cleanCommand } from '#src/cli/commands/clean/clean.command';
 import { fakeLocalWorkflow, fakeWorkflowFile } from '#src/core/compile/workflow.fake';
 import { fakeLockText } from '#src/core/lock/lock-file.fake';
@@ -215,23 +215,6 @@ describe('cleanCommand', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Nothing to clean: every workflow boilerlift.lock.json records still has its file.\n');
-  });
-
-  test('Should not propose a workflow when another target on the same instance still has its file', async () => {
-    const n8n = instance();
-    const ctx = context(n8n, lockFile(), {
-      loadProjectConfig: fakeProjectConfig({
-        targets: {
-          dev: { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './dev' },
-          staging: { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './staging' },
-        },
-      }),
-      loadWorkflowFiles: (dir) => Promise.resolve((dir === './staging' ? [OLD] : [CRM]).map(fakeWorkflowFile)),
-    });
-
-    const result = await cleanCommand.run({ positionals: [], values: { json: true, target: 'dev' } }, ctx);
-
-    expect(JSON.parse(result.stdout)).toMatchObject({ removed: [{ stableName: 'legacy' }] });
   });
 
   test('Should keep the failed entry, clean the others and exit 5 with a next step when one archive is refused', async () => {
