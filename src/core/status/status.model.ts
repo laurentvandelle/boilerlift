@@ -2,7 +2,8 @@ import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
-import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
+import { Result } from '#src/core/common/result';
+import { ApiAnswer, ApiFailure, ConnectedTarget, N8nClient, N8nListedWorkflow, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**
  * Where one workflow stands on the instance. A workflow of the project has one state, the first that holds in this
@@ -82,6 +83,20 @@ export interface StatusInput {
   /** The entries no workflow file points to any more (`removedEntries`): shown as `removed` with the managed ones. */
   removed: Map<StableName, WorkflowId>;
   filter: StatusFilter;
+}
+
+/** One workflow of the project as status read it: with no recorded id, or with the answer to the GET of its id. */
+export type ManagedRead =
+  | { workflow: LocalWorkflow; id?: undefined }
+  | { workflow: LocalWorkflow; id: WorkflowId; draft: Result<ApiAnswer<N8nWorkflow>, ApiFailure> };
+
+/**
+ * What status read on the instance, in reading order: the workflows of the project up to the first read that stops
+ * status, then the workflow list when the filter shows unmanaged workflows and nothing stopped before it.
+ */
+export interface StatusReads {
+  managed: ManagedRead[];
+  listed?: Result<ApiAnswer<N8nListedWorkflow[]>, ApiFailure>;
 }
 
 /**

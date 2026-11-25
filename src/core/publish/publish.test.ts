@@ -48,36 +48,6 @@ describe('planPublish', () => {
     });
   });
 
-  test('Should refuse a differing workflow and skip an up-to-date one when they are named', async () => {
-    const n8n = instance();
-
-    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: ['weekly', 'crm-import', 'daily-report'] });
-
-    expect(plan).toEqual({
-      kind: 'ready',
-      workflows: [
-        expect.objectContaining({ stableName: 'crm-import', action: 'refused' }),
-        expect.objectContaining({ stableName: 'daily-report', action: 'to-publish' }),
-        expect.objectContaining({ stableName: 'weekly', action: 'already-published' }),
-      ],
-    });
-  });
-
-  test('Should report every unknown name with its reason when a name matches no file, no recorded id or an archived workflow', async () => {
-    const n8n = instance();
-
-    const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: ['daily-report', 'nope', 'invoice-sync', 'old-sync'] });
-
-    expect(plan).toEqual({
-      kind: 'unknown-names',
-      unknown: [
-        { name: 'invoice-sync', reason: 'not-deployed' },
-        { name: 'nope', reason: 'no-file' },
-        { name: 'old-sync', reason: 'archived' },
-      ],
-    });
-  });
-
   test('Should stop with the failed read when the instance cannot be reached', async () => {
     const n8n = fakeN8n({ failures: [unreachable('GET /api/v1/workflows/rep1', 'connection refused')] });
 

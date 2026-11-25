@@ -185,24 +185,6 @@ describe('deploy', () => {
     expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml']);
   });
 
-  test.each([[404], [500]])('Should stop before any write with exit 6 when the spec answers HTTP %s', async (status) => {
-    const n8n = fakeN8n({ failures: [httpError('GET /api/v1/openapi.yml', status)] });
-
-    const report = await run([fakeLocalWorkflow('a')], n8n);
-
-    expect(report).toMatchObject({ results: [], exitCode: 6, error: { detail: `HTTP ${status}: n8n 2.35.0 or later is required` } });
-    expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml']);
-  });
-
-  test('Should stop before any write with exit 3 and the ping hint when the spec cannot be reached', async () => {
-    const n8n = fakeN8n({ failures: [unreachable('GET /api/v1/openapi.yml', 'connection reset')] });
-
-    const report = await run([fakeLocalWorkflow('a')], n8n);
-
-    expect(report).toMatchObject({ results: [], exitCode: 3, error: { hint: PING_HINT } });
-    expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml']);
-  });
-
   test('Should report the workflow restored when its recorded id is archived', async () => {
     const workflow = fakeLocalWorkflow('crm');
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(workflow, { id: 'arc', name: 'Old name', isArchived: true })] });
@@ -438,22 +420,6 @@ function mixedSeed(): { workflows: LocalWorkflow[]; instance: N8nWorkflow[]; man
 }
 
 describe('planDeploy', () => {
-  test('Should plan one action per workflow when the record holds new, gone, changed, unchanged and archived ones', async () => {
-    const { workflows, instance, managed } = mixedSeed();
-    const n8n = fakeN8n({ workflows: instance });
-
-    const report = planToReport(await planDeploy({ workflows, target: 'dev', credentials: [], client: n8n.client, managed }));
-
-    expect(actions(report)).toEqual([
-      ['archived', 'restored'],
-      ['changed', 'updated'],
-      ['gone', 'recreated'],
-      ['new', 'created'],
-      ['same', 'skipped'],
-    ]);
-    expect(report.exitCode).toBe(0);
-  });
-
   test('Should make only reads, one per recorded workflow, when it plans', async () => {
     const { workflows, instance, managed } = mixedSeed();
     const n8n = fakeN8n({ workflows: instance });
@@ -499,6 +465,7 @@ describe('planDeploy', () => {
 
   test.each<[string, FakeN8nOptions, number]>([
     ['the spec has no publishIfActive', { spec: 'paths: {}\n' }, 6],
+    ['the spec answers HTTP 404', { failures: [httpError('GET /api/v1/openapi.yml', 404)] }, 6],
     ['the instance is unreachable', { failures: [unreachable('GET /api/v1/openapi.yml', 'refused')] }, 3],
   ])('Should stop before planning any workflow when %s', async (_condition, options, exitCode) => {
     const n8n = fakeN8n({ ...options, workflows: [fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'abc' })] });

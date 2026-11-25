@@ -1,79 +1,47 @@
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
-import { describeFailure, draftsUnsupported, isFatal, runEnd } from '#src/core/deliver/deploy-failure';
-import { DeployError, DeployInput, DeployPlan, DeployWarning, PlannedStep } from '#src/core/deliver/deploy.model';
-import { isSameContent } from '#src/core/deliver/normalize';
+import { Result } from '#src/core/common/result';
+import { DeployInput, DeployPlan } from '#src/core/deliver/deploy.model';
+import { byStableName, decideSpec, decideSteps, stoppedPlan, stopsReading } from '#src/core/deliver/plan-deploy.rules';
 import { resolveCredentials } from '#src/core/deliver/resolve-credentials';
-import { DRAFT_PARAM } from '#src/core/n8n/n8n-api';
-import { N8nTag, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ApiAnswer, ApiFailure, N8nClient, N8nWorkflow, WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**
  * Computes what deploy would do, with reads only: the API spec, then the credentials of the instance when workflows
  * use `credential()` (`resolveCredentials`), then one GET per workflow the lock file records (ADR 0009). A missing
- * credential stops the plan before any workflow. A workflow with no recorded id is created; a recorded id that
- * answers 404 is recreated. A workflow on the instance that the lock file does not record is never read. It never
- * writes.
+ * credential stops the plan before any workflow. A workflow on the instance that the lock file does not record is never
+ * read. It never writes. The actions are decided by `decideSteps` (`plan-deploy.rules.ts`).
  */
 export async function planDeploy(input: DeployInput): Promise<DeployPlan> {
   const { client, managed } = input;
-  const spec = await client.readApiSpec();
-  if (!spec.ok) {
-    const failure = spec.error;
-    return stopped(failure.kind === 'http-error' ? draftsUnsupported(failure.call, failure.status) : describeFailure(failure));
-  }
-  if (!spec.value.body.includes(DRAFT_PARAM)) {
-    return stopped(draftsUnsupported(spec.value.call));
+  const unsupported = decideSpec(await client.readApiSpec());
+  if (unsupported !== undefined) {
+    return stoppedPlan(unsupported);
   }
   const resolved = await resolveCredentials(input);
   if (!resolved.ok) {
-    return stopped(resolved.error);
+    return stoppedPlan(resolved.error);
   }
+  const drafts = await readDrafts(resolved.value, managed, client);
+  return decideSteps(resolved.value, managed, drafts);
+}
 
-  const warnings: DeployWarning[] = [];
-  const steps: PlannedStep[] = [];
-  const tags = new Map<StableName, N8nTag[]>();
-  let fatal: DeployError | undefined;
-  for (const workflow of sortByStableName(resolved.value)) {
-    if (fatal !== undefined) {
-      steps.push({ workflow, action: 'not-processed' });
-      continue;
-    }
+/** One GET per recorded workflow, in stable-name order, until a read fails in a way that stops the run. */
+async function readDrafts(
+  workflows: LocalWorkflow[],
+  managed: ReadonlyMap<StableName, WorkflowId>,
+  client: N8nClient,
+): Promise<Map<StableName, Result<ApiAnswer<N8nWorkflow>, ApiFailure>>> {
+  const drafts = new Map<StableName, Result<ApiAnswer<N8nWorkflow>, ApiFailure>>();
+  for (const workflow of byStableName(workflows)) {
     const id = managed.get(workflow.stableName);
     if (id === undefined) {
-      steps.push({ workflow, action: 'created' });
       continue;
     }
     const draft = await client.getWorkflow(id);
-    if (draft.ok) {
-      tags.set(workflow.stableName, draft.value.body.tags);
-      if (draft.value.body.isArchived) {
-        warnings.push({ kind: 'restored', stableName: workflow.stableName, id });
-        steps.push({ workflow, action: 'restored', id });
-      } else {
-        steps.push({ workflow, action: isSameContent(workflow, draft.value.body) ? 'skipped' : 'updated', id });
-      }
-      continue;
-    }
-    if (draft.error.kind === 'http-error' && draft.error.status === 404) {
-      steps.push({ workflow, action: 'recreated', previousId: id });
-      continue;
-    }
-    const error = describeFailure(draft.error);
-    steps.push(failedStep(workflow, error, id));
-    if (isFatal(error)) {
-      fatal = error;
+    drafts.set(workflow.stableName, draft);
+    if (!draft.ok && stopsReading(draft.error)) {
+      break;
     }
   }
-  return { steps, warnings, tags, ...runEnd(steps, fatal) };
-}
-
-function stopped(error: DeployError): DeployPlan {
-  return { steps: [], warnings: [], tags: new Map(), ...runEnd([], error) };
-}
-
-function sortByStableName(workflows: LocalWorkflow[]): LocalWorkflow[] {
-  return [...workflows].sort((a, b) => a.stableName.localeCompare(b.stableName));
-}
-
-function failedStep(workflow: LocalWorkflow, { call, detail, hint }: DeployError, id?: WorkflowId): PlannedStep {
-  return { workflow, action: 'failed', ...(id === undefined ? {} : { id }), error: { call, detail, hint } };
+  return drafts;
 }
