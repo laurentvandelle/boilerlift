@@ -77,7 +77,7 @@ describe('planClean', () => {
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
 
-  test('Should stop with exit 3 when a read cannot reach the instance', async () => {
+  test('Should stop with unreachable when a read cannot reach the instance', async () => {
     const n8n = fakeN8n({ failures: [unreachable('GET /api/v1/workflows/old1', 'connection refused')] });
 
     const plan = await planClean({ client: n8n.client, managed: fakeManaged(MANAGED), removed: fakeManaged({ 'old-report': 'old1' }), files: [], mode: 'archive' });
@@ -85,15 +85,14 @@ describe('planClean', () => {
     expect(plan).toEqual({
       kind: 'stopped',
       error: { kind: 'unreachable', call: 'GET /api/v1/workflows/old1', detail: 'unreachable: connection refused' },
-      exitCode: 3,
     });
   });
 
-  test('Should stop with exit 4 when the instance rejects the API key', async () => {
+  test('Should stop with key-rejected when the instance rejects the API key', async () => {
     const n8n = fakeN8n({ failures: [httpError('GET /api/v1/workflows', 401)] });
 
     const plan = await planClean({ client: n8n.client, managed: fakeManaged(), removed: fakeManaged(), files: [], mode: 'archive' });
 
-    expect(plan).toMatchObject({ kind: 'stopped', exitCode: 4 });
+    expect(plan).toMatchObject({ kind: 'stopped', error: { kind: 'key-rejected' } });
   });
 });

@@ -1,5 +1,4 @@
 import { StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { LockFile, LockFileError, LockStore } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
@@ -28,7 +27,7 @@ export interface CleanGroups {
 /** What clean found on one target: its groups, or the read that stopped it. Nothing is archived on a stopped plan. */
 export type CleanPlan =
   | ({ kind: 'ready' } & CleanGroups)
-  | { kind: 'stopped'; error: RemovalReadError; exitCode: typeof EXIT_UNREACHABLE | typeof EXIT_API_KEY_REJECTED };
+  | { kind: 'stopped'; error: RemovalReadError };
 
 export interface PlanCleanInput {
   client: N8nClient;

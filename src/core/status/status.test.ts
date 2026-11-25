@@ -75,7 +75,7 @@ describe('readStatus', () => {
     expect(n8n.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });
 
-  test('Should stop reading, without listing the workflows, with exit 4 when the instance rejects the API key', async () => {
+  test('Should stop reading, without listing the workflows, with key-rejected when the instance rejects the API key', async () => {
     const n8n = fakeN8n({ workflows: [fakeN8nWorkflow(CRM, { id: 'crm1' })], failures: [httpError('GET /api/v1/workflows/crm1', 401)] });
 
     const report = await readStatus({ workflows: [CRM], client: n8n.client, managed: fakeManaged({ 'crm-import': 'crm1' }), removed: fakeManaged(), filter: ALL });
@@ -83,7 +83,6 @@ describe('readStatus', () => {
     expect(report).toEqual({
       workflows: [],
       error: { kind: 'key-rejected', call: 'GET /api/v1/workflows/crm1', detail: 'HTTP 401' },
-      exitCode: 4,
     });
     expect(n8n.calls).toEqual(['GET /api/v1/workflows/crm1']);
   });

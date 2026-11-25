@@ -1,10 +1,8 @@
 import { CliResult, ConnectedTarget, TargetSelection } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun } from '#src/cli/targets.render';
-import { LoadProblem } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
+import { EXIT_OK, EXIT_USAGE, outcomeExitCode, readErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
-import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
 import {
   PlannedPublish,
@@ -55,42 +53,6 @@ function withTarget(command: string, target: PublishTarget, format: PublishForma
   return format.named ? `${command} --target ${target.name}` : command;
 }
 
-/** Workflow files that do not load: exit 1, one line per problem on stderr. */
-function renderInvalidFiles(target: PublishTarget, problems: LoadProblem[]): TargetRun {
-  const message = 'Invalid workflow files. Nothing was published.';
-  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
-  return {
-    target: target.name,
-    url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
-    payload: {
-      instance: target.instance,
-      error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
-      exitCode: EXIT_USAGE,
-    },
-    outcome: 'invalid workflow files, nothing published',
-  };
-}
-
-/** A lock file that cannot be read: exit 1, nothing was published, the problem and the fix on stderr. */
-function renderInvalidLockFile(target: PublishTarget, error: LockFileError): TargetRun {
-  const message = `Invalid ${LOCK_FILE}. Nothing was published.`;
-  return {
-    target: target.name,
-    url: target.instance,
-    text: {
-      exitCode: EXIT_USAGE,
-      stdout: '',
-      stderr: sections(
-        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run publish again.')] }]),
-        [message],
-      ),
-    },
-    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
-    outcome: `invalid ${LOCK_FILE}, nothing published`,
-  };
-}
-
 /** Where publish runs: the name, instance and folder of `target`. */
 function placeOf(target: ConnectedTarget): PublishTarget {
   return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
@@ -104,9 +66,9 @@ export function renderHeldBackPlan(plan: TargetPublishPlan, format: PublishForma
   const target = placeOf(plan.target);
   switch (plan.kind) {
   case 'invalid-files':
-    return renderInvalidFiles(target, plan.problems);
+    return renderInvalidFiles(target, plan.problems, { message: 'Invalid workflow files. Nothing was published.', outcome: 'invalid workflow files, nothing published' });
   case 'invalid-lock-file':
-    return renderInvalidLockFile(target, plan.error);
+    return renderInvalidLockFile(target, plan.error, { message: `Invalid ${LOCK_FILE}. Nothing was published.`, outcome: `invalid ${LOCK_FILE}, nothing published`, rerun: 'publish' });
   case 'not-ready':
     return renderNotReady(target, plan.plan, format);
   case 'ready':
@@ -121,12 +83,13 @@ function renderNotReady(target: PublishTarget, plan: Exclude<PublishPlan, { kind
     return renderUnknownNames(target, plan.unknown, format);
   case 'stopped': {
     const { error } = plan;
+    const exitCode = readErrorExitCode(error.kind);
     const ping = withTarget('lift ping', target, format);
     return {
       target: target.name,
       url: target.instance,
-      text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), ['Nothing was published.']) },
-      payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
+      text: { exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), ['Nothing was published.']) },
+      payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode },
       outcome: `stopped: ${error.call} : ${error.detail}`,
     };
   }
@@ -366,7 +329,7 @@ export function renderReport({ target: connected, report }: TargetPublished, for
         next: nextCommand(result, target, format),
       })),
       summary,
-      exitCode: report.exitCode,
+      exitCode: outcomeExitCode(report.outcome),
     },
     outcome: message ?? summaryLine(summary, named),
   };
@@ -380,5 +343,5 @@ function renderText(target: PublishTarget, report: PublishReport, format: Publis
   const notPublished = report.results.filter((result) => result.action === 'refused' || result.action === 'failed').map((result) => result.stableName);
   const stderr =
     notPublished.length === 0 ? '' : sections([`Not published: ${notPublished.join(', ')}.`], [next('lift publish', 'once the step under each line is done')]);
-  return { exitCode: report.exitCode, stdout: sections(top, list, [summary]), stderr };
+  return { exitCode: outcomeExitCode(report.outcome), stdout: sections(top, list, [summary]), stderr };
 }

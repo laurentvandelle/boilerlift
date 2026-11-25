@@ -41,7 +41,7 @@ describe('deploy credentials', () => {
     expect(credentialsOnInstance(n8n, 'Workflow invoice-sync')).toEqual({ httpHeaderAuth: { id: 'g1', name: 'Gmail renamed' } });
   });
 
-  test('Should stop before any write with exit 8 and each missing key when the target lacks credentials', async () => {
+  test('Should stop before any write with each missing key when the target lacks credentials', async () => {
     const n8n = fakeN8n({ credentials: [fakeCredential('gone', { id: 'new-id' }), fakeCredential('retyped', { type: 'slackApi' })] });
     const list = [fakeCredentialEntry('gone'), fakeCredentialEntry('retyped')];
     const workflows = [fakeLocalWorkflowUsing('a', ['gone', 'unlisted']), fakeLocalWorkflowUsing('b', ['retyped', 'unlisted'])];
@@ -50,7 +50,7 @@ describe('deploy credentials', () => {
 
     expect(report).toMatchObject({
       results: [],
-      exitCode: 8,
+      outcome: 'stopped',
       error: {
         kind: 'credentials-missing',
         call: LIST_CALL,
@@ -71,17 +71,17 @@ describe('deploy credentials', () => {
 
     const report = await previewDeploy({ workflows: [fakeLocalWorkflowUsing('a', ['slack'])], target: 'prod', credentials: [], client: n8n.client, managed: fakeManaged() });
 
-    expect(report).toMatchObject({ exitCode: 8, error: { kind: 'credentials-missing', missing: [{ key: 'slack', reason: 'not-listed' }] } });
+    expect(report).toMatchObject({ outcome: 'stopped', error: { kind: 'credentials-missing', missing: [{ key: 'slack', reason: 'not-listed' }] } });
   });
 
-  test('Should stop before any write with exit 9 when the API key cannot list credentials and workflows use credential()', async () => {
+  test('Should stop before any write when the API key cannot list credentials and workflows use credential()', async () => {
     const n8n = fakeN8n({ failures: [httpError(LIST_CALL, 403, 'Forbidden')] });
 
     const report = await run([fakeLocalWorkflowUsing('a', ['slack'])], n8n, [fakeCredentialEntry('slack')]);
 
     expect(report).toMatchObject({
       results: [],
-      exitCode: 9,
+      outcome: 'stopped',
       error: { kind: 'credential-scope-missing', call: LIST_CALL, detail: 'HTTP 403: Forbidden: the API key lacks the credential:list scope' },
     });
   });
@@ -91,7 +91,7 @@ describe('deploy credentials', () => {
 
     const report = await run([fakeLocalWorkflow('a')], n8n, []);
 
-    expect([report.exitCode, n8n.calls.includes(LIST_CALL)]).toEqual([0, false]);
+    expect([report.outcome, n8n.calls.includes(LIST_CALL)]).toEqual(['completed', false]);
   });
 
   test('Should update the workflow when its credential was recreated under the same name with a new id', async () => {

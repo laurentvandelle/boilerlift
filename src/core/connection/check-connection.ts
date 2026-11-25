@@ -1,5 +1,4 @@
 import { Check, CheckConnectionInput, CheckName, ConnectionReport, FailedCheck } from '#src/core/connection/connection.model';
-import { EXIT_API_KEY_REJECTED, EXIT_NODE_TOO_OLD, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
 import { API_KEY_HINT, API_PATH, classifyHttpError } from '#src/core/n8n/n8n-api';
 
 /** The oldest Node.js that Boilerlift runs on (`engines` in package.json). */
@@ -32,7 +31,7 @@ export async function checkConnection({ nodeVersion, config, client }: CheckConn
       failed = check;
     }
   }
-  return { checks, warnings: warningsFor(config.url.value), exitCode: failed?.exitCode ?? EXIT_OK };
+  return { checks, warnings: warningsFor(config.url.value) };
 }
 
 function checkNode(nodeVersion: string): Check {
@@ -44,7 +43,7 @@ function checkNode(nodeVersion: string): Check {
     status: 'failed',
     detail: `${nodeVersion} is too old (requires ≥ ${MIN_NODE_VERSION})`,
     hint: `Install Node ${MIN_NODE_VERSION_SHORT} or later`,
-    exitCode: EXIT_NODE_TOO_OLD,
+    failure: 'node-too-old',
   };
 }
 
@@ -57,14 +56,14 @@ async function checkUrl(client: CheckConnectionInput['client']): Promise<Check> 
   const failure = result.error;
   switch (failure.kind) {
   case 'unreachable':
-    return { name: 'url', status: 'failed', detail: `unreachable: ${failure.reason}`, hint, exitCode: EXIT_UNREACHABLE };
+    return { name: 'url', status: 'failed', detail: `unreachable: ${failure.reason}`, hint, failure: 'unreachable' };
   case 'http-error':
     return {
       name: 'url',
       status: 'failed',
       detail: `not healthy (${failure.call} → ${failure.status})`,
       hint,
-      exitCode: EXIT_UNREACHABLE,
+      failure: 'unreachable',
     };
   }
 }
@@ -81,20 +80,20 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
       status: 'failed',
       detail: `unreachable: ${failure.reason}`,
       hint: 'Check the url of the target and your network, then run ping again',
-      exitCode: EXIT_UNREACHABLE,
+      failure: 'unreachable',
     };
   }
   const call = `${failure.call} → ${failure.status}`;
   switch (classifyHttpError(failure.status)) {
   case 'key-rejected':
-    return { name: 'apiKey', status: 'failed', detail: `rejected (${call})`, hint: API_KEY_HINT, exitCode: EXIT_API_KEY_REJECTED };
+    return { name: 'apiKey', status: 'failed', detail: `rejected (${call})`, hint: API_KEY_HINT, failure: 'key-rejected' };
   case 'not-found':
     return {
       name: 'apiKey',
       status: 'failed',
       detail: `public API not found at ${API_PATH} (${call})`,
       hint: 'Check the url of the target, or whether the public API is enabled on the instance',
-      exitCode: EXIT_UNREACHABLE,
+      failure: 'unreachable',
     };
   case 'other':
     return {
@@ -102,7 +101,7 @@ async function checkApiKey(client: CheckConnectionInput['client']): Promise<Chec
       status: 'failed',
       detail: `unexpected answer (${call})`,
       hint: 'Check that the url of the target points to an n8n instance and that it is running',
-      exitCode: EXIT_UNREACHABLE,
+      failure: 'unreachable',
     };
   }
 }

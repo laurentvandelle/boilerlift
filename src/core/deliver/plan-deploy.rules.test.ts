@@ -79,7 +79,7 @@ describe('decideSteps', () => {
       ['new', 'created'],
       ['same', 'skipped'],
     ]);
-    expect(plan.exitCode).toBe(0);
+    expect(plan.outcome).toBe('completed');
   });
 
   test('Should warn that a workflow is restored when its recorded draft is archived', () => {
@@ -99,17 +99,17 @@ describe('decideSteps', () => {
     expect(plan.tags.get(workflow.stableName)).toEqual(instance.tags);
   });
 
-  test('Should fail only that workflow and exit 5 when its read answers another HTTP error', () => {
+  test('Should fail only that workflow and end partial when its read answers another HTTP error', () => {
     const plan = decideSteps(names('a', 'b'), fakeManaged({ a: 'ida' }), drafts({ a: failed(httpError('GET /api/v1/workflows/ida', 500)) }));
 
     expect(actions(plan)).toEqual([
       ['a', 'failed'],
       ['b', 'created'],
     ]);
-    expect(plan.exitCode).toBe(5);
+    expect(plan.outcome).toBe('partial');
   });
 
-  test('Should mark every workflow after a failed read not-processed with exit 3 when the instance cannot be reached', () => {
+  test('Should mark every workflow after a failed read not-processed and stop when the instance cannot be reached', () => {
     const managed = fakeManaged({ a: 'ida', b: 'idb' });
 
     const plan = decideSteps(names('a', 'b', 'c'), managed, drafts({ a: failed(unreachable('GET /api/v1/workflows/ida', 'connection reset')) }));
@@ -119,7 +119,7 @@ describe('decideSteps', () => {
       ['b', 'not-processed'],
       ['c', 'not-processed'],
     ]);
-    expect(plan).toMatchObject({ exitCode: 3, error: { call: 'GET /api/v1/workflows/ida', kind: 'unreachable', hint: PING_HINT } });
+    expect(plan).toMatchObject({ outcome: 'stopped', error: { call: 'GET /api/v1/workflows/ida', kind: 'unreachable', hint: PING_HINT } });
   });
 
   test('Should mark a recorded workflow not-processed when it has no read', () => {

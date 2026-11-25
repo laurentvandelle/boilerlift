@@ -10,12 +10,11 @@ const HTTPS_CONFIG: ConnectionConfig = {
 };
 
 describe('checkConnection', () => {
-  test('Should pass every check and exit 0 when the instance accepts the key', async () => {
+  test('Should pass every check when the instance accepts the key', async () => {
     const n8n = fakeN8n();
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(0);
     expect(report.checks.map(({ name, status }) => [name, status])).toEqual([
       ['node', 'ok'],
       ['url', 'ok'],
@@ -39,13 +38,12 @@ describe('checkConnection', () => {
     expect(report.checks[0]).toMatchObject({ name: 'node', status: 'ok' });
   });
 
-  test.each([['22.17.1'], ['22.9.0']])('Should fail the Node check with exit 2 and the install hint when Node is %s', async (nodeVersion) => {
+  test.each([['22.17.1'], ['22.9.0']])('Should fail the Node check as too old with the install hint when Node is %s', async (nodeVersion) => {
     const n8n = fakeN8n();
 
     const report = await checkConnection({ nodeVersion, config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(2);
-    expect(report.checks[0]).toMatchObject({ status: 'failed', hint: 'Install Node 22.18 or later' });
+    expect(report.checks[0]).toMatchObject({ status: 'failed', failure: 'node-too-old', hint: 'Install Node 22.18 or later' });
   });
 
   test('Should skip the URL and API key checks without a call when Node is too old', async () => {
@@ -58,14 +56,13 @@ describe('checkConnection', () => {
     expect(n8n.calls).toEqual([]);
   });
 
-  test('Should fail with exit 3 and the url hint when the URL is unreachable', async () => {
+  test('Should fail as unreachable with the url hint when the URL is unreachable', async () => {
     const n8n = fakeN8n({ failures: [unreachable('GET /healthz', 'connection refused')] });
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(3);
     const check = report.checks[1];
-    expect(check).toMatchObject({ status: 'failed', detail: 'unreachable: connection refused' });
+    expect(check).toMatchObject({ status: 'failed', failure: 'unreachable', detail: 'unreachable: connection refused' });
     expect(check?.status === 'failed' ? check.hint : '').toContain('Check the url of the target');
   });
 
@@ -78,34 +75,33 @@ describe('checkConnection', () => {
     expect(n8n.calls).toEqual(['GET /healthz']);
   });
 
-  test('Should fail with exit 3 when /healthz answers with an error status', async () => {
+  test('Should fail as unreachable when /healthz answers with an error status', async () => {
     const n8n = fakeN8n({ failures: [httpError('GET /healthz', 503)] });
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(3);
-    expect(report.checks[1]?.detail).toBe('not healthy (GET /healthz → 503)');
+    expect(report.checks[1]).toMatchObject({ failure: 'unreachable', detail: 'not healthy (GET /healthz → 503)' });
   });
 
-  test.each([[401], [403]])('Should fail with exit 4 when the API key check gets %s', async (status) => {
+  test.each([[401], [403]])('Should fail as key-rejected when the API key check gets %s', async (status) => {
     const n8n = fakeN8n({ failures: [httpError('GET /api/v1/workflows', status)] });
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(4);
     expect(report.checks[2]).toMatchObject({
       status: 'failed',
+      failure: 'key-rejected',
       detail: `rejected (GET /api/v1/workflows → ${status})`,
       hint: 'Create a key in n8n → Settings → n8n API, then set it as the apiKey of the target in boilerlift.config.ts, through the environment variable it reads',
     });
   });
 
-  test('Should fail with exit 3 when the public API is not found', async () => {
+  test('Should fail as unreachable when the public API is not found', async () => {
     const n8n = fakeN8n({ failures: [httpError('GET /api/v1/workflows', 404)] });
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(3);
+    expect(report.checks[2]).toMatchObject({ failure: 'unreachable' });
     expect(report.checks[2]?.detail).toBe('public API not found at /api/v1 (GET /api/v1/workflows → 404)');
     const check = report.checks[2];
     expect(check?.status === 'failed' ? check.hint : '').toContain('public API is enabled');
@@ -114,13 +110,12 @@ describe('checkConnection', () => {
   test.each<[string, ApiFailure]>([
     ['answered 500', httpError('GET /api/v1/workflows', 500)],
     ['unreachable', unreachable('GET /api/v1/workflows', 'connection reset')],
-  ])('Should fail with exit 3 when the API key check is %s', async (_condition, failure) => {
+  ])('Should fail as unreachable when the API key check is %s', async (_condition, failure) => {
     const n8n = fakeN8n({ failures: [failure] });
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config: HTTPS_CONFIG, client: n8n.client });
 
-    expect(report.exitCode).toBe(3);
-    expect(report.checks[2]?.status).toBe('failed');
+    expect(report.checks[2]).toMatchObject({ status: 'failed', failure: 'unreachable' });
   });
 
   test('Should warn without failing when the URL uses http://', async () => {
@@ -128,7 +123,7 @@ describe('checkConnection', () => {
 
     const report = await checkConnection({ nodeVersion: '24.1.0', config, client: fakeN8n().client });
 
-    expect(report.exitCode).toBe(0);
+    expect(report.checks.every(({ status }) => status === 'ok')).toBe(true);
     expect(report.warnings).toHaveLength(1);
     expect(report.warnings[0]).toContain('http://');
   });

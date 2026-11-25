@@ -12,7 +12,6 @@ const REPORT: StatusReport = {
     fakeManagedStatus('old-sync', 'archived', 'old1'),
     fakeManagedStatus('weekly', 'up-to-date', 'wk1'),
   ],
-  exitCode: 0,
 };
 
 describe('decidePublish', () => {
@@ -60,11 +59,11 @@ describe('decidePublish', () => {
     });
   });
 
-  test('Should stop with the error and exit code of the report when status stopped', () => {
+  test('Should stop with the error of the report when status stopped', () => {
     const error = { kind: 'key-rejected', call: 'GET /api/v1/workflows/rep1', detail: 'HTTP 401' } as const;
 
-    const plan = decidePublish({ workflows: [], error, exitCode: 4 }, []);
+    const plan = decidePublish({ workflows: [], error }, []);
 
-    expect(plan).toEqual({ kind: 'stopped', error, exitCode: 4 });
+    expect(plan).toEqual({ kind: 'stopped', error });
   });
 });

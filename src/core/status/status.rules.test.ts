@@ -66,7 +66,7 @@ describe('decideStatus', () => {
   test('Should report a workflow up to date when the published version is its draft and holds the local content', () => {
     const report = decideStatus(NONE, { managed: [read(CRM, 'crm1', fakeN8nWorkflow(CRM, { id: 'crm1' }))] });
 
-    expect(report).toEqual({ workflows: [expect.objectContaining({ stableName: 'crm-import', state: 'up-to-date', id: 'crm1' })], exitCode: 0 });
+    expect(report).toEqual({ workflows: [expect.objectContaining({ stableName: 'crm-import', state: 'up-to-date', id: 'crm1' })], });
   });
 
   test('Should list the instance workflows the lock file does not record after the project ones when nothing filters them', () => {
@@ -112,35 +112,33 @@ describe('decideStatus', () => {
     expect(report.workflows).toEqual([]);
   });
 
-  test('Should stop with exit 4 when the instance rejects the API key', () => {
+  test('Should stop with key-rejected when the instance rejects the API key', () => {
     const report = decideStatus(NONE, { managed: [read(CRM, 'crm1', httpError('GET /api/v1/workflows/crm1', 401))] });
 
     expect(report).toEqual({
       workflows: [],
       error: { kind: 'key-rejected', call: 'GET /api/v1/workflows/crm1', detail: 'HTTP 401' },
-      exitCode: 4,
     });
   });
 
-  test('Should stop with exit 3 when the instance cannot be reached', () => {
+  test('Should stop with unreachable when the instance cannot be reached', () => {
     const report = decideStatus(NONE, { managed: [], listed: err(unreachable(LIST, 'connection refused')) });
 
     expect(report).toEqual({
       workflows: [],
       error: { kind: 'unreachable', call: LIST, detail: 'unreachable: connection refused' },
-      exitCode: 3,
     });
   });
 
-  test('Should stop with exit 3 when the instance answers something that is not the n8n API', () => {
+  test('Should stop with unreachable when the instance answers something that is not the n8n API', () => {
     const report = decideStatus(NONE, { managed: [], listed: err(invalidResponse(LIST)) });
 
-    expect(report).toMatchObject({ error: { kind: 'unreachable', call: LIST }, exitCode: 3 });
+    expect(report).toMatchObject({ workflows: [], error: { kind: 'unreachable', call: LIST } });
   });
 
-  test('Should stop with exit 3 when a read answers another HTTP error', () => {
+  test('Should stop with read-failed when a read answers another HTTP error', () => {
     const report = decideStatus(NONE, { managed: [], listed: err(httpError(LIST, 500, 'boom')) });
 
-    expect(report).toMatchObject({ error: { kind: 'read-failed', detail: 'HTTP 500: boom' }, exitCode: 3 });
+    expect(report).toMatchObject({ workflows: [], error: { kind: 'read-failed', detail: 'HTTP 500: boom' } });
   });
 });

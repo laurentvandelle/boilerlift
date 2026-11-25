@@ -1,6 +1,6 @@
 import { CleanPlan, PlanCleanInput } from '#src/core/clean/clean.model';
 import { decideCleanGroups } from '#src/core/clean/clean.rules';
-import { describeReadFailure, readStopExitCode, readWorkflowsToRemove } from '#src/core/removal/removal';
+import { describeReadFailure, readWorkflowsToRemove } from '#src/core/removal/removal';
 import { RemovalReadError } from '#src/core/removal/removal.model';
 
 /**
@@ -23,5 +23,5 @@ export async function planClean(input: PlanCleanInput): Promise<CleanPlan> {
 }
 
 function stopped(error: RemovalReadError): CleanPlan {
-  return { kind: 'stopped', error, exitCode: readStopExitCode(error) };
+  return { kind: 'stopped', error };
 }

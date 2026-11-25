@@ -1,5 +1,4 @@
 import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
 import { ProjectConfig } from '#src/core/config/config.model';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { Result } from '#src/core/common/result';
@@ -68,12 +67,10 @@ export interface StatusError {
 }
 
 /**
- * Where every workflow stands, or why status stopped. Status exits 0 whenever it could read everything, whatever the
- * states. A stopped status carries no workflow.
+ * Where every workflow stands, or why status stopped. A status that could read everything carries no error, whatever
+ * the states. A stopped status carries no workflow.
  */
-export type StatusReport =
-  | { workflows: WorkflowStatus[]; error?: undefined; exitCode: typeof EXIT_OK }
-  | { workflows: []; error: StatusError; exitCode: typeof EXIT_UNREACHABLE | typeof EXIT_API_KEY_REJECTED };
+export type StatusReport = { workflows: WorkflowStatus[]; error?: undefined } | { workflows: []; error: StatusError };
 
 export interface StatusInput {
   workflows: LocalWorkflow[];

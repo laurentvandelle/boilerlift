@@ -1,10 +1,8 @@
 import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun } from '#src/cli/targets.render';
-import { LoadProblem } from '#src/core/compile/workflow.model';
-import { EXIT_USAGE } from '#src/core/common/exit-codes';
+import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
+import { EXIT_USAGE, statusExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
-import { LockFileError } from '#src/core/lock/lock-file.model';
 import { workflowLink } from '#src/core/n8n/n8n-api';
 import { StatusReport, TargetStatus, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
 
@@ -69,9 +67,13 @@ export function renderTargetStatus(status: TargetStatus, format: StatusFormat): 
   const target = placeOf(status.target);
   switch (status.kind) {
   case 'invalid-files':
-    return renderInvalidFiles(target, status.problems);
+    return renderInvalidFiles(target, status.problems, { message: 'Invalid workflow files. Status cannot compare them.', outcome: 'invalid workflow files' });
   case 'invalid-lock-file':
-    return renderInvalidLockFile(target, status.error);
+    return renderInvalidLockFile(target, status.error, {
+      message: `Invalid ${LOCK_FILE}. Status cannot tell which workflows are yours.`,
+      outcome: `invalid ${LOCK_FILE}`,
+      rerun: 'status',
+    });
   case 'report':
     return renderStatus(target, status.report, format, status.empty);
   }
@@ -79,42 +81,6 @@ export function renderTargetStatus(status: TargetStatus, format: StatusFormat): 
 
 function placeOf(target: ConnectedTarget): StatusTarget {
   return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
-}
-
-/** Workflow files that do not load: exit 1, one line per problem on stderr. */
-function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]): TargetRun {
-  const message = 'Invalid workflow files. Status cannot compare them.';
-  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
-  return {
-    target: target.name,
-    url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
-    payload: {
-      instance: target.instance,
-      error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
-      exitCode: EXIT_USAGE,
-    },
-    outcome: 'invalid workflow files',
-  };
-}
-
-/** A lock file that cannot be read: exit 1, the problem and the fix on stderr. */
-function renderInvalidLockFile(target: StatusTarget, error: LockFileError): TargetRun {
-  const message = `Invalid ${LOCK_FILE}. Status cannot tell which workflows are yours.`;
-  return {
-    target: target.name,
-    url: target.instance,
-    text: {
-      exitCode: EXIT_USAGE,
-      stdout: '',
-      stderr: sections(
-        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run status again.')] }]),
-        [message],
-      ),
-    },
-    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
-    outcome: `invalid ${LOCK_FILE}`,
-  };
 }
 
 /** A `--managed` value that is neither true nor false: exit 1. With --json, the error on stdout too. */
@@ -143,7 +109,7 @@ function renderStatus(target: StatusTarget, report: StatusReport, format: Status
       workflows: report.workflows.map((status) => workflowPayload(status, target, format)),
       summary,
       error: error === undefined ? null : { kind: error.kind, call: error.call, detail: error.detail, next: ping },
-      exitCode: report.exitCode,
+      exitCode: statusExitCode(report),
     },
     outcome: error === undefined ? summaryLine(summary) : `stopped: ${error.call} : ${error.detail}`,
   };
@@ -175,7 +141,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
   const { error } = report;
   if (error !== undefined) {
     const stop = stopped(error.call, error.detail, [next(withTarget('lift ping', target, format))]);
-    return { exitCode: report.exitCode, stdout: sections(top, lead), stderr: sections(stop) };
+    return { exitCode: statusExitCode(report), stdout: sections(top, lead), stderr: sections(stop) };
   }
   const list = rows(
     report.workflows.map((status) => {
@@ -183,7 +149,7 @@ function renderText(target: StatusTarget, report: StatusReport, format: StatusFo
       return { symbol: SYMBOL_OF[status.state], name: titleOf(status), state: detailOf(status, target), followUps: command === null ? [] : [next(command)] };
     }),
   );
-  return { exitCode: report.exitCode, stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
+  return { exitCode: statusExitCode(report), stdout: sections(top, list, [...lead, summaryLine(summarize(report.workflows))]), stderr: '' };
 }
 
 /** A project workflow by its stable name; another one by its name in n8n. */

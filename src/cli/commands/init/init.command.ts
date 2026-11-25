@@ -2,7 +2,7 @@ import { CommandDefinition } from '#src/cli/cli.model';
 import { InitFile } from '#src/cli/commands/init/init.model';
 import { renderFolderIsFile, renderInit, renderTooManyFolders } from '#src/cli/commands/init/init.render';
 import { defineCommand } from '#src/cli/define-command';
-import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
 import { err, ok } from '#src/core/common/result';
 
 /**

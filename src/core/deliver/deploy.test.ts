@@ -3,7 +3,7 @@ import { fakeLocalWorkflow } from '#src/core/compile/workflow.fake';
 import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
 import { planToReport } from '#src/core/deliver/apply-plan';
 import { deploy } from '#src/core/deliver/deploy';
-import { DeployReport } from '#src/core/deliver/deploy.model';
+import { DeployErrorKind, DeployReport } from '#src/core/deliver/deploy.model';
 import { fakeLockWriter, fakeManaged } from '#src/core/lock/lock-file.fake';
 import { planDeploy } from '#src/core/deliver/plan-deploy';
 import { FakeN8n, FakeN8nOptions, fakeN8n, fakeN8nWorkflow, httpError, unreachable } from '#src/core/n8n/n8n.fake';
@@ -34,7 +34,7 @@ describe('deploy', () => {
 
     expect(report).toEqual({
       warnings: [],
-      exitCode: 0,
+      outcome: 'completed',
       lockFile: { path: 'boilerlift.lock.json', changed: true },
       results: [
         {
@@ -164,7 +164,7 @@ describe('deploy', () => {
     expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml', 'GET /api/v1/workflows/w1', 'GET /api/v1/workflows/w2']);
   });
 
-  test('Should stop before any write with exit 6 when the spec has no publishIfActive', async () => {
+  test('Should stop before any write when the spec has no publishIfActive', async () => {
     const workflow = fakeLocalWorkflow('a');
     const n8n = fakeN8n({ spec: 'paths:\n  /workflows/{id}:\n    put: {}\n', workflows: [fakeN8nWorkflow(workflow, { id: 'abc' })] });
 
@@ -180,7 +180,7 @@ describe('deploy', () => {
         hint: 'Upgrade the instance to n8n 2.35.0 or later, then run deploy again',
         kind: 'drafts-unsupported',
       },
-      exitCode: 6,
+      outcome: 'stopped',
     });
     expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml']);
   });
@@ -192,7 +192,7 @@ describe('deploy', () => {
     const report = await run([workflow], n8n, fakeManaged({ crm: 'arc' }));
 
     expect(report.results).toEqual([expect.objectContaining({ stableName: 'crm', action: 'restored', id: 'arc' })]);
-    expect(report.exitCode).toBe(0);
+    expect(report.outcome).toBe('completed');
   });
 
   test('Should leave the lock file untouched when it restores an archived workflow', async () => {
@@ -269,10 +269,10 @@ describe('deploy', () => {
       expect.objectContaining({ stableName: 'new', action: 'created' }),
     ]);
     expect(report.error).toBeUndefined();
-    expect(report.exitCode).toBe(5);
+    expect(report.outcome).toBe('partial');
   });
 
-  test('Should keep delivering the others and exit 5 when one update fails', async () => {
+  test('Should keep delivering the others and end partial when one update fails', async () => {
     const n8n = fakeN8n({
       workflows: [
         fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'ida', name: 'Old name' }),
@@ -289,7 +289,7 @@ describe('deploy', () => {
       ['c', 'created'],
     ]);
     expect(report.error).toBeUndefined();
-    expect(report.exitCode).toBe(5);
+    expect(report.outcome).toBe('partial');
   });
 
   test('Should name the failed call and its hint when an update fails', async () => {
@@ -310,7 +310,7 @@ describe('deploy', () => {
     });
   });
 
-  test('Should mark the rest not-processed and exit 4 when the key is rejected mid-run', async () => {
+  test('Should mark the rest not-processed and stop when the key is rejected mid-run', async () => {
     const n8n = fakeN8n({
       workflows: [fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'ida', name: 'Old name' })],
       failures: [httpError('POST /api/v1/workflows', 401)],
@@ -325,7 +325,7 @@ describe('deploy', () => {
       ['d', 'not-processed'],
     ]);
     expect(report.error).toMatchObject({ call: 'POST /api/v1/workflows', detail: 'HTTP 401', kind: 'key-rejected' });
-    expect(report.exitCode).toBe(4);
+    expect(report.outcome).toBe('stopped');
     expect(n8n.calls.filter((call) => call === 'POST /api/v1/workflows')).toHaveLength(1);
   });
 
@@ -337,14 +337,14 @@ describe('deploy', () => {
     expect(report.results[1]).toEqual({ stableName: 'b', path: 'workflows/b.json', action: 'not-processed', name: 'Workflow b' });
   });
 
-  test('Should stop the run with exit 7 and name the created id when the lock file cannot be written', async () => {
+  test('Should stop the run and name the created id when the lock file cannot be written', async () => {
     const n8n = fakeN8n();
     const lock = fakeLockWriter({ failWith: 'EACCES: permission denied' });
 
     const report = await run(['a', 'b', 'c'].map((name) => fakeLocalWorkflow(name)), n8n, fakeManaged(), lock);
 
     expect(report).toMatchObject({
-      exitCode: 7,
+      outcome: 'stopped',
       error: {
         kind: 'lock-write-failed',
         call: 'write boilerlift.lock.json',
@@ -369,20 +369,20 @@ describe('deploy', () => {
     expect(n8n.calls.filter((call) => call === 'POST /api/v1/workflows')).toHaveLength(1);
   });
 
-  test.each<[number, string, ApiFailure, string]>([
-    [3, 'unreachable', unreachable('GET /api/v1/workflows/ida', 'connection refused'), PING_HINT],
-    [4, 'answered 401', httpError('GET /api/v1/workflows/ida', 401), KEY_HINT],
-    [4, 'answered 403', httpError('GET /api/v1/workflows/ida', 403), KEY_HINT],
-  ])('Should stop before any write with exit %s when the first recorded workflow read is %s', async (exitCode, _condition, failure, hint) => {
+  test.each<[DeployErrorKind, string, ApiFailure, string]>([
+    ['unreachable', 'unreachable', unreachable('GET /api/v1/workflows/ida', 'connection refused'), PING_HINT],
+    ['key-rejected', 'answered 401', httpError('GET /api/v1/workflows/ida', 401), KEY_HINT],
+    ['key-rejected', 'answered 403', httpError('GET /api/v1/workflows/ida', 403), KEY_HINT],
+  ])('Should stop before any write with %s when the first recorded workflow read is %s', async (kind, _condition, failure, hint) => {
     const n8n = fakeN8n({ failures: [failure], workflows: [fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'ida' })] });
 
     const report = await run([fakeLocalWorkflow('a'), fakeLocalWorkflow('b')], n8n, fakeManaged({ a: 'ida' }));
 
-    expect(report).toMatchObject({ exitCode, error: { call: 'GET /api/v1/workflows/ida', hint } });
+    expect(report).toMatchObject({ outcome: 'stopped', error: { kind, call: 'GET /api/v1/workflows/ida', hint } });
     expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml', 'GET /api/v1/workflows/ida']);
   });
 
-  test('Should write nothing and mark the rest not-processed with exit 3 when a read fails mid-plan', async () => {
+  test('Should write nothing and mark the rest not-processed when a read fails mid-plan', async () => {
     const n8n = fakeN8n({
       workflows: [
         fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'ida', name: 'Old name' }),
@@ -398,7 +398,7 @@ describe('deploy', () => {
       ['b', 'failed'],
       ['c', 'not-processed'],
     ]);
-    expect(report).toMatchObject({ exitCode: 3, error: { call: 'GET /api/v1/workflows/idb', kind: 'unreachable' } });
+    expect(report).toMatchObject({ outcome: 'stopped', error: { call: 'GET /api/v1/workflows/idb', kind: 'unreachable' } });
     expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml', 'GET /api/v1/workflows/ida', 'GET /api/v1/workflows/idb']);
   });
 });
@@ -460,20 +460,20 @@ describe('planDeploy', () => {
     const deployed = await run(workflows, fakeN8n({ workflows: instance }), managed);
 
     expect(actions(deployed)).toEqual(actions(planned));
-    expect(deployed.exitCode).toBe(planned.exitCode);
+    expect(deployed.outcome).toBe(planned.outcome);
   });
 
-  test.each<[string, FakeN8nOptions, number]>([
-    ['the spec has no publishIfActive', { spec: 'paths: {}\n' }, 6],
-    ['the spec answers HTTP 404', { failures: [httpError('GET /api/v1/openapi.yml', 404)] }, 6],
-    ['the instance is unreachable', { failures: [unreachable('GET /api/v1/openapi.yml', 'refused')] }, 3],
-  ])('Should stop before planning any workflow when %s', async (_condition, options, exitCode) => {
+  test.each<[string, FakeN8nOptions, DeployErrorKind]>([
+    ['the spec has no publishIfActive', { spec: 'paths: {}\n' }, 'drafts-unsupported'],
+    ['the spec answers HTTP 404', { failures: [httpError('GET /api/v1/openapi.yml', 404)] }, 'drafts-unsupported'],
+    ['the instance is unreachable', { failures: [unreachable('GET /api/v1/openapi.yml', 'refused')] }, 'unreachable'],
+  ])('Should stop before planning any workflow when %s', async (_condition, options, kind) => {
     const n8n = fakeN8n({ ...options, workflows: [fakeN8nWorkflow(fakeLocalWorkflow('a'), { id: 'abc' })] });
 
     const plan = await planDeploy({ workflows: [fakeLocalWorkflow('a'), fakeLocalWorkflow('b')], target: 'dev', credentials: [], client: n8n.client, managed: fakeManaged({ a: 'abc' }) });
 
     expect(plan.steps).toEqual([]);
-    expect(plan.exitCode).toBe(exitCode);
+    expect(plan).toMatchObject({ outcome: 'stopped', error: { kind } });
     expect(n8n.calls).toEqual(['GET /api/v1/openapi.yml']);
   });
 });

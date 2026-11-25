@@ -1,10 +1,9 @@
 import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun } from '#src/cli/targets.render';
+import { StopWording, TargetRun } from '#src/cli/targets.render';
 import { CleanGroups, CleanPlan, ReadyClean, TargetCleanPlan } from '#src/core/clean/clean.model';
-import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, outcomeExitCode, readErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
-import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT } from '#src/core/n8n/n8n-api';
 import { RemovalMode, RemovalReport, RemovalResult, RemovalWriteCause, WorkflowToRemove } from '#src/core/removal/removal.model';
 
@@ -117,34 +116,23 @@ export function renderHeldBackPlan(plan: TargetCleanPlan, format: CleanFormat): 
   }
 }
 
-/** A lock file that cannot be read: exit 1, nothing was archived, the problem and the fix on stderr. */
-export function renderInvalidLockFile(target: CleanTarget, error: LockFileError): TargetRun {
-  const message = `Invalid ${LOCK_FILE}. Nothing was archived.`;
-  return {
-    target: target.name,
-    url: target.instance,
-    text: {
-      exitCode: EXIT_USAGE,
-      stdout: '',
-      stderr: sections(
-        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run lift clean again.')] }]),
-        [message],
-      ),
-    },
-    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
-    outcome: `invalid ${LOCK_FILE}, nothing archived`,
-  };
-}
+/** How clean words a lock file that cannot be read: nothing was archived. */
+export const INVALID_LOCK_FILE: StopWording & { rerun: string } = {
+  message: `Invalid ${LOCK_FILE}. Nothing was archived.`,
+  outcome: `invalid ${LOCK_FILE}, nothing archived`,
+  rerun: 'lift clean',
+};
 
 /** A read that failed: exit 3 or 4, nothing was archived, `lift ping` next. */
 function renderStopped(target: CleanTarget, plan: Extract<CleanPlan, { kind: 'stopped' }>, format: CleanFormat): TargetRun {
   const { error } = plan;
+  const exitCode = readErrorExitCode(error.kind);
   const ping = withTarget('lift ping', target, format);
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: plan.exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), [`Nothing was ${DONE[format.mode]}.`]) },
-    payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode: plan.exitCode },
+    text: { exitCode, stdout: '', stderr: sections(stopped(error.call, error.detail, [next(ping)]), [`Nothing was ${DONE[format.mode]}.`]) },
+    payload: { instance: target.instance, error: { kind: error.kind, call: error.call, detail: error.detail, next: ping }, exitCode },
     outcome: `stopped: ${error.call} : ${error.detail}`,
   };
 }
@@ -393,7 +381,7 @@ export function renderReport({ target, groups }: PlannedTarget, report: RemovalR
   return {
     target: target.name,
     url: target.instance,
-    text: { exitCode: report.exitCode, stdout, stderr },
+    text: { exitCode: outcomeExitCode(report.outcome), stdout, stderr },
     payload: {
       instance: target.instance,
       stage: 'cleaned',
@@ -408,7 +396,7 @@ export function renderReport({ target, groups }: PlannedTarget, report: RemovalR
       ...otherGroupsPayload(groups, target, format),
       summary,
       lockFileUpdated: dropped,
-      exitCode: report.exitCode,
+      exitCode: outcomeExitCode(report.outcome),
     },
     outcome: summaryLine(summary),
   };

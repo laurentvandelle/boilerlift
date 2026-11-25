@@ -1,7 +1,7 @@
 import { CliResult, CommandDefinition } from '#src/cli/cli.model';
 import { renderCommandHelp, renderGlobalHelp, renderHelp, unknownCommand } from '#src/cli/commands/help/help.render';
 import { defineCommand } from '#src/cli/define-command';
-import { EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
 
 export const helpCommand: CommandDefinition = defineCommand({
   name: 'help',

@@ -128,9 +128,9 @@ describe('target tag', () => {
       tagCalls: untagged.calls.filter((call) => call.includes('/tags')),
       tag: report.tag,
       results: report.results,
-      exitCode: report.exitCode,
+      outcome: report.outcome,
       lockFile: report.lockFile,
-    }).toEqual({ tagCalls: [], tag: undefined, results: withTag.results, exitCode: withTag.exitCode, lockFile: withTag.lockFile });
+    }).toEqual({ tagCalls: [], tag: undefined, results: withTag.results, outcome: withTag.outcome, lockFile: withTag.lockFile });
   });
 
   test('Should not tag a workflow when it failed', async () => {
@@ -141,14 +141,14 @@ describe('target tag', () => {
     expect(n8n.calls.filter((call) => call.includes('/tags'))).toEqual([]);
   });
 
-  test('Should warn, keep the action and the exit code when the instance refuses to add the tag to a workflow', async () => {
+  test('Should warn, keep the action and the outcome when the instance refuses to add the tag to a workflow', async () => {
     const n8n = mixedInstance({ failures: [httpError('PUT /api/v1/workflows/rep1/tags', 403, 'Forbidden')] });
 
     const report = await run(n8n, { workflows: [CRM, REPORT] });
 
-    expect({ warnings: report.warnings, exitCode: report.exitCode, report: report.results[1]?.action, tag: report.tag }).toEqual({
+    expect({ warnings: report.warnings, outcome: report.outcome, report: report.results[1]?.action, tag: report.tag }).toEqual({
       warnings: [{ kind: 'tag-failed', stableName: 'daily-report', tag: 'boilerlift:sales-prod', call: 'PUT /api/v1/workflows/rep1/tags', detail: 'HTTP 403: Forbidden' }],
-      exitCode: 0,
+      outcome: 'completed',
       report: 'skipped',
       tag: { name: 'boilerlift:sales-prod', added: 1 },
     });
@@ -160,9 +160,9 @@ describe('target tag', () => {
 
     const report = await run(n8n, { workflows: [NEW, REPORT], managed: fakeManaged(), lock });
 
-    expect({ warnings: report.warnings.map(({ stableName }) => stableName), exitCode: report.exitCode, recorded: lock.recorded() }).toEqual({
+    expect({ warnings: report.warnings.map(({ stableName }) => stableName), outcome: report.outcome, recorded: lock.recorded() }).toEqual({
       warnings: ['daily-report', 'invoice-sync'],
-      exitCode: 0,
+      outcome: 'completed',
       recorded: { 'daily-report': 'w1', 'invoice-sync': 'w2' },
     });
   });
@@ -172,9 +172,9 @@ describe('target tag', () => {
 
     const report = await run(n8n, { workflows: [NEW], managed: fakeManaged() });
 
-    expect({ warnings: report.warnings, exitCode: report.exitCode }).toEqual({
+    expect({ warnings: report.warnings, outcome: report.outcome }).toEqual({
       warnings: [{ kind: 'tag-failed', stableName: 'invoice-sync', tag: 'boilerlift:sales-prod', call: 'GET /api/v1/tags', detail: 'unreachable: connection reset' }],
-      exitCode: 0,
+      outcome: 'completed',
     });
   });
 

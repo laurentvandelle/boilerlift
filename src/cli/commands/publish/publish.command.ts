@@ -9,7 +9,7 @@ import {
 } from '#src/cli/commands/publish/publish.render';
 import { defineCommand } from '#src/cli/define-command';
 import { renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/core/common/exit-codes';
+import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_PARTIAL_FAILURE, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/cli/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders } from '#src/core/config/project-config';
 import { LOCK_FILE } from '#src/core/lock/lock-file';

@@ -1,9 +1,12 @@
 import { CliResult } from '#src/cli/cli.model';
-import { SYMBOLS } from '#src/cli/output.render';
-import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
+import { SYMBOLS, next, rows, sections } from '#src/cli/output.render';
+import { EXIT_OK, EXIT_USAGE, ExitCode } from '#src/cli/exit-codes';
+import { LoadProblem } from '#src/core/compile/workflow.model';
 import { describeConfigError } from '#src/core/config/config-error';
 import { ConfigError } from '#src/core/config/config.model';
 import { CONFIG_FILE, availableTargets } from '#src/core/config/project-config';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_PATH } from '#src/core/n8n/n8n-api';
 
 /** The help section of every command that runs on targets: where they are declared, and how one is picked. */
@@ -31,6 +34,58 @@ export interface TargetRun {
 export interface TargetsFormat {
   json: boolean;
   all: boolean;
+}
+
+/** The target a run is about: its name and the url of its instance. */
+export interface TargetPlace {
+  name: string;
+  instance: string;
+}
+
+/**
+ * How a command words a stop before any call to n8n: `message` closes stderr and the --json error, `outcome` is the
+ * recap line of --all.
+ */
+export interface StopWording {
+  message: string;
+  outcome: string;
+}
+
+/** Workflow files that do not load: exit 1, one line per problem on stderr, then the message. */
+export function renderInvalidFiles(target: TargetPlace, problems: LoadProblem[], wording: StopWording): TargetRun {
+  const { message, outcome } = wording;
+  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
+  return {
+    target: target.name,
+    url: target.instance,
+    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
+    payload: {
+      instance: target.instance,
+      error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
+      exitCode: EXIT_USAGE,
+    },
+    outcome,
+  };
+}
+
+/**
+ * A lock file that cannot be read: exit 1, the problem and the fix on stderr, then the message. `rerun` is the command
+ * the fix names, as in `then run lift clean again`.
+ */
+export function renderInvalidLockFile(target: TargetPlace, error: LockFileError, wording: StopWording & { rerun: string }): TargetRun {
+  const { message, outcome, rerun } = wording;
+  const fix = next(`Fix the file, or restore it from version control, then run ${rerun} again.`);
+  return {
+    target: target.name,
+    url: target.instance,
+    text: {
+      exitCode: EXIT_USAGE,
+      stdout: '',
+      stderr: sections(rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [fix] }]), [message]),
+    },
+    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
+    outcome,
+  };
 }
 
 /** Targets that cannot be used: exit 1, nothing ran. With --json, the error and the declared targets on stdout too. */

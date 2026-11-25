@@ -1,4 +1,3 @@
-import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/core/common/exit-codes';
 import { MIN_N8N_VERSION, classifyHttpError } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nClient } from '#src/core/n8n/n8n.model';
 import { PlanPublishInput, PlannedPublish, PublishFailure, PublishPlan, PublishReport, PublishResult } from '#src/core/publish/publish.model';
@@ -35,7 +34,7 @@ export async function applyPublish(workflows: PlannedPublish[], client: N8nClien
     }
   }
   const failed = results.some((result) => result.action === 'refused' || result.action === 'failed');
-  return { results, exitCode: failed ? EXIT_PARTIAL_FAILURE : EXIT_OK };
+  return { results, outcome: failed ? 'partial' : 'completed' };
 }
 
 function describeFailure(failure: ApiFailure): PublishFailure {

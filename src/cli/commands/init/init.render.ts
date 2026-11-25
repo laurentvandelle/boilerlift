@@ -1,7 +1,7 @@
 import { CliResult } from '#src/cli/cli.model';
 import { InitFile } from '#src/cli/commands/init/init.model';
 import { Row, SYMBOLS, next, rows, sections } from '#src/cli/output.render';
-import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE, ExitCode } from '#src/core/common/exit-codes';
+import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE, ExitCode } from '#src/cli/exit-codes';
 
 /** Printed before the next steps: the project is not usable until they are run. */
 export const NEXT_STEPS_HEADING = 'The project is not ready yet. Run these commands, in order, to finish the setup:';

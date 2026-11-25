@@ -8,12 +8,12 @@ import {
   renderConfirmation,
   renderDeclined,
   renderHeldBackPlan,
-  renderInvalidLockFile,
+  INVALID_LOCK_FILE,
   renderListing,
   renderReport,
 } from '#src/cli/commands/clean/clean.render';
 import { defineCommand } from '#src/cli/define-command';
-import { renderConfigError, renderTargets } from '#src/cli/targets.render';
+import { renderConfigError, renderInvalidLockFile, renderTargets } from '#src/cli/targets.render';
 import { applyCleanTargets, isCleanConfirmed, planCleanTargets } from '#src/core/clean/clean-targets';
 import {
   EXIT_API_KEY_REJECTED,
@@ -22,7 +22,7 @@ import {
   EXIT_PARTIAL_FAILURE,
   EXIT_UNREACHABLE,
   EXIT_USAGE,
-} from '#src/core/common/exit-codes';
+} from '#src/cli/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
@@ -136,7 +136,7 @@ async function run({ targets, loadWorkflowFiles, readLockFile, writeLockFile, as
   const plan = await planCleanTargets({ config: targets.config, targets: targets.selected, mode }, { loadWorkflowFiles, lock });
   switch (plan.kind) {
   case 'invalid-lock-file':
-    return { kind: 'invalid-lock-file', runs: targets.selected.map((target) => renderInvalidLockFile(placeOf(target), plan.error)) };
+    return { kind: 'invalid-lock-file', runs: targets.selected.map((target) => renderInvalidLockFile(placeOf(target), plan.error, INVALID_LOCK_FILE)) };
   case 'held-back':
     return { kind: 'runs', runs: plan.plans.map((target) => renderHeldBackPlan(target, format)) };
   case 'nothing-to-remove':
