@@ -1,10 +1,8 @@
 import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun } from '#src/cli/targets.render';
-import { LoadProblem } from '#src/core/compile/workflow.model';
+import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
 import { EXIT_USAGE, statusExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
-import { LockFileError } from '#src/core/lock/lock-file.model';
 import { workflowLink } from '#src/core/n8n/n8n-api';
 import { StatusReport, TargetStatus, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
 
@@ -69,9 +67,13 @@ export function renderTargetStatus(status: TargetStatus, format: StatusFormat): 
   const target = placeOf(status.target);
   switch (status.kind) {
   case 'invalid-files':
-    return renderInvalidFiles(target, status.problems);
+    return renderInvalidFiles(target, status.problems, { message: 'Invalid workflow files. Status cannot compare them.', outcome: 'invalid workflow files' });
   case 'invalid-lock-file':
-    return renderInvalidLockFile(target, status.error);
+    return renderInvalidLockFile(target, status.error, {
+      message: `Invalid ${LOCK_FILE}. Status cannot tell which workflows are yours.`,
+      outcome: `invalid ${LOCK_FILE}`,
+      rerun: 'status',
+    });
   case 'report':
     return renderStatus(target, status.report, format, status.empty);
   }
@@ -79,42 +81,6 @@ export function renderTargetStatus(status: TargetStatus, format: StatusFormat): 
 
 function placeOf(target: ConnectedTarget): StatusTarget {
   return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
-}
-
-/** Workflow files that do not load: exit 1, one line per problem on stderr. */
-function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]): TargetRun {
-  const message = 'Invalid workflow files. Status cannot compare them.';
-  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
-  return {
-    target: target.name,
-    url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
-    payload: {
-      instance: target.instance,
-      error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
-      exitCode: EXIT_USAGE,
-    },
-    outcome: 'invalid workflow files',
-  };
-}
-
-/** A lock file that cannot be read: exit 1, the problem and the fix on stderr. */
-function renderInvalidLockFile(target: StatusTarget, error: LockFileError): TargetRun {
-  const message = `Invalid ${LOCK_FILE}. Status cannot tell which workflows are yours.`;
-  return {
-    target: target.name,
-    url: target.instance,
-    text: {
-      exitCode: EXIT_USAGE,
-      stdout: '',
-      stderr: sections(
-        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run status again.')] }]),
-        [message],
-      ),
-    },
-    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
-    outcome: `invalid ${LOCK_FILE}`,
-  };
 }
 
 /** A `--managed` value that is neither true nor false: exit 1. With --json, the error on stdout too. */

@@ -1,13 +1,11 @@
 import { CliResult } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped, warning } from '#src/cli/output.render';
-import { TargetRun } from '#src/cli/targets.render';
+import { TargetRun, renderInvalidFiles, renderInvalidLockFile } from '#src/cli/targets.render';
 import { credentialsFilePath } from '#src/core/compile/credential-lists';
-import { LoadProblem } from '#src/core/compile/workflow.model';
 import { CONFIG_FILE } from '#src/core/config/project-config';
 import { TargetDelivery } from '#src/core/deliver/deliver.model';
 import { DeployAction, DeployError, DeployReport, DeployResult, DeployWarning, UnresolvedCredential } from '#src/core/deliver/deploy.model';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
-import { LockFileError } from '#src/core/lock/lock-file.model';
 import { SharedEntry } from '#src/core/deliver/shared-entries';
 import { workflowLink } from '#src/core/n8n/n8n-api';
 import { EXIT_OK, EXIT_USAGE, runEndExitCode } from '#src/cli/exit-codes';
@@ -152,50 +150,14 @@ export function renderDelivery(delivery: TargetDelivery, format: DeployFormat): 
   const where: DeployTarget = { name: target.name, instance: target.connection.url.value };
   switch (delivery.kind) {
   case 'invalid-files':
-    return renderInvalidFiles(where, delivery.problems);
+    return renderInvalidFiles(where, delivery.problems, { message: 'Invalid workflow files. Nothing was sent to n8n.', outcome: 'invalid workflow files, nothing sent' });
   case 'nothing-to-deploy':
     return renderNothingToDeploy(where, target.workflows, format);
   case 'invalid-lock-file':
-    return renderInvalidLockFile(where, delivery.error);
+    return renderInvalidLockFile(where, delivery.error, { message: `Invalid ${LOCK_FILE}. Nothing was sent to n8n.`, outcome: `invalid ${LOCK_FILE}, nothing sent`, rerun: 'deploy' });
   case 'report':
     return renderReport(where, delivery.report, format);
   }
-}
-
-/** Workflow files that do not load: exit 1, one line per problem on stderr. */
-function renderInvalidFiles(target: DeployTarget, problems: LoadProblem[]): TargetRun {
-  const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
-  const message = 'Invalid workflow files. Nothing was sent to n8n.';
-  return {
-    target: target.name,
-    url: target.instance,
-    text: { exitCode: EXIT_USAGE, stdout: '', stderr: sections(lines, [message]) },
-    payload: {
-      instance: target.instance,
-      error: { kind: 'invalid-files', message, problems: problems.map(({ path, detail }) => ({ path, detail })) },
-      exitCode: EXIT_USAGE,
-    },
-    outcome: 'invalid workflow files, nothing sent',
-  };
-}
-
-/** A lock file that cannot be read: exit 1, nothing was sent, the problem and the fix on stderr. */
-function renderInvalidLockFile(target: DeployTarget, error: LockFileError): TargetRun {
-  const message = `Invalid ${LOCK_FILE}. Nothing was sent to n8n.`;
-  return {
-    target: target.name,
-    url: target.instance,
-    text: {
-      exitCode: EXIT_USAGE,
-      stdout: '',
-      stderr: sections(
-        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run deploy again.')] }]),
-        [message],
-      ),
-    },
-    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
-    outcome: `invalid ${LOCK_FILE}, nothing sent`,
-  };
 }
 
 /** No workflow file under `dir`: exit 0, nothing was sent. */

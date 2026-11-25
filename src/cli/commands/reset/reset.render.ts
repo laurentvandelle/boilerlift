@@ -1,9 +1,8 @@
 import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
-import { TargetRun } from '#src/cli/targets.render';
+import { StopWording, TargetRun } from '#src/cli/targets.render';
 import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE, outcomeExitCode, readErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
-import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT } from '#src/core/n8n/n8n-api';
 import { RemovalMode, RemovalReport, RemovalResult, RemovalWriteCause, WorkflowToRemove } from '#src/core/removal/removal.model';
 import { KeptEntries, ResetPlan } from '#src/core/reset/reset.model';
@@ -89,24 +88,12 @@ export function renderTargetNotNamed(format: { json: boolean }): CliResult {
   return { exitCode: EXIT_USAGE, stdout: `${JSON.stringify(payload, null, 2)}\n`, stderr: message };
 }
 
-/** A lock file that cannot be read: exit 1, nothing was removed, the problem and the fix on stderr. */
-export function renderInvalidLockFile(target: ResetTarget, error: LockFileError): TargetRun {
-  const message = `Invalid ${LOCK_FILE}. Nothing was removed.`;
-  return {
-    target: target.name,
-    url: target.instance,
-    text: {
-      exitCode: EXIT_USAGE,
-      stdout: '',
-      stderr: sections(
-        rows([{ symbol: SYMBOLS.failed, name: LOCK_FILE, state: error.detail, followUps: [next('Fix the file, or restore it from version control, then run lift reset again.')] }]),
-        [message],
-      ),
-    },
-    payload: { instance: target.instance, error: { kind: 'invalid-lock-file', message, detail: error.detail }, exitCode: EXIT_USAGE },
-    outcome: `invalid ${LOCK_FILE}, nothing removed`,
-  };
-}
+/** How reset words a lock file that cannot be read: nothing was removed. */
+export const INVALID_LOCK_FILE: StopWording & { rerun: string } = {
+  message: `Invalid ${LOCK_FILE}. Nothing was removed.`,
+  outcome: `invalid ${LOCK_FILE}, nothing removed`,
+  rerun: 'lift reset',
+};
 
 /** A read that failed: exit 3 or 4, nothing was removed, `lift ping` next. */
 export function renderStopped(target: ResetTarget, plan: Extract<ResetPlan, { kind: 'stopped' }>, mode: RemovalMode): TargetRun {

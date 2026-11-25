@@ -6,14 +6,14 @@ import {
   placeOf,
   renderConfirmation,
   renderDeclined,
-  renderInvalidLockFile,
+  INVALID_LOCK_FILE,
   renderListing,
   renderReport,
   renderStopped,
   renderTargetNotNamed,
 } from '#src/cli/commands/reset/reset.render';
 import { defineCommand } from '#src/cli/define-command';
-import { renderConfigError, renderTargets } from '#src/cli/targets.render';
+import { renderConfigError, renderInvalidLockFile, renderTargets } from '#src/cli/targets.render';
 import {
   EXIT_API_KEY_REJECTED,
   EXIT_CONFIRMATION_NEEDED,
@@ -131,7 +131,7 @@ async function run(
   const plan = await planResetTarget({ config: targets.config, target, mode }, { loadWorkflowFiles, lock });
   switch (plan.kind) {
   case 'invalid-lock-file':
-    return { kind: 'run', run: renderInvalidLockFile(place, plan.error) };
+    return { kind: 'run', run: renderInvalidLockFile(place, plan.error, INVALID_LOCK_FILE) };
   case 'stopped':
     return { kind: 'run', run: renderStopped(place, plan.plan, mode) };
   case 'nothing-to-remove':
