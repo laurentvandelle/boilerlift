@@ -67,6 +67,15 @@ export type TargetSelection = { kind: 'default' } | { kind: 'one'; name: string 
 /** What the CLI found at `./boilerlift.config.ts`: no file, its default export, or why it could not be imported. */
 export type ProjectConfigFile = { kind: 'missing' } | { kind: 'loaded'; content: unknown } | { kind: 'unreadable'; reason: string };
 
+/** A file of the project template that `lift init` writes: its path in the template, with `/`, and its text. */
+export interface TemplateFile {
+  path: string;
+  text: string;
+}
+
+/** What creating one project file did: created, left as it was because something is already there, or failed. */
+export type FileCreation = { status: 'created' } | { status: 'exists' } | { status: 'failed'; reason: string };
+
 /**
  * Why the targets cannot be used. Each one exits 1 before anything is sent.
  * - `no-config-file`: there is no `boilerlift.config.ts` in the current folder.

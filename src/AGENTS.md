@@ -3,7 +3,7 @@
 ## Prohibitions
 
 - Do not import from `debug/` or `dist/`.
-- Layer direction: `cli` → `services` → `core`. `core` never imports `cli` or `services`, tests included. Only `cli/commands/` import `services/`. `npm run lint:check` (`eslint-plugin-boundaries`) enforces it.
+- Layer direction: `cli` → `services` → `core`. `core` never imports `cli` or `services`, tests included. Only `cli/targets-need.ts` and `cli/node-context.ts` import `services/`. `npm run lint:check` (`eslint-plugin-boundaries`) enforces it.
 - `bin.ts` imports only from `cli/`. `index.ts` imports only from `core/compile/` and `core/config/`; the CLI is not a public API. Lint enforces both.
 - `core/`, `services/` and `cli/commands/` take configuration, I/O, time and randomness through their parameters (`CommandContext`, the `N8nClient` port, an injected `fetch`), so a test controls them: no `process`, `console` or global `fetch`, no `node:fs`, `node:http` or other file, network or process module, no `Date.now()`, `new Date()`, `Math.random()` or `randomUUID()`. Lint enforces it. Tests and fakes are exempt.
 - Strict types: no `any`, no type assertion but `as const`, no non-null `!`, and a `switch` over a union handles every member. Check an unknown object with `isRecord` (`core/common/is-record.ts`), never with an inline `typeof x === 'object'`. Lint enforces all of these.
