@@ -5,11 +5,11 @@ Subcommands:
   context                          check gh auth, print the project's Card type and Status options
   read   --issue N                 print an issue and its Type/Status in the project
   create --type T --title X --body-file F [--parent N] [--dry-run]
-                                   create the issue, add it to the project, Card type=T, Status=Backlog;
+                                   create the issue, add it to the project, Card type=T, Status=Ready;
                                    with --parent, attach it as a sub-issue of issue N
   update --issue N --type T --title X --body-file F [--dry-run]
                                    rewrite an existing card in place, add it to the project if missing,
-                                   Card type=T, Status=Backlog only when Status is empty or Inbox
+                                   Card type=T, Status=Ready only when Status is empty or Backlog
   link   --parent N --issue M [--dry-run]
                                    attach issue M as a sub-issue of issue N (finishes a create that failed there)
   triage --issue N --cards 35,36 [--dry-run]
@@ -43,19 +43,19 @@ OWNER = "laurentvandelle"
 PROJECT = 3
 REPO = "laurentvandelle/boilerlift"
 TYPES = ["story", "tech story", "bug", "investigation"]
+READY = "Ready"  # a created card has passed the Definition of Ready
 BACKLOG = "Backlog"
 # GitHub reserves the field name "Type" (issue types), so the project field is "Card type"
 TYPE_FIELD = "Card type"
-INBOX = "Inbox"  # board status of every untriaged issue, set by the project's own automations
 CLOSE_REASONS = ["not planned", "duplicate"]
-# the board's "Item added to project" rule sets Inbox asynchronously, so a fresh card is checked again
+# the board's "Item added to project" rule sets Backlog asynchronously, so a fresh card is checked again
 SETTLE_TRIES, SETTLE_DELAY = 3, 3.0
 
 EXIT_CODES = """\
 exit 0  success (or a dry-run)
 exit 2  usage error, or gh missing
 exit 3  gh not authenticated, or token lacks the project scope
-exit 4  not found: issue, project, Card type field, a Card type option or the Backlog status option
+exit 4  not found: issue, project, Card type field, a Card type option or the Ready status option
 exit 5  an open issue already has this title (create only)
 exit 6  a gh call failed (a create that fails after the issue exists names its URL and the command to finish it)"""
 
@@ -100,9 +100,9 @@ def check(p: dict, card_type: str | None = None) -> None:
     if p["type"] is None:
         raise Fail(4, f'project has no "{TYPE_FIELD}" field -- ask the user, then run setup-type-field')
     missing = [t for t in TYPES if t not in p["type"]["options"]]
-    if p["status"] is None or BACKLOG.lower() not in p["status"]["options"]:
+    if p["status"] is None or READY.lower() not in p["status"]["options"]:
         avail = sorted(p["status"]["options"]) if p["status"] else []
-        raise Fail(4, f'Status option "{BACKLOG}" missing; available: {avail} -- the user adds it in the project settings')
+        raise Fail(4, f'Status option "{READY}" missing; available: {avail} -- the user adds it in the project settings')
     if missing:
         raise Fail(4, f'Type options missing: {missing} -- the user adds them in the project settings')
 
@@ -215,15 +215,15 @@ def cmd_create(a) -> dict:
     if same:
         raise Fail(5, f"open issue already titled this way: {same[0]['url']}")
     if a.dry_run:
-        return {"dry_run": True, "would_create": {"title": a.title, "type": a.type, "status": BACKLOG,
+        return {"dry_run": True, "would_create": {"title": a.title, "type": a.type, "status": READY,
                                                   "parent": parent, "body_chars": len(body)}}
     url = gh("issue", "create", "--repo", REPO, "--title", a.title, "--body-file", a.body_file, parse=False).strip().splitlines()[-1]
     num = int(url.rsplit("/", 1)[-1])
     try:
         item = add_to_project(url)
         set_field(p, item, p["type"], a.type)
-        set_field(p, item, p["status"], BACKLOG)
-        settle_status(p, num, BACKLOG)
+        set_field(p, item, p["status"], READY)
+        settle_status(p, num, READY)
     except Fail as e:
         # the issue exists: finish it with update, not a second create (which would hit exit 5)
         then = f" then: link --parent {parent} --issue {num}" if parent else ""
@@ -233,7 +233,7 @@ def cmd_create(a) -> dict:
             attach(parent, num)
         except Fail as e:
             raise Fail(e.code, f"issue created at {url} but not attached to #{parent} ({e}) -- rerun with: link --parent {parent} --issue {num}")
-    return {"created": url, "type": a.type, "status": BACKLOG, "parent": parent}
+    return {"created": url, "type": a.type, "status": READY, "parent": parent}
 
 
 def cmd_update(a) -> dict:
@@ -243,17 +243,17 @@ def cmd_update(a) -> dict:
     num = issue_number(a.issue)
     issue = read_issue(num)
     status = (issue["project_item"] or {}).get("status")
-    if status and status.lower() == INBOX.lower():
-        status = None  # a card still in the board's Inbox column moves to Backlog
+    if status and status.lower() == BACKLOG.lower():
+        status = None  # a card in Backlog has now passed the Definition of Ready: it moves to Ready
     if a.dry_run:
         return {"dry_run": True, "would_update": issue["url"], "title": a.title, "type": a.type,
-                "status": status or BACKLOG}
+                "status": status or READY}
     gh("issue", "edit", str(num), "--repo", REPO, "--title", a.title, "--body-file", a.body_file, parse=False)
     item = add_to_project(issue["url"])
     set_field(p, item, p["type"], a.type)
     if not status:
-        set_field(p, item, p["status"], BACKLOG)
-        status = BACKLOG
+        set_field(p, item, p["status"], READY)
+        status = READY
     return {"updated": issue["url"], "type": a.type, "status": status}
 
 

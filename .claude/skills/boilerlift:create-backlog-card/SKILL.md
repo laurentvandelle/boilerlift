@@ -1,16 +1,16 @@
 ---
 name: "boilerlift:create-backlog-card"
-description: "Turns a free-text request or an existing GitHub issue into ready-to-code boilerlift backlog cards (story, tech story, bug or investigation) in GitHub project 3 (laurentvandelle/projects/3). Deduces the card type, runs a product interview grounded in the code, proposes a split into cards and waits for approval, writes each card from its strict template, checks it against a Definition of Ready, then creates the issues in laurentvandelle/boilerlift with Card type set and Status Backlog: as sub-issues of an untriaged input issue, which stays untouched, or as a rewrite of an issue that is already a card. Use when the user invokes /boilerlift:create-backlog-card, or asks to create, write, add or refine a backlog card, ticket, issue, user story, bug report or spike for boilerlift, even if they only describe an idea, paste notes or give an issue number. To take a ready card to a pull request, use /boilerlift:ship; to stress-test a plan with no card to create, use /boilerlift:interviewing."
+description: "Turns a free-text request or an existing GitHub issue into ready-to-code boilerlift backlog cards (story, tech story, bug or investigation) in GitHub project 3 (laurentvandelle/projects/3). Deduces the card type, runs a product interview grounded in the code, proposes a split into cards and waits for approval, writes each card from its strict template, checks it against a Definition of Ready, then creates the issues in laurentvandelle/boilerlift with Card type set and Status Ready: as sub-issues of an untriaged input issue, which stays untouched, or as a rewrite of an issue that is already a card. Use when the user invokes /boilerlift:create-backlog-card, or asks to create, write, add or refine a backlog card, ticket, issue, user story, bug report or spike for boilerlift, even if they only describe an idea, paste notes or give an issue number. To take a ready card to a pull request, use /boilerlift:ship; to stress-test a plan with no card to create, use /boilerlift:interviewing."
 allowed-tools: "Bash(${CLAUDE_SKILL_DIR}/scripts/backlog.py *)"
 ---
 
 # Create a backlog card
 
-Turn a request into one or more boilerlift backlog cards that a developer or a coding agent can start without asking anything. A card says what and why, never how: the solution belongs to the plan made later with `/boilerlift:ship`. The run ends with issues in `laurentvandelle/boilerlift`, each in project 3 with `Card type` set and `Status` = `Backlog`.
+Turn a request into one or more boilerlift backlog cards that a developer or a coding agent can start without asking anything. A card says what and why, never how: the solution belongs to the plan made later with `/boilerlift:ship`. The run ends with issues in `laurentvandelle/boilerlift`, each in project 3 with `Card type` set and `Status` = `Ready`, because every card has passed the Definition of Ready.
 
 ## Terms
 
-- **Untriaged issue**: any issue in the board's `Inbox` column with no `Card type`: an idea from `/boilerlift:inbox` or an issue someone opened through a form. Project 3's automations put every new issue there; `Inbox` is the only "not triaged yet" marker.
+- **Untriaged issue**: any issue with no `Card type`: an idea from `/boilerlift:inbox` or an issue someone opened through a form. Project 3's automations put every new issue in the `Backlog` column; a missing `Card type` is the only "not triaged yet" marker, since `Backlog` also holds cards that are not ready yet.
 - **Card**: an issue with `Card type` set, written from a template in [card-templates.md](card-templates.md).
 - **Parent**: an untriaged issue once it is triaged. Its title and body stay as its author wrote them; its cards are its sub-issues, it gets a comment listing them, and its board item is archived. A GitHub Action closes it when its last card closes.
 
@@ -30,7 +30,7 @@ Read [card-templates.md](card-templates.md) before step 3: it holds the type rul
 
 ### 1. Read the input and the project
 
-Run `${CLAUDE_SKILL_DIR}/scripts/backlog.py context`. Exit 3 (missing `project` scope): tell the user to run `gh auth refresh -s project` and stop. Exit 4 with no `Card type` field: ask whether to create it (`Create field (Recommended)` / `Stop`), stop and wait, and on yes run `backlog.py setup-type-field`, then `context` again. Exit 4 with no `Backlog` status, or a `Card type` field missing one of the four options: tell the user to add that option in the project settings, and stop.
+Run `${CLAUDE_SKILL_DIR}/scripts/backlog.py context`. Exit 3 (missing `project` scope): tell the user to run `gh auth refresh -s project` and stop. Exit 4 with no `Card type` field: ask whether to create it (`Create field (Recommended)` / `Stop`), stop and wait, and on yes run `backlog.py setup-type-field`, then `context` again. Exit 4 with no `Ready` status, or a `Card type` field missing one of the four options: tell the user to add that option in the project settings, and stop.
 
 The input is one of:
 - **An untriaged issue** (number, `#12` or URL whose `read` shows no `project_item.type`): run `backlog.py read --issue N`. Its title and body are the request; it becomes the parent of the cards. Its `author` says who to write for: someone other than `laurentvandelle` is an external reporter, so facts only they hold stay `unknown` unless the issue states them.
@@ -113,7 +113,7 @@ On a `FAIL` caused by missing information, go back to step 4 with a targeted rou
 For each card, in split order:
 - input was an untriaged issue: `backlog.py create --parent N --type "[type]" --title "[title]" --body-file [file]`
 - input was free text: `backlog.py create --type "[type]" --title "[title]" --body-file [file]`
-- the existing card itself: `backlog.py update --issue N --type "[type]" --title "[title]" --body-file [file]` (keeps its Status, sets Backlog when it is empty or `Inbox`)
+- the existing card itself: `backlog.py update --issue N --type "[type]" --title "[title]" --body-file [file]` (keeps its Status, sets Ready when it is empty or `Backlog`)
 
 Once every card of an untriaged issue exists, run `backlog.py triage --issue N --cards [numbers, comma-separated]`: it comments the cards on the parent and archives the parent's board item, so the board shows only cards. Skip it when no card was created.
 

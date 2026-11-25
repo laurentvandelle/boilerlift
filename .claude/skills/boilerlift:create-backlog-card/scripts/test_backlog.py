@@ -50,7 +50,7 @@ class StatusAllowedTest(unittest.TestCase):
         self.assertTrue(allowed)
 
     def test_should_skip_when_the_card_is_already_further_on(self):
-        allowed = backlog.status_allowed("In review", ["Inbox", "Backlog", "Ready"])
+        allowed = backlog.status_allowed("In review", ["Backlog", "Ready"])
 
         self.assertFalse(allowed)
 

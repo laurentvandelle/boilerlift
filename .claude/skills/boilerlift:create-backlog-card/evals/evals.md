@@ -16,7 +16,7 @@ Prompt: "refine #[N] for the backlog" (an issue in project 3 with `Card type` se
 - Status kept if already set.
 
 ## 2b. External issue split in two
-Prompt: "turn #[N] into cards" (an issue opened by someone else through the bug form, in `Inbox`, no `Card type`, mixing a crash and a feature wish)
+Prompt: "turn #[N] into cards" (an issue opened by someone else through the bug form, in `Backlog`, no `Card type`, mixing a crash and a feature wish)
 - The issue's title and body are never edited: no `update` on it.
 - Each card is created with `create --parent N`, then `triage --issue N --cards a,b` runs once.
 - The report links the parent and both cards.

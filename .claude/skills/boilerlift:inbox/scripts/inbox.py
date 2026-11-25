@@ -7,7 +7,7 @@ Usage:
   EOF
 
 The body is read from stdin. The issue gets no label and no field: project 3's own automations
-put it in the board's Inbox column, and /boilerlift:create-backlog-card triages it later.
+put it in the board's Backlog column with no Card type, and /boilerlift:create-backlog-card triages it later.
 
 stdout: one JSON object {"url", "number", "title"}.  stderr: a single "error:" line on failure.
 """

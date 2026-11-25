@@ -118,7 +118,7 @@ It installs the root dependencies, builds `dist/`, installs `debug/` dependencie
 Do this right after the setup above and before step 7, on a new pull request and on a resume alike:
 
 ```bash
-${CLAUDE_SKILL_DIR}/../boilerlift:create-backlog-card/scripts/backlog.py status --issue <issue number> --status "In progress" --only-from "Inbox,Backlog,Ready"
+${CLAUDE_SKILL_DIR}/../boilerlift:create-backlog-card/scripts/backlog.py status --issue <issue number> --status "In progress" --only-from "Backlog,Ready"
 ```
 
 `--only-from` keeps a resumed card that is already `In review` where it is: the JSON then says `skipped`. On a non-zero exit, keep its `error:` line for the reply and continue, because the pull request doesn't depend on it.

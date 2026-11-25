@@ -9,7 +9,7 @@ Prompt: `/boilerlift:inbox lift deploy could print a diff of the changed nodes b
 - Exactly one call to `scripts/inbox.py`, no other Bash call and no question.
 - Title is 3 to 8 English words, no `Idea:` prefix.
 - Issue body equals the prompt text after the command, character for character (it is already English).
-- Issue has no label; the skill makes no project call (the board's automation puts it in `Inbox`).
+- Issue has no label; the skill makes no project call (the board's automation puts it in `Backlog`).
 - Final message is one line with the issue number, title and URL.
 
 ## 2. French idea with quotes and a dollar sign
