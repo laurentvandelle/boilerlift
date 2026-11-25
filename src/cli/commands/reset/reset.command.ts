@@ -3,7 +3,7 @@ import {
   ListingStage,
   PlannedReset,
   ResetOutput,
-  ResetTarget,
+  placeOf,
   renderConfirmation,
   renderDeclined,
   renderInvalidLockFile,
@@ -14,7 +14,6 @@ import {
 } from '#src/cli/commands/reset/reset.render';
 import { defineCommand } from '#src/cli/define-command';
 import { renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { stableNamesOf } from '#src/core/compile/load-workflows';
 import {
   EXIT_API_KEY_REJECTED,
   EXIT_CONFIRMATION_NEEDED,
@@ -25,12 +24,10 @@ import {
 } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
-import { LOCK_FILE, lockRemover, managedIds, parseLockFile } from '#src/core/lock/lock-file';
-import { LockFile } from '#src/core/lock/lock-file.model';
-import { applyRemoval } from '#src/core/removal/removal';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { LockStore } from '#src/core/lock/lock-file.model';
 import { RemovalMode } from '#src/core/removal/removal.model';
-import { OtherTarget } from '#src/core/reset/reset.model';
-import { planReset } from '#src/core/reset/reset';
+import { applyResetTarget, isResetConfirmed, planResetTarget } from '#src/core/reset/reset-target';
 
 const DESCRIPTION = `Removes, on the n8n instance of one target, every workflow ./${LOCK_FILE} records as
 deployed there: the workflows of the target's folder, still in the project or not, and the
@@ -83,7 +80,7 @@ export const resetCommand: CommandDefinition = defineCommand({
     json: { type: 'boolean', description: 'Print the result as JSON', format: true },
   },
   needs: ['targets', 'isDirectory', 'loadWorkflowFiles', 'readLockFile', 'writeLockFile', 'ask', 'isInteractive'],
-  prepare: async ({ format, target: selection }, { targets: { config, selected }, isDirectory, readLockFile }) => {
+  prepare: async ({ format, target: selection }, { targets: { config, selected }, isDirectory }) => {
     const [target] = selected;
     if (selection.kind !== 'one' || target === undefined) {
       return err(renderTargetNotNamed(format));
@@ -94,17 +91,13 @@ export const resetCommand: CommandDefinition = defineCommand({
     if (!folders.ok) {
       return err(renderConfigError(folders.error, format));
     }
-    const lock = parseLockFile(await readLockFile(LOCK_FILE));
-    if (!lock.ok) {
-      return err(renderTargets([renderInvalidLockFile(where(target), lock.error)], { json: format.json, all: false }));
-    }
-    return ok({ target, lock: lock.value });
+    return ok(target);
   },
   modes: {
-    'dry-run': (prepared, deps, { options, format }) => run(prepared, deps, { dryRun: true, yes: false, json: format.json, mode: modeOf(options.flag('delete')) }),
+    'dry-run': (target, deps, { options, format }) => run(target, deps, { dryRun: true, yes: false, json: format.json, mode: modeOf(options.flag('delete')) }),
   },
-  default: (prepared, deps, { options, format }) =>
-    run(prepared, deps, {
+  default: (target, deps, { options, format }) =>
+    run(target, deps, {
       dryRun: false,
       yes: options.flag('yes') || options.flag('force'),
       json: format.json,
@@ -113,13 +106,7 @@ export const resetCommand: CommandDefinition = defineCommand({
   render: (output, { format }) => (output.kind === 'declined' ? renderDeclined(output.mode) : renderTargets([output.run], { json: format.json, all: false })),
 });
 
-type ResetDeps = Deps<'targets' | 'loadWorkflowFiles' | 'writeLockFile' | 'ask' | 'isInteractive'>;
-
-/** What `prepare` hands the handlers: the one named target and the lock file. */
-interface Prepared {
-  target: ConnectedTarget;
-  lock: LockFile;
-}
+type ResetDeps = Deps<'targets' | 'loadWorkflowFiles' | 'readLockFile' | 'writeLockFile' | 'ask' | 'isInteractive'>;
 
 /** What the command line asks of a run: list only, remove without asking, print JSON, and archive or delete for good. */
 interface RunOptions {
@@ -133,36 +120,36 @@ function modeOf(deleteFlag: boolean): RemovalMode {
   return deleteFlag ? 'delete' : 'archive';
 }
 
-function where(target: ConnectedTarget): ResetTarget {
-  return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
-}
-
 /** Reads the target, then lists, asks, archives or deletes, by the options and whether a person can answer. */
-async function run({ target, lock }: Prepared, deps: ResetDeps, { dryRun, yes, json, mode }: RunOptions): Promise<ResetOutput> {
-  const place = where(target);
-  const others: OtherTarget[] = [];
-  for (const other of targetsOnInstance(deps.targets.config, place.instance)) {
-    if (other.name !== target.name) {
-      others.push({ name: other.name, stableNames: stableNamesOf((await deps.loadWorkflowFiles(other.workflows)).map(({ path }) => path)) });
-    }
+async function run(
+  target: ConnectedTarget,
+  { targets, loadWorkflowFiles, readLockFile, writeLockFile, ask, isInteractive }: ResetDeps,
+  { dryRun, yes, json, mode }: RunOptions,
+): Promise<ResetOutput> {
+  const place = placeOf(target);
+  const lock: LockStore = { read: () => readLockFile(LOCK_FILE), write: (text) => writeLockFile(LOCK_FILE, text) };
+  const plan = await planResetTarget({ config: targets.config, target, mode }, { loadWorkflowFiles, lock });
+  switch (plan.kind) {
+  case 'invalid-lock-file':
+    return { kind: 'run', run: renderInvalidLockFile(place, plan.error) };
+  case 'stopped':
+    return { kind: 'run', run: renderStopped(place, plan.plan, mode) };
+  case 'nothing-to-remove':
+  case 'needs-confirmation':
+    break;
   }
-  const plan = await planReset({ client: target.client, managed: managedIds(lock, place.instance), others, mode });
-  if (plan.kind === 'stopped') {
-    return { kind: 'run', run: renderStopped(place, plan, mode) };
-  }
-  const planned: PlannedReset = { target: place, plan };
+  const planned: PlannedReset = { target: place, plan: plan.plan };
   const listing = (stage: ListingStage): ResetOutput => ({ kind: 'run', run: renderListing(planned, stage, mode) });
-  if (dryRun || plan.workflows.length === 0) {
+  if (dryRun || plan.kind === 'nothing-to-remove') {
     return listing('dry-run');
   }
   if (!yes) {
-    if (json || !deps.isInteractive) {
+    if (json || !isInteractive) {
       return listing('confirmation-needed');
     }
-    if ((await deps.ask(renderConfirmation(planned, mode)))?.trim() !== target.name) {
+    if (!isResetConfirmed(await ask(renderConfirmation(planned, mode)), target.name)) {
       return { kind: 'declined', mode };
     }
   }
-  const remover = lockRemover(lock, (text) => deps.writeLockFile(LOCK_FILE, text));
-  return { kind: 'run', run: renderReport(planned, await applyRemoval(plan.workflows, target.client, place.instance, remover), mode) };
+  return { kind: 'run', run: renderReport(planned, await applyResetTarget(plan, target, lock), mode) };
 }

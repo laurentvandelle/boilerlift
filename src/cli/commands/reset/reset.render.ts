@@ -1,4 +1,4 @@
-import { CliResult } from '#src/cli/cli.model';
+import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { EXIT_CONFIRMATION_NEEDED, EXIT_OK, EXIT_USAGE } from '#src/core/common/exit-codes';
@@ -72,6 +72,11 @@ function resetCommand(target: ResetTarget, mode: RemovalMode, extra = ''): strin
 
 function heading(target: ResetTarget): string {
   return header('lift reset', target.name, target.instance);
+}
+
+/** Where reset runs: the name, instance and folder of `target`. */
+export function placeOf(target: ConnectedTarget): ResetTarget {
+  return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
 }
 
 /** Reset ran without `--target <name>`, or with `--all`: exit 1, nothing was read or removed. */
