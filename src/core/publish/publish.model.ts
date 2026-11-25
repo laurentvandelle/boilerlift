@@ -1,5 +1,4 @@
 import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_PARTIAL_FAILURE } from '#src/cli/exit-codes';
 import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
 import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
 import { StatusError } from '#src/core/status/status.model';
@@ -74,12 +73,12 @@ export type PublishResult = PublishedWorkflow &
   );
 
 /**
- * What publish did on one target. It exits 5 when a workflow was refused or failed; the others are still published. A
- * `differs` workflow, found without names, does not change the exit code.
+ * What publish did on one target. Its outcome is `partial` when a workflow was refused or failed; the others are still
+ * published. A `differs` workflow, found without names, does not change the outcome.
  */
 export interface PublishReport {
   results: PublishResult[];
-  exitCode: typeof EXIT_OK | typeof EXIT_PARTIAL_FAILURE;
+  outcome: 'completed' | 'partial';
 }
 
 /**

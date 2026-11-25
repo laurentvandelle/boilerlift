@@ -2,7 +2,7 @@ import { CliResult, ConnectedTarget, TargetSelection } from '#src/cli/cli.model'
 import { Row, SYMBOLS, cause, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
-import { EXIT_OK, EXIT_USAGE, readErrorExitCode } from '#src/cli/exit-codes';
+import { EXIT_OK, EXIT_USAGE, outcomeExitCode, readErrorExitCode } from '#src/cli/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { API_KEY_HINT, workflowLink } from '#src/core/n8n/n8n-api';
@@ -367,7 +367,7 @@ export function renderReport({ target: connected, report }: TargetPublished, for
         next: nextCommand(result, target, format),
       })),
       summary,
-      exitCode: report.exitCode,
+      exitCode: outcomeExitCode(report.outcome),
     },
     outcome: message ?? summaryLine(summary, named),
   };
@@ -381,5 +381,5 @@ function renderText(target: PublishTarget, report: PublishReport, format: Publis
   const notPublished = report.results.filter((result) => result.action === 'refused' || result.action === 'failed').map((result) => result.stableName);
   const stderr =
     notPublished.length === 0 ? '' : sections([`Not published: ${notPublished.join(', ')}.`], [next('lift publish', 'once the step under each line is done')]);
-  return { exitCode: report.exitCode, stdout: sections(top, list, [summary]), stderr };
+  return { exitCode: outcomeExitCode(report.outcome), stdout: sections(top, list, [summary]), stderr };
 }

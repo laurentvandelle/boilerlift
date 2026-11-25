@@ -66,12 +66,12 @@ describe('applyPublish', () => {
 
     expect(report).toEqual({
       results: [expect.objectContaining({ stableName: 'crm-import', action: 'differs' }), expect.objectContaining({ stableName: 'daily-report', action: 'published' })],
-      exitCode: 0,
+      outcome: 'completed',
     });
     expect(n8n.workflows.find((workflow) => workflow.id === 'rep1')).toMatchObject({ versionId: 'v2', activeVersionId: 'v2' });
   });
 
-  test('Should still publish the others and exit 5 when n8n rejects one workflow', async () => {
+  test('Should still publish the others and end partial when n8n rejects one workflow', async () => {
     const other = fakeLocalWorkflow('other');
     const n8n = fakeN8n({
       workflows: [
@@ -101,17 +101,17 @@ describe('applyPublish', () => {
           error: { kind: 'rejected', call: 'POST /api/v1/workflows/oth1/activate', detail: 'HTTP 400: Workflow has no node to start the workflow' },
         }),
       ],
-      exitCode: 5,
+      outcome: 'partial',
     });
   });
 
-  test('Should exit 5 and publish nothing for it when a named workflow is refused', async () => {
+  test('Should end partial and publish nothing for it when a named workflow is refused', async () => {
     const n8n = instance();
     const plan = await planPublish({ workflows: WORKFLOWS, client: n8n.client, managed: managed(), names: ['crm-import'] });
 
     const report = await applyPublish(plan.kind === 'ready' ? plan.workflows : [], n8n.client);
 
-    expect(report).toEqual({ results: [expect.objectContaining({ stableName: 'crm-import', action: 'refused' })], exitCode: 5 });
+    expect(report).toEqual({ results: [expect.objectContaining({ stableName: 'crm-import', action: 'refused' })], outcome: 'partial' });
     expect(n8n.calls.filter((call) => call.endsWith('/activate'))).toEqual([]);
   });
 });
