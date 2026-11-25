@@ -1,30 +1,14 @@
 import { UNKNOWN_CREDENTIAL_TYPE, findCredentialUses } from '#src/core/compile/credential';
 import { credentialsFilePath } from '#src/core/compile/credential-lists';
 import { CredentialEntry, MissingCredential } from '#src/core/compile/credential.model';
-import {
-  EXIT_API_KEY_REJECTED,
-  EXIT_CREDENTIALS_MISSING,
-  EXIT_CREDENTIALS_WRITE_FAILED,
-  EXIT_CREDENTIAL_SCOPE_MISSING,
-  EXIT_OK,
-  EXIT_UNREACHABLE,
-  FailureExitCode,
-} from '#src/cli/exit-codes';
 import { CredentialsWriter, SyncError, SyncInput, SyncReport } from '#src/core/credentials/credentials.model';
 import { CREDENTIAL_LIST_SCOPE } from '#src/core/n8n/n8n-api';
 import { ApiFailure, N8nCredential } from '#src/core/n8n/n8n.model';
 
-const EXIT_CODES: Record<SyncError['kind'], FailureExitCode> = {
-  unreachable: EXIT_UNREACHABLE,
-  'key-rejected': EXIT_API_KEY_REJECTED,
-  'scope-missing': EXIT_CREDENTIAL_SCOPE_MISSING,
-  'write-failed': EXIT_CREDENTIALS_WRITE_FAILED,
-};
-
 /**
  * Lists the credentials of the instance of a target (reads only: nothing is written to n8n), writes them to
  * `credentials/<target>.ts`, then reports each `credential()` key that the workflows of the target use and that the
- * list does not have. Missing keys still leave the list written, and exit EXIT_CREDENTIALS_MISSING. A failed read
+ * list does not have. Missing keys still leave the list written. A failed read
  * leaves the file as it was.
  */
 export async function syncCredentials(input: SyncInput, write: CredentialsWriter): Promise<SyncReport> {
@@ -44,11 +28,11 @@ export async function syncCredentials(input: SyncInput, write: CredentialsWriter
     });
   }
   const missing = missingCredentials(input, new Set(credentials.map(({ key }) => key)));
-  return { status: 'synced', file, credentials, missing, exitCode: missing.length === 0 ? EXIT_OK : EXIT_CREDENTIALS_MISSING };
+  return { status: 'synced', file, credentials, missing };
 }
 
 function failed(error: SyncError): SyncReport {
-  return { status: 'failed', error, exitCode: EXIT_CODES[error.kind] };
+  return { status: 'failed', error };
 }
 
 function describeFailure(failure: ApiFailure): SyncError {

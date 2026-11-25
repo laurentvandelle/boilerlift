@@ -45,7 +45,6 @@ describe('syncCredentials', () => {
         { key: 'slack', name: 'Slack', type: 'slackApi', id: '2' },
       ],
       missing: [],
-      exitCode: 0,
     });
   });
 
@@ -130,7 +129,6 @@ declare module 'boilerlift' {
     expect(report).toMatchObject({
       credentials: [{ key: 'gmail-team' }],
       missing: [{ key: 'gmail-sales', type: 'gmailOAuth2', workflows: ['invoice-sync'] }],
-      exitCode: 8,
     });
   });
 
@@ -152,7 +150,7 @@ declare module 'boilerlift' {
       ],
     });
 
-    expect(report).toMatchObject({ missing: [{ key: 'stripe', type: 'httpHeaderAuth', workflows: ['alpha', 'zeta'] }], exitCode: 8 });
+    expect(report).toMatchObject({ missing: [{ key: 'stripe', type: 'httpHeaderAuth', workflows: ['alpha', 'zeta'] }] });
   });
 
   test('Should give no type when no list ever held the missing key', async () => {
@@ -161,17 +159,17 @@ declare module 'boilerlift' {
     expect(report).toMatchObject({ missing: [{ key: 'ghost', type: undefined }] });
   });
 
-  test('Should write an empty list and exit 0 when the instance has no credentials', async () => {
+  test('Should write an empty list when the instance has no credentials', async () => {
     const { report, writer } = await sync();
 
-    expect(report).toEqual({ status: 'synced', file: FILE, credentials: [], missing: [], exitCode: 0 });
+    expect(report).toEqual({ status: 'synced', file: FILE, credentials: [], missing: [] });
     expect(writer.text(FILE)).toContain('export const credentials = defineCredentials([]);');
   });
 
-  test('Should exit 8 when the instance has no credentials and workflows use some', async () => {
+  test('Should report every key missing when the instance has no credentials and workflows use some', async () => {
     const { report } = await sync({ files: [fakeWorkflowFileUsing('workflows/a.json', ['slack'])] });
 
-    expect(report).toMatchObject({ credentials: [], exitCode: 8 });
+    expect(report).toMatchObject({ credentials: [], missing: [{ key: 'slack' }] });
   });
 
   test('Should only read the instance when it syncs', async () => {
@@ -180,42 +178,40 @@ declare module 'boilerlift' {
     expect(n8n.calls).toEqual([LIST_CALL]);
   });
 
-  test('Should fail with the missing credential:list scope, exit 9 and write nothing when the instance answers 403', async () => {
+  test('Should fail with the missing credential:list scope and write nothing when the instance answers 403', async () => {
     const { report, writer } = await sync({ n8n: fakeN8n({ failures: [httpError(LIST_CALL, 403, 'Forbidden')] }) });
 
     expect(report).toMatchObject({
       status: 'failed',
       error: { kind: 'scope-missing', call: LIST_CALL, detail: 'HTTP 403: Forbidden: the API key lacks the credential:list scope' },
-      exitCode: 9,
     });
     expect(writer.writes).toEqual([]);
   });
 
-  test('Should fail with exit 4, tell to run lift ping and write nothing when the instance rejects the key', async () => {
+  test('Should fail with key-rejected, tell to run lift ping and write nothing when the instance rejects the key', async () => {
     const { report, writer } = await sync({ n8n: fakeN8n({ failures: [httpError(LIST_CALL, 401)] }) });
 
-    expect(report).toMatchObject({ status: 'failed', error: { kind: 'key-rejected' }, exitCode: 4 });
+    expect(report).toMatchObject({ status: 'failed', error: { kind: 'key-rejected' } });
     expect(report.status === 'failed' ? report.error.hint : '').toContain('Run lift ping');
     expect(writer.writes).toEqual([]);
   });
 
-  test('Should fail with exit 3, tell to run lift ping and write nothing when the instance is unreachable', async () => {
+  test('Should fail with unreachable, tell to run lift ping and write nothing when the instance is unreachable', async () => {
     const { report, writer } = await sync({ n8n: fakeN8n({ failures: [unreachable(LIST_CALL, 'connection refused')] }) });
 
     expect(report).toMatchObject({
       status: 'failed',
       error: { kind: 'unreachable', detail: 'unreachable: connection refused' },
-      exitCode: 3,
     });
     expect(report.status === 'failed' ? report.error.hint : '').toContain('Run lift ping');
     expect(writer.writes).toEqual([]);
   });
 
-  test('Should fail with exit 10 and the reason when the file cannot be written', async () => {
+  test('Should fail with write-failed and the reason when the file cannot be written', async () => {
     const writer = fakeCredentialsWriter({ failWith: 'EACCES: permission denied' });
 
     const report = await syncCredentials({ target: 'dev', client: fakeN8n().client, files: [], knownTypes: new Map() }, writer.write);
 
-    expect(report).toMatchObject({ status: 'failed', error: { kind: 'write-failed', path: FILE, detail: 'EACCES: permission denied' }, exitCode: 10 });
+    expect(report).toMatchObject({ status: 'failed', error: { kind: 'write-failed', path: FILE, detail: 'EACCES: permission denied' } });
   });
 });

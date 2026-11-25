@@ -1,5 +1,6 @@
 import { header, next, sections } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
+import { syncExitCode } from '#src/cli/exit-codes';
 import { SyncReport } from '#src/core/credentials/credentials.model';
 
 /** The target a report is about: its name and the url of its instance. */
@@ -13,6 +14,7 @@ export interface SyncTarget {
  * --json payload holds the list written and `missing`, or the error.
  */
 export function renderSync(target: SyncTarget, report: SyncReport): TargetRun {
+  const exitCode = syncExitCode(report);
   if (report.status === 'failed') {
     const { error } = report;
     const where = error.kind === 'write-failed' ? error.path : error.call;
@@ -20,11 +22,11 @@ export function renderSync(target: SyncTarget, report: SyncReport): TargetRun {
     return {
       target: target.name,
       url: target.instance,
-      text: { exitCode: report.exitCode, stdout: '', stderr: message },
+      text: { exitCode, stdout: '', stderr: message },
       payload: {
         url: target.instance,
         error: { kind: error.kind, ...(error.kind === 'write-failed' ? { path: error.path } : { call: error.call }), detail: error.detail, hint: error.hint },
-        exitCode: report.exitCode,
+        exitCode,
       },
       outcome: `Failed: ${error.detail}`,
     };
@@ -35,12 +37,12 @@ export function renderSync(target: SyncTarget, report: SyncReport): TargetRun {
     ({ key, type, workflows }) => `Missing on ${target.name}: ${key} (${type ?? 'unknown type'}), used by: ${workflows.join(', ')}`,
   );
   const lines = [synced, ...empty, `Wrote ${report.file}.`, ...missing];
-  const summary = `${report.missing.length} missing on ${target.name}. Exit code ${report.exitCode}.`;
+  const summary = `${report.missing.length} missing on ${target.name}. Exit code ${exitCode}.`;
   return {
     target: target.name,
     url: target.instance,
     text: {
-      exitCode: report.exitCode,
+      exitCode,
       stdout: sections([header('lift creds sync', target.name, target.instance)], lines),
       stderr: report.missing.length === 0 ? '' : sections([summary]),
     },
@@ -49,7 +51,7 @@ export function renderSync(target: SyncTarget, report: SyncReport): TargetRun {
       file: report.file,
       credentials: report.credentials,
       missing: report.missing.map(({ key, type, workflows }) => ({ key, type: type ?? null, workflows })),
-      exitCode: report.exitCode,
+      exitCode,
     },
     outcome: report.missing.length === 0 ? synced : `${synced} ${summary}`,
   };

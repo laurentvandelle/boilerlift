@@ -1,4 +1,5 @@
 import { CheckFailure, ConnectionReport } from '#src/core/connection/connection.model';
+import { SyncError, SyncReport } from '#src/core/credentials/credentials.model';
 import { DeployErrorKind, RunEnd } from '#src/core/deliver/deploy.model';
 import { StatusReport } from '#src/core/status/status.model';
 
@@ -149,4 +150,28 @@ export function readErrorExitCode(kind: 'unreachable' | 'key-rejected' | 'read-f
 /** The exit code of a status on one target: 0 whenever it could read everything, whatever the states. */
 export function statusExitCode(report: StatusReport): ExitCode {
   return report.error === undefined ? EXIT_OK : readErrorExitCode(report.error.kind);
+}
+
+/** The exit code of a creds sync error: the list was left as it was. */
+export function syncErrorExitCode(kind: SyncError['kind']): FailureExitCode {
+  switch (kind) {
+  case 'unreachable':
+    return EXIT_UNREACHABLE;
+  case 'key-rejected':
+    return EXIT_API_KEY_REJECTED;
+  case 'scope-missing':
+    return EXIT_CREDENTIAL_SCOPE_MISSING;
+  case 'write-failed':
+    return EXIT_CREDENTIALS_WRITE_FAILED;
+  }
+}
+
+/** The exit code of a creds sync on one target: 0, 8 when the list was written but workflows use missing keys, or the code of its error. */
+export function syncExitCode(report: SyncReport): ExitCode {
+  switch (report.status) {
+  case 'synced':
+    return report.missing.length === 0 ? EXIT_OK : EXIT_CREDENTIALS_MISSING;
+  case 'failed':
+    return syncErrorExitCode(report.error.kind);
+  }
 }

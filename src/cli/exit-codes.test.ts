@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode, statusExitCode } from '#src/cli/exit-codes';
+import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode, statusExitCode, syncErrorExitCode, syncExitCode } from '#src/cli/exit-codes';
+import { SyncError, SyncReport } from '#src/core/credentials/credentials.model';
 import { Check, CheckFailure } from '#src/core/connection/connection.model';
 import { DeployError, DeployErrorKind } from '#src/core/deliver/deploy.model';
 
@@ -87,5 +88,34 @@ describe('statusExitCode', () => {
 
   test('Should exit 4 when a read stopped status on a rejected API key', () => {
     expect(statusExitCode({ workflows: [], error: { kind: 'key-rejected', call: 'GET /api/v1/workflows', detail: 'HTTP 401' } })).toBe(4);
+  });
+});
+
+describe('syncErrorExitCode', () => {
+  test.each<[SyncError['kind'], number]>([
+    ['unreachable', 3],
+    ['key-rejected', 4],
+    ['scope-missing', 9],
+    ['write-failed', 10],
+  ])('Should exit %s with %s when creds sync fails that way', (kind, exitCode) => {
+    expect(syncErrorExitCode(kind)).toBe(exitCode);
+  });
+});
+
+describe('syncExitCode', () => {
+  test('Should exit 0 when the list is written and no key is missing', () => {
+    expect(syncExitCode({ status: 'synced', file: 'credentials/dev.ts', credentials: [], missing: [] })).toBe(0);
+  });
+
+  test('Should exit 8 when the list is written but workflows use a missing key', () => {
+    const report: SyncReport = { status: 'synced', file: 'credentials/dev.ts', credentials: [], missing: [{ key: 'slack', type: 'slackApi', workflows: ['a'] }] };
+
+    expect(syncExitCode(report)).toBe(8);
+  });
+
+  test('Should exit with the code of its error when the sync failed', () => {
+    const report: SyncReport = { status: 'failed', error: { kind: 'write-failed', path: 'credentials/dev.ts', detail: 'EACCES', hint: 'fix it' } };
+
+    expect(syncExitCode(report)).toBe(10);
   });
 });
