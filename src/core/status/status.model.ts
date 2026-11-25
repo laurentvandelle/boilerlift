@@ -1,6 +1,8 @@
-import { LocalWorkflow, StableName } from '#src/core/compile/workflow.model';
+import { LoadProblem, LocalWorkflow, StableName, WorkflowFileLoader } from '#src/core/compile/workflow.model';
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE } from '#src/core/common/exit-codes';
-import { N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
+import { ProjectConfig } from '#src/core/config/config.model';
+import { LockFileError, LockReader } from '#src/core/lock/lock-file.model';
+import { ConnectedTarget, N8nClient, WorkflowId } from '#src/core/n8n/n8n.model';
 
 /**
  * Where one workflow stands on the instance. A workflow of the project has one state, the first that holds in this
@@ -80,4 +82,28 @@ export interface StatusInput {
   /** The entries no workflow file points to any more (`removedEntries`): shown as `removed` with the managed ones. */
   removed: Map<StableName, WorkflowId>;
   filter: StatusFilter;
+}
+
+/**
+ * What status read on one target, tagged by `kind`:
+ * - `invalid-files`: a workflow file of its folder does not load; the instance was not read.
+ * - `invalid-lock-file`: the lock file cannot be read; the instance was not read.
+ * - `report`: where each workflow stands, or the read that stopped it. `empty`: the folder holds no workflow file.
+ */
+export type TargetStatus =
+  | { kind: 'invalid-files'; target: ConnectedTarget; problems: LoadProblem[] }
+  | { kind: 'invalid-lock-file'; target: ConnectedTarget; error: LockFileError }
+  | { kind: 'report'; target: ConnectedTarget; report: StatusReport; empty: boolean };
+
+export interface StatusTargetsInput {
+  config: ProjectConfig;
+  /** The selected targets, in the order status reads them. */
+  targets: readonly ConnectedTarget[];
+  filter: StatusFilter;
+}
+
+/** The ports status reads the project through. It never writes. */
+export interface StatusPorts {
+  loadWorkflowFiles: WorkflowFileLoader;
+  lock: LockReader;
 }

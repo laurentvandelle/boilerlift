@@ -1,4 +1,4 @@
-import { CliResult } from '#src/cli/cli.model';
+import { CliResult, ConnectedTarget } from '#src/cli/cli.model';
 import { Row, SYMBOLS, header, next, rows, sections, stopped } from '#src/cli/output.render';
 import { TargetRun } from '#src/cli/targets.render';
 import { LoadProblem } from '#src/core/compile/workflow.model';
@@ -6,7 +6,7 @@ import { EXIT_USAGE } from '#src/core/common/exit-codes';
 import { LOCK_FILE } from '#src/core/lock/lock-file';
 import { LockFileError } from '#src/core/lock/lock-file.model';
 import { workflowLink } from '#src/core/n8n/n8n-api';
-import { StatusReport, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
+import { StatusReport, TargetStatus, WorkflowState, WorkflowStatus } from '#src/core/status/status.model';
 
 /** The target status runs on: its name, its url (the instance the lock file records under) and its workflows folder. */
 export interface StatusTarget {
@@ -64,8 +64,25 @@ function nextCommand(status: WorkflowStatus, target: StatusTarget, format: Statu
   }
 }
 
+/** The run of one target, from what `readStatusTargets` read there. */
+export function renderTargetStatus(status: TargetStatus, format: StatusFormat): TargetRun {
+  const target = placeOf(status.target);
+  switch (status.kind) {
+  case 'invalid-files':
+    return renderInvalidFiles(target, status.problems);
+  case 'invalid-lock-file':
+    return renderInvalidLockFile(target, status.error);
+  case 'report':
+    return renderStatus(target, status.report, format, status.empty);
+  }
+}
+
+function placeOf(target: ConnectedTarget): StatusTarget {
+  return { name: target.name, instance: target.connection.url.value, folder: target.workflows };
+}
+
 /** Workflow files that do not load: exit 1, one line per problem on stderr. */
-export function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]): TargetRun {
+function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]): TargetRun {
   const message = 'Invalid workflow files. Status cannot compare them.';
   const lines = rows(problems.map((problem) => ({ symbol: SYMBOLS.failed, name: problem.path, state: problem.detail })));
   return {
@@ -82,7 +99,7 @@ export function renderInvalidFiles(target: StatusTarget, problems: LoadProblem[]
 }
 
 /** A lock file that cannot be read: exit 1, the problem and the fix on stderr. */
-export function renderInvalidLockFile(target: StatusTarget, error: LockFileError): TargetRun {
+function renderInvalidLockFile(target: StatusTarget, error: LockFileError): TargetRun {
   const message = `Invalid ${LOCK_FILE}. Status cannot tell which workflows are yours.`;
   return {
     target: target.name,
@@ -111,7 +128,7 @@ export function renderInvalidManaged(value: string, format: { json: boolean }): 
 }
 
 /** Where every workflow of one target stands: its text, its JSON payload and its recap. `empty`: the project has no workflow file. */
-export function renderStatus(target: StatusTarget, report: StatusReport, format: StatusFormat, empty: boolean): TargetRun {
+function renderStatus(target: StatusTarget, report: StatusReport, format: StatusFormat, empty: boolean): TargetRun {
   const message = empty && format.managed ? `No workflow yet in ${target.folder}. Add a workflow file there, then run lift deploy.` : undefined;
   const { error } = report;
   const ping = withTarget('lift ping', target, format);

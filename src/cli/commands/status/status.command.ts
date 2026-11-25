@@ -1,13 +1,12 @@
 import { CommandDefinition } from '#src/cli/cli.model';
-import { StatusFormat, renderInvalidFiles, renderInvalidLockFile, renderInvalidManaged, renderStatus } from '#src/cli/commands/status/status.render';
+import { StatusFormat, renderInvalidManaged, renderTargetStatus } from '#src/cli/commands/status/status.render';
 import { defineCommand } from '#src/cli/define-command';
-import { TargetRun, renderConfigError, renderTargets } from '#src/cli/targets.render';
-import { loadWorkflows, stableNamesOf } from '#src/core/compile/load-workflows';
+import { renderConfigError, renderTargets } from '#src/cli/targets.render';
 import { EXIT_API_KEY_REJECTED, EXIT_OK, EXIT_UNREACHABLE, EXIT_USAGE } from '#src/core/common/exit-codes';
 import { err, ok } from '#src/core/common/result';
 import { CONFIG_FILE, checkWorkflowFolders, targetsOnInstance } from '#src/core/config/project-config';
-import { LOCK_FILE, managedIds, parseLockFile, removedEntries } from '#src/core/lock/lock-file';
-import { readStatus } from '#src/core/status/status';
+import { LOCK_FILE } from '#src/core/lock/lock-file';
+import { readStatusTargets } from '#src/core/status/status-targets';
 import { StatusFilter } from '#src/core/status/status.model';
 
 const DESCRIPTION = `Shows where each workflow of a target stands on its n8n instance, and the next step:
@@ -72,35 +71,8 @@ export const statusCommand: CommandDefinition = defineCommand({
   modes: {},
   default: async (filter, { targets, loadWorkflowFiles, readLockFile }, { target: selection }) => {
     const format: StatusFormat = { named: selection.kind !== 'default', managed: filter.managed };
-    const runs: TargetRun[] = [];
-    for (const target of targets.selected) {
-      const instance = target.connection.url.value;
-      const where = { name: target.name, instance, folder: target.workflows };
-      const loaded = loadWorkflows(await loadWorkflowFiles(target.workflows));
-      if (!loaded.ok) {
-        runs.push(renderInvalidFiles(where, loaded.error));
-        continue;
-      }
-      const lock = parseLockFile(await readLockFile(LOCK_FILE));
-      if (!lock.ok) {
-        runs.push(renderInvalidLockFile(where, lock.error));
-        continue;
-      }
-      const workflows = loaded.value;
-      const present = new Set<string>();
-      for (const { workflows: folder } of targetsOnInstance(targets.config, instance)) {
-        stableNamesOf((await loadWorkflowFiles(folder)).map(({ path }) => path)).forEach((name) => present.add(name));
-      }
-      const report = await readStatus({
-        workflows,
-        client: target.client,
-        managed: managedIds(lock.value, instance),
-        removed: removedEntries(lock.value, instance, present),
-        filter,
-      });
-      runs.push(renderStatus(where, report, format, workflows.length === 0));
-    }
-    return runs;
+    const statuses = await readStatusTargets({ config: targets.config, targets: targets.selected, filter }, { loadWorkflowFiles, lock: { read: () => readLockFile(LOCK_FILE) } });
+    return statuses.map((status) => renderTargetStatus(status, format));
   },
   render: (runs, { format, target }) => renderTargets(runs, { json: format.json, all: target.kind === 'all' }),
 });

@@ -5,7 +5,6 @@ import {
   FakeLockFile,
   fakeContext,
   fakeLockFile,
-  fakeProjectConfig,
   fakeSingleTarget,
   fakeTwoTargets,
 } from '#src/cli/cli.fake';
@@ -121,23 +120,6 @@ describe('statusCommand', () => {
     const result = await statusCommand.run({ positionals: [], values: { managed: 'true' } }, ctx);
 
     expect(result.stdout).toContain('= weekly  up to date  https://n8n.example.com/workflow/wk1\n');
-  });
-
-  test('Should not show a workflow as removed when another target on the same instance still has its file', async () => {
-    const lock = fakeLockFile({ text: fakeLockText({ weekly: 'wk1' }) });
-    const ctx = context(fakeN8n({ workflows: [fakeN8nWorkflow(WEEKLY, { id: 'wk1' })] }), {
-      loadProjectConfig: fakeProjectConfig({
-        targets: {
-          dev: { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './dev' },
-          staging: { url: 'https://n8n.example.com', apiKey: 'secret', workflows: './staging' },
-        },
-      }),
-      loadWorkflowFiles: (dir) => Promise.resolve(dir === './staging' ? [fakeWorkflowFile(WEEKLY)] : []),
-    }, lock);
-
-    const result = await statusCommand.run({ positionals: [], values: { json: true, target: 'dev' } }, ctx);
-
-    expect(JSON.parse(result.stdout)).toMatchObject({ summary: { removed: 0 } });
   });
 
   test('Should give each workflow its state and the command to run next when --json is given', async () => {
