@@ -20,7 +20,7 @@ Rules for the whole run:
 - **The split approval is the only go-ahead.** Nothing is created or edited on GitHub before the user explicitly approves the split, because issues are visible to others. After that, create the cards without asking again, then offer adjustments.
 - **`scripts/backlog.py` owns every GitHub call.** On a non-zero exit, report its `error:` line and stop: hand-written `gh` calls skip its duplicate and field checks.
 - **An untriaged issue is never edited.** Its author's words are the record of what they asked: its cards are new sub-issues. Only an issue that is already a card is rewritten in place.
-- **A card carries only its body, its title, `Card type` and `Status`.** Estimates, assignees and links to other tools are decided when someone picks the card up, not at creation.
+- **A card carries only its body, its title, `Card type`, `Status` and its "blocked by" links.** Estimates, assignees and links to other tools are decided when someone picks the card up, not at creation.
 - **Facts come from the user or the code.** A coding agent takes every line of a card as true, so an unknown value stays `unknown` (rules in [card-templates.md](card-templates.md)), and any other gap becomes a question.
 - **With no one to answer** (an unattended run), go through step 4 and stop: write the drafted split and cards to the scratch folder, report their paths and the open questions, and create nothing, because a card built on guesses costs more than a late one.
 
@@ -90,6 +90,8 @@ Show this table, then the split logic in one line:
 | --- | --- | --- | --- | --- |
 | 1 | [title] | [story / tech story / bug / investigation] | [what the card covers] | [card or none] |
 
+**Depends on** names the cards that must ship first: another row of the split by its order (`1`), or an open issue in `laurentvandelle/boilerlift` (`#42`) that the code map or the interview showed this card needs. Each entry becomes a "blocked by" link in step 8, so leave it at `none` for a card that only relates to another without waiting on it.
+
 For an untriaged issue, every row is a new sub-issue of it; for an existing card, card 1 is that card (rewritten) and the others are new issues.
 
 When triage finds that the issue needs no card (a duplicate of an open issue, out of the backlog's scope, or a question that an answer settles), show a single row `No card` with the reason instead, and the duplicate's URL if any. Approving it closes the issue in step 8.
@@ -117,11 +119,13 @@ For each card, in split order:
 
 Once every card of an untriaged issue exists, run `backlog.py triage --issue N --cards [numbers, comma-separated]`: it comments the cards on the parent and archives the parent's board item, so the board shows only cards. Skip it when no card was created.
 
+Once every card exists, link the dependencies: for each card whose **Depends on** is not `none`, run `backlog.py block --issue [card] --blocked-by [numbers, comma-separated]`, with split rows turned into the issue numbers just created. One direction is enough: GitHub shows the blocking side on the other issue. A dependency on a card that waits (failed the Definition of Ready) is not linked; report it instead. A link that fails leaves the cards as they are: report its `rerun with:` command, never recreate a card.
+
 An approved `No card` row: write the one-line reason to a scratch file and run `backlog.py close --issue N --reason "not planned" --comment-file [file]`, or `--reason duplicate --duplicate-of M` for a duplicate.
 
 An exit 6 after the issue was created names its URL and the command that finishes it (`update --issue M`, then `link --parent N --issue M` when the sub-issue link failed): run that, never a second `create`. Exit 5 means an open issue already has that title: show its URL and ask whether to rewrite that one instead or rename the card. Stop and wait.
 
-Then report, per card: the issue link and title, the type, and any `-> owner:` question left, plus the parent's link when there is one. Ask whether to adjust anything now that the cards exist.
+Then report, per card: the issue link and title, the type, the issues it is blocked by, and any `-> owner:` question left, plus the parent's link when there is one. Ask whether to adjust anything now that the cards exist.
 
 ## Gotchas
 

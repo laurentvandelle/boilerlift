@@ -21,6 +21,12 @@ Prompt: "turn #[N] into cards" (an issue opened by someone else through the bug 
 - Each card is created with `create --parent N`, then `triage --issue N --cards a,b` runs once.
 - The report links the parent and both cards.
 
+## 2d. Split with a dependency
+Prompt: "we need a spike on whether n8n exposes workflow versions, then lift diff built on it"
+- The split has two rows: an investigation at order 1, then a story whose `Depends on` is `1`.
+- After both `create` calls, `block --issue [story] --blocked-by [investigation]` runs once; no `block` call goes the other way.
+- The report shows the story as blocked by the investigation.
+
 ## 2c. Duplicate
 Prompt: "triage #[N]" (an untriaged issue asking for something an open card already covers)
 - The split shows a single `No card` row with the duplicate's URL, then stops for approval.
