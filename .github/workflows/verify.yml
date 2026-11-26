@@ -54,3 +54,60 @@ jobs:
 
       - name: Build into dist/
         run: npm run build
+
+  template:
+    name: Check a fresh project from boilerlift-template
+    # Same skip as the job above.
+    if: github.event_name == 'push' || github.event.pull_request.changed_files > 0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install the npm version of package.json devEngines
+        run: npm install -g npm@11.21.3
+
+      - name: Cache the npm download cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+
+      - name: Install dependencies from package-lock.json
+        run: npm ci
+
+      - name: Build into dist/
+        run: npm run build
+
+      - name: Pack boilerlift
+        id: pack
+        run: echo "tgz=$RUNNER_TEMP/$(npm pack --pack-destination "$RUNNER_TEMP" | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      # The boilerlift-template branch named after this pull request's branch, else main. It fails when
+      # that branch cannot fast-forward boilerlift-template main. Logic in .github/scripts/template_branch.py.
+      - name: Create a fresh project from the Template branch
+        id: template
+        env:
+          MODE: pull_request
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: python3 .github/scripts/template_branch.py
+
+      - name: Install the packed boilerlift in the fresh project
+        working-directory: ${{ steps.template.outputs.dir }}
+        run: npm install --save-dev "${{ steps.pack.outputs.tgz }}"
+
+      - name: Install the fresh project's dependencies
+        working-directory: ${{ steps.template.outputs.dir }}
+        run: npm install
+
+      - name: Lint, typecheck and test the fresh project
+        working-directory: ${{ steps.template.outputs.dir }}
+        run: npm run verify

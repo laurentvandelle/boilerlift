@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes the job summary of release.yml (step `summary`, which always runs).
 
-Each of npm, tag and GitHub release is `published`, `skipped (already done)` or `not done`.
+Each of npm, tag, GitHub release and template (the boilerlift-template commit and tag) is `published`, `skipped (already done)` or `not done`.
 Reads the outputs of the `check` step and the outcomes of the publish steps from the environment.
 """
 
@@ -9,11 +9,11 @@ import os
 import sys
 from collections.abc import Mapping
 
-STEPS = (("npm", "NPM"), ("tag", "TAG"), ("GitHub release", "RELEASE"))
+STEPS = (("npm", "NPM"), ("tag", "TAG"), ("GitHub release", "RELEASE"), ("boilerlift-template", "TEMPLATE"))
 
 
 def status(env: Mapping[str, str], step: str) -> str:
-    """The status of one step (`NPM`, `TAG` or `RELEASE`)."""
+    """The status of one step (`NPM`, `TAG`, `RELEASE` or `TEMPLATE`)."""
     if env.get("CHECK_OUTCOME") != "success":
         return "not done"
     if env.get("WORK") != "true":
