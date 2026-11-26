@@ -1,4 +1,13 @@
-import { BoilerliftConfig, CommandContext, CredentialsFile, FileCreation, ProjectConfigFile, TemplateFile } from '#src/cli/cli.model';
+import {
+  BoilerliftConfig,
+  CommandContext,
+  CredentialsFile,
+  FileCreation,
+  PathContents,
+  ProjectConfigFile,
+  TemplateFetchError,
+  TemplateFile,
+} from '#src/cli/cli.model';
 import { Result, err, ok } from '#src/core/common/result';
 
 /**
@@ -22,8 +31,8 @@ export function fakeContext(overrides: Partial<CommandContext> = {}): CommandCon
     loadCredentialsFiles: () => Promise.resolve([]),
     writeCredentialsFile: () =>
       Promise.reject(new Error('writeCredentialsFile was called, but this test does not expect a credentials file write')),
-    isFile: () => Promise.resolve(false),
-    loadProjectTemplate: () => Promise.reject(new Error('loadProjectTemplate was called, but this test does not expect a template')),
+    readPath: () => Promise.resolve({ kind: 'missing' }),
+    fetchProjectTemplate: () => Promise.reject(new Error('fetchProjectTemplate was called, but this test does not expect a template')),
     createFile: () => Promise.reject(new Error('createFile was called, but this test does not expect a file write')),
     ...overrides,
   };
@@ -146,28 +155,52 @@ export function fakeAnswer(answer: string | undefined): FakeAnswer {
 }
 
 export interface FakeProjectFolderOptions {
-  /** The files of the template `loadProjectTemplate` returns. */
+  /** The files of the Project template `fetchProjectTemplate` returns. */
   template?: TemplateFile[];
+  /** When set, `fetchProjectTemplate` fails with this error instead. */
+  fetchError?: TemplateFetchError;
+  /** What `readPath` finds at the folder given to init. Default: nothing. */
+  contents?: PathContents;
   /** The paths, relative to the current folder, that already hold a file. */
   existing?: string[];
   /** The paths whose write fails, with this reason. */
   failures?: Record<string, string>;
 }
 
-/** An in-memory project folder for `fakeContext`: the template, the files already there, and the writes that fail. */
+/**
+ * An in-memory project folder for `fakeContext`: what is at the folder, the Project template or the error of its fetch,
+ * the files already there, and the writes that fail.
+ */
 export interface FakeProjectFolder {
-  /** Its `loadProjectTemplate` and `createFile`, to spread into `fakeContext`. */
-  context: Pick<CommandContext, 'loadProjectTemplate' | 'createFile'>;
+  /** Its `readPath`, `fetchProjectTemplate` and `createFile`, to spread into `fakeContext`. */
+  context: Pick<CommandContext, 'readPath' | 'fetchProjectTemplate' | 'createFile'>;
   /** The text written at `path`, or `undefined` when the command created nothing there. */
   text(path: string): string | undefined;
+  /** The paths of every write, in order. */
+  writes: string[];
+  /** The versions of every template fetch, in order. */
+  fetches: string[];
 }
 
-export function fakeProjectFolder({ template = [], existing = [], failures = {} }: FakeProjectFolderOptions = {}): FakeProjectFolder {
+export function fakeProjectFolder({
+  template = [],
+  fetchError,
+  contents = { kind: 'missing' },
+  existing = [],
+  failures = {},
+}: FakeProjectFolderOptions = {}): FakeProjectFolder {
   const texts = new Map<string, string>();
+  const writes: string[] = [];
+  const fetches: string[] = [];
   return {
     context: {
-      loadProjectTemplate: () => Promise.resolve(structuredClone(template)),
+      readPath: () => Promise.resolve(structuredClone(contents)),
+      fetchProjectTemplate: (version): Promise<Result<TemplateFile[], TemplateFetchError>> => {
+        fetches.push(version);
+        return Promise.resolve(fetchError === undefined ? ok(structuredClone(template)) : err(fetchError));
+      },
       createFile: (path, text): Promise<FileCreation> => {
+        writes.push(path);
         const reason = failures[path];
         if (reason !== undefined) {
           return Promise.resolve({ status: 'failed', reason });
@@ -180,5 +213,7 @@ export function fakeProjectFolder({ template = [], existing = [], failures = {} 
       },
     },
     text: (path) => texts.get(path),
+    writes,
+    fetches,
   };
 }

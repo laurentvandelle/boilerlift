@@ -27,7 +27,7 @@
     "start": "npm run build && npm run start:prod --",
     "start:prod": "cd debug && node main.ts",
     "debug:setup": "node debug/setup.ts",
-    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').cpSync('templates/project','dist/templates/project',{recursive:true})\"",
+    "build": "tsc -p tsconfig.build.json",
     "lint": "eslint --flag unstable_native_nodejs_ts_config src --fix",
     "lint:check": "eslint --flag unstable_native_nodejs_ts_config --max-warnings 0 src",
     "test": "vitest run",

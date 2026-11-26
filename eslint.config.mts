@@ -20,9 +20,9 @@ const CORE = ['compile', 'deliver', 'status', 'publish', 'clean', 'reset', 'remo
 
 /**
  * The src/services/ folders: adapters to the outside world. Only cli/targets-need.ts imports services/n8n/ and only
- * cli/node-context.ts imports services/fs/ (src/services/AGENTS.md).
+ * cli/node-context.ts imports services/fs/ and services/git/ (src/services/AGENTS.md).
  */
-const SERVICES = ['services-http', 'services-n8n', 'services-fs'];
+const SERVICES = ['services-http', 'services-n8n', 'services-fs', 'services-git'];
 
 /** File, network and process modules: core/, services/ and the commands get them through a parameter or a port. */
 const IO_MODULES = ['fs', 'http', 'https', 'http2', 'net', 'tls', 'dgram', 'dns', 'child_process', 'process', 'console'];
@@ -210,6 +210,7 @@ export default tseslint.config(
         { type: 'services-http', pattern: 'src/services/http' },
         { type: 'services-n8n', pattern: 'src/services/n8n' },
         { type: 'services-fs', pattern: 'src/services/fs' },
+        { type: 'services-git', pattern: 'src/services/git' },
       ],
       'boundaries/files': [
         { category: 'test', pattern: '**/*.{test,test-d}.ts' },
@@ -322,6 +323,12 @@ export default tseslint.config(
               allow: { to: { element: { type: ['services-fs', 'compile', 'config'] } } },
             },
             {
+              // git/ fetches the Project template of a version with git, for lift init. It returns the template file
+              // shapes of config/.
+              from: { element: { type: 'services-git' } },
+              allow: { to: { element: { type: ['services-git', 'config'] } } },
+            },
+            {
               // A command sees only itself, the CLI contracts (cli/*.model.ts and defineCommand) and core. Never another command.
               from: { element: { type: 'cli-command' } },
               allow: { to: { element: { type: CORE } } },
@@ -432,10 +439,10 @@ export default tseslint.config(
               allow: { to: [{ element: { type: 'services-n8n' } }, { file: { categories: 'n8n-client' } }] },
             },
             {
-              // The composition root wires the project file adapters of services/fs/ into the CommandContext. After the
-              // disallow above.
+              // The composition root wires the project file adapters of services/fs/ and the Project template fetch of
+              // services/git/ into the CommandContext. After the disallow above.
               from: { file: { categories: 'node-context' } },
-              allow: { to: { element: { type: 'services-fs' } } },
+              allow: { to: { element: { type: ['services-fs', 'services-git'] } } },
             },
           ],
         },
@@ -480,6 +487,16 @@ export default tseslint.config(
     ignores: ['src/**/*.test.ts', 'src/**/*.test-d.ts', 'src/**/*.fake.ts'],
     rules: {
       'no-restricted-imports': ioImportBan(IO_MODULES.filter((module) => module !== 'fs')),
+    },
+  },
+  {
+    // services/git/ runs git to fetch the Project template into a temp folder, then reads it: it alone may import
+    // node:child_process, and node:fs too. The environment and the temp folder still come in as parameters, so the
+    // process ban holds. Replaces the import ban above.
+    files: ['src/services/git/**/*.ts'],
+    ignores: ['src/**/*.test.ts', 'src/**/*.test-d.ts', 'src/**/*.fake.ts'],
+    rules: {
+      'no-restricted-imports': ioImportBan(IO_MODULES.filter((module) => module !== 'fs' && module !== 'child_process')),
     },
   },
   {

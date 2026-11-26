@@ -101,7 +101,7 @@ Write n8n workflows in TypeScript, test them, and lift them from dev to prod.
 Commands:
   help        Show help for Boilerlift or for one command
   version     Print the Boilerlift version
-  init        Start a Boilerlift project in a folder
+  init        Create a Boilerlift project in a new folder
   ping        Check the connection to your n8n instance
   status      Show where each workflow stands on your n8n instance
   deploy      Deliver your workflows to your n8n instance as drafts

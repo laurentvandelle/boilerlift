@@ -3,8 +3,8 @@
 ## Prohibitions
 
 - A command never imports another command. It may import its own folder, `#src/cli/*.model.ts`, `define-command.ts`, `targets.render.ts`, `output.render.ts`, `exit-codes.ts` and `core/`. Lint enforces this.
-- A command does no I/O of its own (`src/AGENTS.md` lists what lint bans). `run` returns a `Promise<CliResult>`; `bin.ts` writes it. Anything a command needs from the outside world is a field of `CommandContext` (`cli.model.ts`, which documents each field), added by the first command that needs it and filled for the real process in `node-context.ts`, which only wires: the file adapters live in `services/fs/project-files.ts`.
-- Only `targets-need.ts` and `node-context.ts` import `src/services/`. `targets-need.ts` builds the client of each target from `ctx.fetch` with `createN8nClient` (`services/n8n/n8n-client.ts`) for every command that declares the `'targets'` need; `node-context.ts` wires the file adapters of `services/fs/`. Commands and the rest of `cli/` never import it. Lint enforces this.
+- A command does no I/O of its own (`src/AGENTS.md` lists what lint bans). `run` returns a `Promise<CliResult>`; `bin.ts` writes it. Anything a command needs from the outside world is a field of `CommandContext` (`cli.model.ts`, which documents each field), added by the first command that needs it and filled for the real process in `node-context.ts`, which only wires: the file adapters live in `services/fs/project-files.ts`, the Project template fetch in `services/git/project-template.ts`.
+- Only `targets-need.ts` and `node-context.ts` import `src/services/`. `targets-need.ts` builds the client of each target from `ctx.fetch` with `createN8nClient` (`services/n8n/n8n-client.ts`) for every command that declares the `'targets'` need; `node-context.ts` wires the file adapters of `services/fs/` and the Project template fetch of `services/git/`. Commands and the rest of `cli/` never import it. Lint enforces this.
 
 ## Shape
 

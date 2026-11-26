@@ -2,10 +2,30 @@ import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { ExitCode } from '#src/cli/exit-codes';
 import { Result } from '#src/core/common/result';
 import { CredentialsFile } from '#src/core/compile/credential.model';
-import { BoilerliftConfig, FileCreation, ProjectConfig, ProjectConfigFile, TargetSelection, TemplateFile } from '#src/core/config/config.model';
+import {
+  BoilerliftConfig,
+  FileCreation,
+  PathContents,
+  ProjectConfig,
+  ProjectConfigFile,
+  TargetSelection,
+  TemplateFetchError,
+  TemplateFile,
+} from '#src/core/config/config.model';
 import { ConnectedTarget } from '#src/core/n8n/n8n.model';
 
-export type { BoilerliftConfig, ConnectedTarget, CredentialsFile, FileCreation, ProjectConfigFile, TargetSelection, TemplateFile, WorkflowFile };
+export type {
+  BoilerliftConfig,
+  ConnectedTarget,
+  CredentialsFile,
+  FileCreation,
+  PathContents,
+  ProjectConfigFile,
+  TargetSelection,
+  TemplateFetchError,
+  TemplateFile,
+  WorkflowFile,
+};
 
 export interface CliResult {
   exitCode: ExitCode;
@@ -199,13 +219,16 @@ export interface CommandContext {
    * same way. Resolves the line without its line break, or `undefined` when stdin closes first (EOF).
    */
   ask(prompt: string): Promise<string | undefined>;
-  /** True when `path`, relative to the current folder, is an existing file (not a folder). */
-  isFile(path: string): Promise<boolean>;
   /**
-   * The files of the project template that `lift init` writes, sorted by path, read from the template folder that
-   * ships with Boilerlift. A missing template is a broken install: it throws.
+   * What is at `path`, relative to the current folder: nothing, a file, or a folder with the names of its entries.
    */
-  loadProjectTemplate(): Promise<TemplateFile[]>;
+  readPath(path: string): Promise<PathContents>;
+  /**
+   * Every file of the Project template of `version`, sorted by path: the tag `v<version>` of the boilerlift-template
+   * repository, cloned with git into a temp folder that is removed afterwards. `.git/` is left out. git missing, no
+   * such tag, or a failed clone comes back as a `TemplateFetchError`, never a throw.
+   */
+  fetchProjectTemplate(version: string): Promise<Result<TemplateFile[], TemplateFetchError>>;
   /**
    * Creates the file `path`, relative to the current folder, with `text`, creating its folders when needed. It never
    * overwrites: anything already at `path` leaves it untouched, as `exists`. A disk error comes back as `failed` with

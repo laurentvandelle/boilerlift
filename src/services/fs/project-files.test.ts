@@ -2,16 +2,15 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, onTestFinished, test } from 'vitest';
-import { loadWorkflows } from '#src/core/compile/load-workflows';
 import {
   createFile,
   isDirectory,
   isFile,
   loadCredentialsFiles,
   loadProjectConfig,
-  loadProjectTemplate,
   loadWorkflowFiles,
   readLockFile,
+  readPath,
   writeTextFile,
   writeTextFileInFolder,
 } from '#src/services/fs/project-files';
@@ -303,43 +302,26 @@ describe('createFile', () => {
   });
 });
 
-describe('loadProjectTemplate', () => {
-  test('Should read every file of the template, sorted, with paths from the template folder when it is loaded', async () => {
-    const template = await loadProjectTemplate();
+describe('readPath', () => {
+  test('Should return missing when nothing is at the path', async () => {
+    const cwd = await tempFolder();
 
-    expect(template.map((file) => file.path)).toEqual([
-      '.claude/hooks/guard.test.ts',
-      '.claude/hooks/guard.ts',
-      '.claude/settings.json',
-      '.claude/skills/BOILERLIFT:interviewing/SKILL.md',
-      '.claude/skills/BOILERLIFT:plan/SKILL.md',
-      '.claude/skills/BOILERLIFT:qa/SKILL.md',
-      '.claude/skills/BOILERLIFT:ship/SKILL.md',
-      '.env.example',
-      '.github/copilot-instructions.md',
-      'AGENTS.md',
-      'ARCHITECTURE.md',
-      'CLAUDE.md',
-      'GLOSSARY.md',
-      'README.md',
-      '_gitignore',
-      'boilerlift.config.ts',
-      'code/AGENTS.md',
-      'code/hello.test.ts',
-      'code/hello.ts',
-      'docs/adr/README.md',
-      'docs/agents.md',
-      'docs/guardrails.md',
-      'docs/maintenance.md',
-      'docs/testing.md',
-      'eslint.config.mts',
-      'package.json',
-      'scripts/n8n.test.ts',
-      'scripts/n8n.ts',
-      'tsconfig.json',
-      'workflows/AGENTS.md',
-      'workflows/hello.workflow.ts',
-    ]);
+    expect(await readPath(join(cwd, 'my-app'))).toEqual({ kind: 'missing' });
+  });
+
+  test('Should return file when the path is a file', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'notes.txt', 'a file\n');
+
+    expect(await readPath(join(cwd, 'notes.txt'))).toEqual({ kind: 'file' });
+  });
+
+  test('Should return the sorted names of its entries, files and folders, when the path is a folder', async () => {
+    const cwd = await tempFolder();
+    await write(cwd, 'my-app/README.md', '# Project\n');
+    await write(cwd, 'my-app/.git/HEAD', 'ref\n');
+
+    expect(await readPath(join(cwd, 'my-app'))).toEqual({ kind: 'folder', entries: ['.git', 'README.md'] });
   });
 });
 
@@ -351,15 +333,5 @@ describe('isFile', () => {
     const checks = [await isFile(join(cwd, 'notes.txt')), await isFile(cwd), await isFile(join(cwd, 'missing'))];
 
     expect(checks).toEqual([true, false, false]);
-  });
-});
-
-describe('project template', () => {
-  test('Should hold an example workflow that deploy accepts when the template is loaded', async () => {
-    const files = await loadWorkflowFiles(join(__dirname, '..', '..', '..', 'templates', 'project'), 'workflows');
-
-    const loaded = loadWorkflows(files);
-
-    expect([files.map((file) => file.path), loaded.ok]).toEqual([['workflows/hello.workflow.ts'], true]);
   });
 });
