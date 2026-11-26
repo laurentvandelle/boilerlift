@@ -2,7 +2,7 @@
 
 Set up Boilerlift yourself, without an AI agent. To let an agent do it with you, paste the prompt of the [README](../README.md) instead.
 
-Requires Node.js 22.18 or later, and n8n 2.35.0 or later.
+Requires Node.js 22.18 or later, and n8n 2.35.0 or later. `lift init` also needs [git](https://git-scm.com/downloads) and a network connection: it downloads the Project template with git.
 
 ## Install
 
@@ -19,10 +19,11 @@ This installs the `lift` command (`boilerlift` is an alias). It is optional: in 
    ```sh
    npx boilerlift init my-n8n-workflows
    cd my-n8n-workflows
+   git init
    npm install
    ```
 
-   It writes `boilerlift.config.ts` with one target, `dev`, an example workflow `workflows/hello.workflow.ts`, `.env.example` and the Agent kit. To build the project by hand instead, see [Without `lift init`](#without-lift-init).
+   It creates the folder, which must be new or empty, with `boilerlift.config.ts` and one target, `dev`, an example workflow `workflows/hello.workflow.ts`, `.env.example` and the Agent kit. To start without `lift init`, see [Without `lift init`](#without-lift-init).
 
 2. Copy `.env.example` to `.env` (git-ignored), then set `N8N_URL` and `N8N_API_KEY` (n8n → Settings → n8n API):
 
@@ -47,53 +48,6 @@ This installs the `lift` command (`boilerlift` is an alias). It is optional: in 
 
 ## Without `lift init`
 
-1. Install Boilerlift in your project, so workflow files can import it:
+The Project template is a GitHub template repository: open [boilerlift-template](https://github.com/laurentvandelle/boilerlift-template) and click **Use this template** to create your own repository from it. It gives `main`, the template of the latest version of Boilerlift: the same files `lift init` of that version writes.
 
-   ```sh
-   npm install --save-dev boilerlift
-   ```
-
-2. Create `boilerlift.config.ts` at the project root, with one target:
-
-   ```ts
-   import { defineConfig } from 'boilerlift';
-
-   export default defineConfig({
-     targets: {
-       dev: { url: process.env.N8N_URL, apiKey: process.env.N8N_API_KEY, workflows: './workflows' },
-     },
-   });
-   ```
-
-3. Set `N8N_URL` and `N8N_API_KEY` in `.env` (keep it out of Git):
-
-   ```sh
-   N8N_URL=https://your-n8n.example.com
-   N8N_API_KEY=your-api-key
-   ```
-
-4. Check the connection:
-
-   ```sh
-   lift ping
-   ```
-
-5. Add a tiny workflow, `workflows/hello.workflow.ts`:
-
-   ```ts
-   import { defineWorkflow } from 'boilerlift';
-
-   export default defineWorkflow({
-     name: 'Hello',
-     nodes: [{ parameters: {}, name: 'Start', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0] }],
-     connections: {},
-   });
-   ```
-
-6. See what a deploy would do, without writing anything:
-
-   ```sh
-   lift deploy --dry-run
-   ```
-
-   Then run `lift deploy` to deliver it as a draft, and `lift publish` to publish it.
+Then clone your new repository, and follow the [Quick start](#quick-start) from step 2, after `npm install`.

@@ -24,7 +24,7 @@ Read https://raw.githubusercontent.com/laurentvandelle/boilerlift/main/docs/get-
 and follow it to set up Boilerlift with me, one step at a time.
 ```
 
-Paste it into your AI agent (Claude Code, Cursor, Codex…). It checks Node.js, creates your project, connects it to your n8n instance and deploys an example workflow as a draft, asking you one question at a time.
+Paste it into your AI agent (Claude Code, Cursor, Codex…). It checks Node.js and Git, creates your project, connects it to your n8n instance and deploys an example workflow as a draft, asking you one question at a time.
 
 Developer, or no AI agent? See the [manual install](https://github.com/laurentvandelle/boilerlift/blob/main/docs/manual-install.md).
 
@@ -32,7 +32,7 @@ Developer, or no AI agent? See the [manual install](https://github.com/laurentva
 
 - [Get started with an AI agent](https://github.com/laurentvandelle/boilerlift/blob/main/docs/get-started.md): the guide your agent follows
 - [Manual install](https://github.com/laurentvandelle/boilerlift/blob/main/docs/manual-install.md): install and set up Boilerlift yourself
-- [`lift init`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/init.md): start a project, with the Agent kit for AI agents
+- [`lift init`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/init.md): create a project from the Project template, with the Agent kit for AI agents
 - [Write a workflow](https://github.com/laurentvandelle/boilerlift/blob/main/docs/workflows.md)
 - [Configure your targets](https://github.com/laurentvandelle/boilerlift/blob/main/docs/configuration.md)
 - [`lift ping`](https://github.com/laurentvandelle/boilerlift/blob/main/docs/commands/ping.md): check the connection to your instance

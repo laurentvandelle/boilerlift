@@ -21,11 +21,12 @@ The person may have started before. Run these checks in order, and stop at the f
 | Step | Done when |
 | --- | --- |
 | 1. Node.js | `node -v` prints `v22.18.0` or later |
-| 2. Project folder | the project folder holds `boilerlift.config.ts` (ask for the folder name if you do not know it) and `node_modules/` |
-| 3. Connection | `.env` exists in the project folder (check with `test -f .env`, never by reading it), and `npx lift ping --json` exits 0 |
-| 4. Example deployed | `npx lift status -t dev --json` gives `hello` a state other than `missing` |
+| 2. Git | `git --version` prints a version |
+| 3. Project folder | the project folder holds `boilerlift.config.ts` (ask for the folder name if you do not know it) and `node_modules/` |
+| 4. Connection | `.env` exists in the project folder (check with `test -f .env`, never by reading it), and `npx lift ping --json` exits 0 |
+| 5. Example deployed | `npx lift status -t dev --json` gives `hello` a state other than `missing` |
 
-Tell the person where they resume, in one sentence, for example "Node.js and your project are ready: we resume at the connection to n8n." Then go on from that step. When every check passes, go to step 5.
+Tell the person where they resume, in one sentence, for example "Node.js and your project are ready: we resume at the connection to n8n." Then go on from that step. When every check passes, go to step 6.
 
 ## Step 1: Node.js
 
@@ -34,21 +35,34 @@ Run `node -v`.
 - It prints `v22.18.0` or later: go on.
 - The command is not found, or the version is older: explain that Boilerlift needs Node.js 22.18 or later. Ask them to download the LTS installer from [nodejs.org](https://nodejs.org), run it, then tell you when it is done. They may need to open a new terminal, or restart you, so the new version is found. Then run `node -v` again.
 
-## Step 2: the project folder
+## Step 2: Git
 
-Ask what to call the folder that will hold their workflows, and suggest `my-n8n-workflows`.
+Run `git --version`.
+
+- It prints a version: go on.
+- The command is not found: explain that `lift init` uses Git to download the project files, and that the skills of the project use it too. Walk them through installing it, for their system:
+  - **macOS**: run `xcode-select --install` and accept the dialog that opens: it installs the Xcode Command Line Tools, which include Git.
+  - **Windows**: ask them to download the installer from [git-scm.com](https://git-scm.com/downloads), run it with the default options, then tell you when it is done.
+  - **Linux**: install it with the package manager, for example `sudo apt install git` on Debian or Ubuntu, or `sudo dnf install git` on Fedora. Ask before you run a command with `sudo`: it may ask for their password, which they type themselves.
+
+  They may need to open a new terminal, or restart you, so Git is found. Then run `git --version` again.
+
+## Step 3: the project folder
+
+Ask what to call the folder that will hold their workflows, and suggest `my-n8n-workflows`. It must be a new folder, or an empty one.
 
 Then, in the folder where the person wants it (their current folder, unless they say otherwise), run:
 
 ```sh
 npx boilerlift@latest init <name>
 cd <name>
+git init
 npm install
 ```
 
-Use `boilerlift@latest`, not `boilerlift`, so an old copy in the npx cache cannot run. `init` writes the project files and the Agent kit, and prints the next steps. Work inside that folder from now on: every later command runs there.
+Use `boilerlift@latest`, not `boilerlift`, so an old copy in the npx cache cannot run. `init` downloads the project files and the Agent kit, writes them into the folder, and prints the next steps. If it exits 13, it could not download them: read its message, fix the cause (Git missing, no network) and run it again. Work inside that folder from now on: every later command runs there.
 
-## Step 3: connect to n8n
+## Step 4: connect to n8n
 
 First ask whether they already have an n8n instance, and its address.
 
@@ -78,7 +92,7 @@ First ask whether they already have an n8n instance, and its address.
 
   Then run `npx lift ping --json` again, until it passes.
 
-## Step 4: deploy the example
+## Step 5: deploy the example
 
 Explain that the project already holds an example workflow, `workflows/hello.workflow.ts`, and that it will land as a draft: nothing is published.
 
@@ -99,7 +113,7 @@ Then tell the person how to see it run:
 
 Ask whether they can see it. If not, help them find it before you go on.
 
-## Step 5: their own workflow
+## Step 6: their own workflow
 
 Congratulate them: Boilerlift is set up. Then explain how to create their own workflow, from this project folder:
 
