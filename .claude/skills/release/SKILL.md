@@ -1,6 +1,6 @@
 ---
 name: release
-description: Prepares a boilerlift release. Reads the commits and the diff since the last v* tag, runs verify and build, proposes the next version, writes the Keep a Changelog notes, and after an explicit "yes" opens a `chore(release): vX.Y.Z` pull request. Once the maintainer has merged it and asks to publish, dispatches `.github/workflows/release.yml`, which publishes to npm, tags and creates the GitHub release. Use when the maintainer asks to release, cut a version, ship a version or publish boilerlift, or to publish a merged release pull request.
+description: Prepares a boilerlift release. Reads the commits and the diff since the last v* tag, runs verify and build, proposes the next version, writes the Keep a Changelog notes, and after an explicit "yes" opens a `chore(release): vX.Y.Z` pull request. Once the maintainer has merged it and asks to publish, dispatches `.github/workflows/release.yml`, which checks a fresh project from boilerlift-template, publishes to npm, tags, creates the GitHub release and tags boilerlift-template. Use when the maintainer asks to release, cut a version, ship a version or publish boilerlift, or to publish a merged release pull request.
 ---
 
 # Release boilerlift
@@ -98,15 +98,15 @@ gh pr view release/vX.Y.Z --json state,mergeCommit -q '.state + " " + .mergeComm
 git ls-remote origin refs/heads/main
 ```
 
-Stop when the state is not `MERGED`, or when `main` has moved past the merge commit, and say why. Otherwise:
+Stop when the state is not `MERGED`, or when `main` has moved past the merge commit, and say why. Otherwise, ask the maintainer which Template branch the release ships: the boilerlift-template branch whose template changes go out with this version. No answer, or none, means `main`. Then:
 
 ```bash
-gh workflow run release.yml --ref main
+gh workflow run release.yml --ref main -f template_branch=<branch>
 gh run list --workflow release.yml --limit 1 --json databaseId,url
 gh run watch <databaseId> --exit-status
 ```
 
-The workflow runs `npm run verify` and `npm run build`, publishes `boilerlift@X.Y.Z` to npm with provenance, creates the `vX.Y.Z` tag, and creates the GitHub release whose body is the new CHANGELOG section. Give the maintainer the run URL and its outcome. On a failure, read the failed step's log (`gh run view <databaseId> --log-failed`) and report the cause; do not publish, tag or release by hand.
+The workflow runs `npm run verify` and `npm run build`, packs boilerlift once, and checks a fresh project from the Template branch against that `.tgz` (`npm install`, then `npm run verify`); the Template branch must fast-forward boilerlift-template `main`. Only then does it publish that `.tgz` as `boilerlift@X.Y.Z` to npm with provenance, create the `vX.Y.Z` tag, and create the GitHub release whose body is the new CHANGELOG section. Last, it fast-forwards boilerlift-template `main` to the checked SHA, sets `"boilerlift": "^X.Y.Z"` there, commits `chore(release): vX.Y.Z`, tags it `vX.Y.Z`, and deletes the Template branch unless it is `main`. Give the maintainer the run URL and its outcome. On a failure, read the failed step's log (`gh run view <databaseId> --log-failed`) and report the cause; do not publish, tag or release by hand.
 
 ## 7b. Anything other than an explicit "yes"
 
@@ -122,9 +122,9 @@ No push, no pull request, no tag, no GitHub release, no npm version, no change o
 
 ## When a release is half done
 
-Every step of `.github/workflows/release.yml` checks before it acts: it skips the npm publish when `npm view boilerlift@X.Y.Z` returns a version, the tag when `vX.Y.Z` exists, and the GitHub release when it exists. Once the cause is fixed and the maintainer asks, re-run the failed run (`gh run rerun <databaseId>`), or dispatch the workflow on `main` as in step 8, to finish a partial release. Its job summary lists npm, tag and GitHub release as published, skipped (already done) or not done.
+Every step of `.github/workflows/release.yml` checks before it acts: it skips the npm publish when `npm view boilerlift@X.Y.Z` returns a version, the tag when `vX.Y.Z` exists, the GitHub release when it exists, and the boilerlift-template step when boilerlift-template has the tag `vX.Y.Z` (it only tags `main` when `main` already depends on `^X.Y.Z`). Once the cause is fixed and the maintainer asks, re-run the failed run (`gh run rerun <databaseId>`), or dispatch the workflow on `main` as in step 8, to finish a partial release. Its job summary lists npm, tag, GitHub release and boilerlift-template as published, skipped (already done) or not done.
 
-## One-time setup on npmjs.com
+## One-time setup on npmjs.com and GitHub
 
 The workflow authenticates with npm trusted publishing (OIDC): there is no npm token in the repository secrets. The maintainer sets it up once, by hand, on npmjs.com: package `boilerlift` → Settings → Trusted publishing → GitHub Actions, with owner `laurentvandelle`, repository `boilerlift`, workflow `release.yml`, no environment.
 
@@ -136,3 +136,15 @@ npm configures a trusted publisher on an existing package only, and a new truste
 4. Optionally deprecate the placeholder: `npm deprecate boilerlift@0.0.1 "placeholder before the first release"`.
 
 Check first with `npm view boilerlift version`: a version printed means the package exists and only step 2 may be left.
+
+### GitHub App for boilerlift-template
+
+The workflow writes to boilerlift-template with a GitHub App, never a personal token: `actions/create-github-app-token` mints a short-lived token per run. The maintainer sets it up once, by hand:
+
+1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App, owned by `laurentvandelle`. No webhook. Repository permissions: Contents read and write, Metadata read-only. Only on this account.
+2. Generate a private key (a `.pem` file) and note the App ID.
+3. Install the app on `laurentvandelle/boilerlift-template` only (Only select repositories).
+4. In `laurentvandelle/boilerlift` → Settings → Secrets and variables → Actions, add the repository secrets `TEMPLATE_APP_ID` (the App ID) and `TEMPLATE_APP_PRIVATE_KEY` (the whole `.pem` content).
+5. If boilerlift-template `main` has a ruleset, let the app bypass it, or the push that fast-forwards `main` and the tag `v*` is refused.
+
+The template commit is authored by the app's bot user.
