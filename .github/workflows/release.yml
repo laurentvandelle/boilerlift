@@ -5,9 +5,20 @@ name: Release 🚀
 # is merged and the maintainer asks to publish. It does nothing when the version is already fully
 # released, or when CHANGELOG.md has no section for it.
 # Every step checks before it acts, so a re-run (or a dispatch on the same commit) finishes a partial
-# release without duplicating anything. The logic lives in .github/scripts/release_*.py. Decision record: docs/adr/0013-release-workflow-dispatched-by-the-skill.md.
+# release without duplicating anything. The logic lives in .github/scripts/release_*.py and template_*.py.
+# Decision records: docs/adr/0013-release-workflow-dispatched-by-the-skill.md and
+# docs/adr/0019-boilerlift-release-tags-the-project-template.md.
+#
+# Before `npm publish`, a fresh project from the Template branch of boilerlift-template is checked against
+# the packed boilerlift, and that same .tgz is published. After the boilerlift tag and GitHub release,
+# boilerlift-template main is fast-forwarded to the checked SHA, set to "boilerlift": "^X.Y.Z" and tagged vX.Y.Z.
 on:
   workflow_dispatch:
+    inputs:
+      template_branch:
+        description: The boilerlift-template branch this release ships (main when it does not exist)
+        type: string
+        default: main
 
 permissions:
   contents: write # create the vX.Y.Z tag and the GitHub release
@@ -19,7 +30,7 @@ concurrency:
 
 jobs:
   release:
-    name: Publish to npm, tag and create the GitHub release
+    name: Publish to npm, tag, create the GitHub release and tag boilerlift-template
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -64,12 +75,45 @@ jobs:
         if: steps.check.outputs.work == 'true'
         run: npm run build
 
+      # Packed once: the fresh-project check installs this .tgz and npm publishes it, so what is checked is what ships.
+      - name: Pack boilerlift
+        id: pack
+        if: steps.check.outputs.work == 'true'
+        run: echo "tgz=$RUNNER_TEMP/$(npm pack --pack-destination "$RUNNER_TEMP" | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      # Resolves template_branch to one SHA and fails unless it fast-forwards boilerlift-template main.
+      - name: Create a fresh project from the Template branch
+        id: template
+        if: steps.check.outputs.work == 'true'
+        env:
+          MODE: release
+          TEMPLATE_BRANCH: ${{ inputs.template_branch }}
+          VERSION: ${{ steps.check.outputs.version }}
+          TEMPLATE_NEEDED: ${{ steps.check.outputs.template_needed }}
+        run: python3 .github/scripts/template_branch.py
+
+      - name: Install the packed boilerlift in the fresh project
+        if: steps.check.outputs.work == 'true'
+        working-directory: ${{ steps.template.outputs.dir }}
+        run: npm install --save-dev "${{ steps.pack.outputs.tgz }}"
+
+      - name: Install the fresh project's dependencies
+        if: steps.check.outputs.work == 'true'
+        working-directory: ${{ steps.template.outputs.dir }}
+        run: npm install
+
+      # Nothing is published or tagged, in either repository, unless the fresh project passes.
+      - name: Lint, typecheck and test the fresh project
+        if: steps.check.outputs.work == 'true'
+        working-directory: ${{ steps.template.outputs.dir }}
+        run: npm run verify
+
       # --loglevel verbose logs the OIDC token exchange ("npm verbose oidc ..."): on an E404, it says whether
       # npmjs.com matched the trusted publisher.
       - name: Publish to npm with provenance
         id: npm
         if: steps.check.outputs.work == 'true' && steps.check.outputs.npm_needed == 'true'
-        run: npm publish --provenance --access public --loglevel verbose
+        run: npm publish "${{ steps.pack.outputs.tgz }}" --provenance --access public --loglevel verbose
 
       - name: Create the tag on the released commit
         id: tag
@@ -85,6 +129,28 @@ jobs:
           --title "${{ steps.check.outputs.tag }}"
           --notes-file "${{ steps.check.outputs.notes_file }}"
 
+      # A short-lived token of the GitHub App installed on boilerlift-template only (secrets in the release skill's setup).
+      - name: Mint a boilerlift-template token
+        id: app
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.template_needed == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.TEMPLATE_APP_ID }}
+          private-key: ${{ secrets.TEMPLATE_APP_PRIVATE_KEY }}
+          owner: laurentvandelle
+          repositories: boilerlift-template
+
+      - name: Fast-forward, set the version and tag boilerlift-template
+        id: template_release
+        if: steps.check.outputs.work == 'true' && steps.check.outputs.template_needed == 'true'
+        env:
+          TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          VERSION: ${{ steps.check.outputs.version }}
+          SHA: ${{ steps.template.outputs.sha }}
+          BRANCH: ${{ steps.template.outputs.branch }}
+        run: python3 .github/scripts/template_release.py
+
       - name: Write the job summary
         if: always()
         env:
@@ -95,7 +161,9 @@ jobs:
           NPM_NEEDED: ${{ steps.check.outputs.npm_needed }}
           TAG_NEEDED: ${{ steps.check.outputs.tag_needed }}
           RELEASE_NEEDED: ${{ steps.check.outputs.release_needed }}
+          TEMPLATE_NEEDED: ${{ steps.check.outputs.template_needed }}
           NPM_OUTCOME: ${{ steps.npm.outcome }}
           TAG_OUTCOME: ${{ steps.tag.outcome }}
           RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          TEMPLATE_OUTCOME: ${{ steps.template_release.outcome }}
         run: python3 .github/scripts/release_summary.py
