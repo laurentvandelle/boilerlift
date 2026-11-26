@@ -2,7 +2,8 @@
 """Finds what is left to release for the version in package.json (step `check` of release.yml).
 
 A version is a release only when CHANGELOG.md has a section for it. For a release, each of the npm
-version, the vX.Y.Z tag and the GitHub release is checked, so the workflow only does what is missing.
+version, the vX.Y.Z tag, the GitHub release and the vX.Y.Z tag of boilerlift-template is checked, so
+the workflow only does what is missing.
 Writes the step outputs to $GITHUB_OUTPUT and the GitHub release body to $RUNNER_TEMP/release-notes.md.
 """
 
@@ -28,7 +29,12 @@ def changelog_section(changelog: str, version: str) -> str:
     return "\n".join(lines).strip()
 
 
-def plan(version: str, notes: str, npm_published: bool, tag_exists: bool, release_exists: bool) -> dict[str, str]:
+TEMPLATE_URL = "https://github.com/laurentvandelle/boilerlift-template.git"
+
+
+def plan(
+    version: str, notes: str, npm_published: bool, tag_exists: bool, release_exists: bool, template_tag_exists: bool
+) -> dict[str, str]:
     """The step outputs: what is left to do for this version, and why there is nothing to do when so."""
     tag = f"v{version}"
     outputs = {"version": version, "tag": tag}
@@ -39,9 +45,15 @@ def plan(version: str, notes: str, npm_published: bool, tag_exists: bool, releas
             "npm_needed": "false",
             "tag_needed": "false",
             "release_needed": "false",
+            "template_needed": "false",
             "reason": f"CHANGELOG.md has no section for {version}: not a release commit",
         }
-    needed = {"npm_needed": not npm_published, "tag_needed": not tag_exists, "release_needed": not release_exists}
+    needed = {
+        "npm_needed": not npm_published,
+        "tag_needed": not tag_exists,
+        "release_needed": not release_exists,
+        "template_needed": not template_tag_exists,
+    }
     work = any(needed.values())
     return {
         **outputs,
@@ -74,9 +86,10 @@ def main() -> int:
             npm_published=npm_has(name, version),
             tag_exists=succeeds("git", "ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"),
             release_exists=succeeds("gh", "release", "view", tag),
+            template_tag_exists=succeeds("git", "ls-remote", "--exit-code", "--tags", TEMPLATE_URL, f"refs/tags/{tag}"),
         )
     else:
-        outputs = plan(version, notes, npm_published=False, tag_exists=False, release_exists=False)
+        outputs = plan(version, notes, npm_published=False, tag_exists=False, release_exists=False, template_tag_exists=False)
 
     notes_file = Path(os.environ["RUNNER_TEMP"]) / "release-notes.md"
     notes_file.write_text(notes + "\n")
@@ -89,7 +102,7 @@ def main() -> int:
     if outputs["reason"]:
         print(f"{outputs['reason']}: nothing to do.")
     else:
-        todo = [step for step, key in (("npm", "npm_needed"), ("tag", "tag_needed"), ("GitHub release", "release_needed")) if outputs[key] == "true"]
+        todo = [step for step, key in (("npm", "npm_needed"), ("tag", "tag_needed"), ("GitHub release", "release_needed"), ("template", "template_needed")) if outputs[key] == "true"]
         print(f"{tag}: left to do: {', '.join(todo)}.")
     return 0
 
