@@ -67,11 +67,28 @@ export type TargetSelection = { kind: 'default' } | { kind: 'one'; name: string 
 /** What the CLI found at `./boilerlift.config.ts`: no file, its default export, or why it could not be imported. */
 export type ProjectConfigFile = { kind: 'missing' } | { kind: 'loaded'; content: unknown } | { kind: 'unreadable'; reason: string };
 
-/** A file of the project template that `lift init` writes: its path in the template, with `/`, and its text. */
+/** A file of the Project template that `lift init` writes: its path in the template, with `/`, and its text. */
 export interface TemplateFile {
   path: string;
   text: string;
 }
+
+/**
+ * Why the Project template of a version could not be fetched. Each one carries the URL of the template repository.
+ * - `git-not-found`: git is not installed, or not on the PATH.
+ * - `tag-not-found`: the repository has no tag `tag`, the tag of this version (an unreleased or local build).
+ * - `fetch-failed`: git could not clone the tag (network down, repository unreachable), with its own message.
+ */
+export type TemplateFetchError =
+  | { kind: 'git-not-found'; url: string }
+  | { kind: 'tag-not-found'; url: string; tag: string }
+  | { kind: 'fetch-failed'; url: string; tag: string; reason: string };
+
+/**
+ * What is at a path, for `lift init`: nothing, a file, or a folder with the names of its entries (files and folders,
+ * not recursive).
+ */
+export type PathContents = { kind: 'missing' } | { kind: 'file' } | { kind: 'folder'; entries: string[] };
 
 /** What creating one project file did: created, left as it was because something is already there, or failed. */
 export type FileCreation = { status: 'created' } | { status: 'exists' } | { status: 'failed'; reason: string };

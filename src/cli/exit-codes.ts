@@ -1,6 +1,7 @@
 import { CheckFailure, ConnectionReport } from '#src/core/connection/connection.model';
 import { SyncError, SyncReport } from '#src/core/credentials/credentials.model';
 import { DeployErrorKind, RunEnd } from '#src/core/deliver/deploy.model';
+import { TemplateFetchError } from '#src/core/config/config.model';
 import { StatusError, StatusReport } from '#src/core/status/status.model';
 
 // The process exit codes of every command, one name per code. Scripts read them, so a code means the same thing
@@ -51,8 +52,11 @@ export const EXIT_CREDENTIALS_WRITE_FAILED = 10;
  */
 export const EXIT_CONFIRMATION_NEEDED = 11;
 
-/** init could not write at least one file of the project; it still wrote the others. A rerun fills the gaps. */
+/** init could not write at least one file of the project; it still wrote the others. */
 export const EXIT_INIT_WRITE_FAILED = 12;
+
+/** init could not get the Project template of its version (git missing, network, no such tag): nothing was written. */
+export const EXIT_TEMPLATE_UNAVAILABLE = 13;
 
 /** Every exit code a command can return. EXIT_UNEXPECTED is EXIT_USAGE's code, so the union lists it once. */
 export type ExitCode =
@@ -68,7 +72,8 @@ export type ExitCode =
   | typeof EXIT_CREDENTIAL_SCOPE_MISSING
   | typeof EXIT_CREDENTIALS_WRITE_FAILED
   | typeof EXIT_CONFIRMATION_NEEDED
-  | typeof EXIT_INIT_WRITE_FAILED;
+  | typeof EXIT_INIT_WRITE_FAILED
+  | typeof EXIT_TEMPLATE_UNAVAILABLE;
 
 /** The exit code of a failure: any code but EXIT_OK. */
 export type FailureExitCode = Exclude<ExitCode, typeof EXIT_OK>;
@@ -190,5 +195,15 @@ export function syncExitCode(report: SyncReport): ExitCode {
     return report.missing.length === 0 ? EXIT_OK : EXIT_CREDENTIALS_MISSING;
   case 'failed':
     return syncErrorExitCode(report.error.kind);
+  }
+}
+
+/** The exit code of a Project template that init could not fetch: every kind stops init before it writes anything. */
+export function templateFetchExitCode(error: TemplateFetchError): typeof EXIT_TEMPLATE_UNAVAILABLE {
+  switch (error.kind) {
+  case 'git-not-found':
+  case 'tag-not-found':
+  case 'fetch-failed':
+    return EXIT_TEMPLATE_UNAVAILABLE;
   }
 }

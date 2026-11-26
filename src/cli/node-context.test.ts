@@ -33,9 +33,9 @@ describe('nodeContext', () => {
     await write(cwd, 'workflows/a.json', '{}');
     const ctx = nodeContext(cwd);
 
-    const read = [await ctx.readLockFile('boilerlift.lock.json'), await ctx.isDirectory('workflows'), await ctx.isFile('workflows/a.json')];
+    const read = [await ctx.readLockFile('boilerlift.lock.json'), await ctx.isDirectory('workflows'), await ctx.readPath('workflows')];
 
-    expect(read).toEqual(['{}\n', true, true]);
+    expect(read).toEqual(['{}\n', true, { kind: 'folder', entries: ['a.json'] }]);
   });
 });
 

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { CommandContext } from '#src/cli/cli.model';
 import { COMMANDS } from '#src/cli/registry';
@@ -8,19 +9,20 @@ import {
   ask,
   createFile,
   isDirectory,
-  isFile,
   loadCredentialsFiles,
   loadProjectConfig,
-  loadProjectTemplate,
   loadWorkflowFiles,
   readLockFile,
+  readPath,
   writeTextFile,
   writeTextFileInFolder,
 } from '#src/services/fs/project-files';
+import { fetchProjectTemplate, gitRunner } from '#src/services/git/project-template';
 
 /**
  * The CommandContext of this Node process, which bin.ts hands to runCli: its environment, Node version, terminals and
- * `fetch`, the Boilerlift version, and the file adapters of services/fs/ with every path resolved from `cwd`.
+ * `fetch`, the Boilerlift version, the file adapters of services/fs/ with every path resolved from `cwd`, and the
+ * Project template fetch of services/git/.
  */
 export function nodeContext(cwd: string): CommandContext {
   return {
@@ -38,8 +40,8 @@ export function nodeContext(cwd: string): CommandContext {
     ask: (prompt) => ask(prompt, { input: process.stdin, output: process.stderr }),
     isInteractive: process.stdin.isTTY === true,
     color: outputColor(process.env, process.stdout.isTTY === true && process.stderr.isTTY === true),
-    isFile: (path) => isFile(resolve(cwd, path)),
-    loadProjectTemplate,
+    readPath: (path) => readPath(resolve(cwd, path)),
+    fetchProjectTemplate: (version) => fetchProjectTemplate(version, { tempDir: tmpdir(), git: gitRunner(process.env) }),
     createFile: (path, text) => createFile(resolve(cwd, path), text),
   };
 }

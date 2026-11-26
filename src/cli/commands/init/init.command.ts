@@ -1,79 +1,94 @@
-import { CommandDefinition } from '#src/cli/cli.model';
-import { InitFile } from '#src/cli/commands/init/init.model';
-import { renderFolderIsFile, renderInit, renderTooManyFolders } from '#src/cli/commands/init/init.render';
+import { CommandDefinition, FileCreation } from '#src/cli/cli.model';
+import { InitFile, InitFolder, InitOutput } from '#src/cli/commands/init/init.model';
+import { renderFolderIsFile, renderFolderNotEmpty, renderInit, renderNoFolder, renderTooManyFolders } from '#src/cli/commands/init/init.render';
 import { defineCommand } from '#src/cli/define-command';
-import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_USAGE } from '#src/cli/exit-codes';
+import { EXIT_INIT_WRITE_FAILED, EXIT_OK, EXIT_TEMPLATE_UNAVAILABLE, EXIT_USAGE } from '#src/cli/exit-codes';
 import { err, ok } from '#src/core/common/result';
 
-/**
- * The template files whose name in the template is not their name in the project. npm leaves `.gitignore` files out
- * of a published package, so the template stores it as `_gitignore`.
- */
-const PROJECT_NAMES: Readonly<Record<string, string>> = { _gitignore: '.gitignore' };
+const DESCRIPTION = `Creates a new Boilerlift project in folder, from the Project template of this version of
+lift: the tag v<version> of the boilerlift-template repository, fetched with git, so git must be
+installed. The folder is created when it is missing; one that exists must be empty, or hold
+only .git. init never writes into a folder that holds anything else: to bring an existing
+project to a new version, create a new one and move your files into it (docs/migration.md).
 
-/** Written in the template where the generated project needs the version of Boilerlift that created it. */
-export const VERSION_PLACEHOLDER = '{{boilerliftVersion}}';
+The project holds boilerlift.config.ts with one target, dev, read from N8N_URL and
+N8N_API_KEY, an example workflow in workflows/ with its tested Code node function in code/,
+package.json with npm run verify (ESLint, tsc, Vitest) and npm run n8n (one call to the n8n
+public API), and the Agent kit: AGENTS.md with its docs, the BOILERLIFT: skills in
+.claude/skills/, and the Claude Code guardrails in .claude/.
 
-const DESCRIPTION = `Writes a ready-to-use Boilerlift project into folder, created when missing, or into the
-current folder: boilerlift.config.ts with one target, dev, read from N8N_URL and N8N_API_KEY,
-an example workflow in workflows/ with its tested Code node function in code/, package.json
-with npm run verify (ESLint, tsc, Vitest) and npm run n8n (one call to the n8n public API),
-tsconfig.json, eslint.config.mts, .env.example, .gitignore and README.md.
-
-It also writes the Agent kit: AGENTS.md with its docs, the BOILERLIFT: skills in
-.claude/skills/, with which an AI agent takes a workflow request from interview to a checked
-draft on n8n, and the Claude Code guardrails: a hook in .claude/hooks/, wired by
-.claude/settings.json, that asks the user before a Guarded command (publish, a real clean, a
-deploy outside dev, an n8n API write) and blocks reading .env.
-
-init never overwrites a file: one already there is left as it is and reported as skipped, so
-it can run in a folder that already holds part of a project, and again after a failed write.
-When .claude/settings.json is already there, the next steps say how to add the hook to it.
-It never writes .env and never runs npm install.`;
+init only writes files: it never runs git init or npm install, and never writes .env. It
+prints the commands that finish the setup.`;
 
 export const initCommand: CommandDefinition = defineCommand({
   name: 'init',
-  summary: 'Start a Boilerlift project in a folder',
+  summary: 'Create a Boilerlift project in a new folder',
   help: {
-    positionals: '[folder]',
+    positionals: '<folder>',
     description: DESCRIPTION,
     exitCodes: [
-      [EXIT_OK, 'Every file is created, or was already there'],
-      [EXIT_USAGE, 'Usage error, or folder is an existing file'],
-      [EXIT_INIT_WRITE_FAILED, 'At least one file could not be written; the others were. Run init again to fill the gaps'],
+      [EXIT_OK, 'Every file is created'],
+      [EXIT_USAGE, 'Usage error: no folder, or folder is a file or a folder that is not empty. Nothing is written'],
+      [EXIT_INIT_WRITE_FAILED, 'At least one file could not be written; the others were'],
+      [EXIT_TEMPLATE_UNAVAILABLE, 'Could not get the Project template: git not found, network down, or no tag for this version. Nothing is written'],
     ],
   },
   allowPositionals: true,
   options: {
     json: { type: 'boolean', description: 'Print the result as JSON', format: true },
   },
-  needs: ['version', 'isFile', 'loadProjectTemplate', 'createFile'],
-  prepare: async ({ positionals, format }, { isFile }) => {
-    if (positionals.length > 1) {
+  needs: ['version', 'readPath', 'fetchProjectTemplate', 'createFile'],
+  prepare: async ({ positionals, format }, { readPath }) => {
+    const [path, ...others] = positionals;
+    if (path === undefined) {
+      return err(renderNoFolder(format));
+    }
+    if (others.length > 0) {
       return err(renderTooManyFolders(positionals, format));
     }
-    const folder = positionals[0] ?? '.';
-    if (await isFile(folder)) {
-      return err(renderFolderIsFile(folder, format));
+    const contents = await readPath(path);
+    switch (contents.kind) {
+    case 'missing':
+      return ok<InitFolder>({ path, hasGit: false });
+    case 'file':
+      return err(renderFolderIsFile(path, format));
+    case 'folder':
+      if (contents.entries.some((entry) => entry !== '.git')) {
+        return err(renderFolderNotEmpty(path, format));
+      }
+      return ok<InitFolder>({ path, hasGit: contents.entries.includes('.git') });
     }
-    return ok(folder);
   },
   modes: {},
-  default: async (folder, { version, loadProjectTemplate, createFile }) => {
-    const template = (await loadProjectTemplate())
-      .map((file) => ({ path: PROJECT_NAMES[file.path] ?? file.path, text: file.text.replaceAll(VERSION_PLACEHOLDER, version) }))
-      .sort((a, b) => a.path.localeCompare(b.path));
+  default: async (folder, { version, fetchProjectTemplate, createFile }): Promise<InitOutput> => {
+    // The whole template first: a failed fetch leaves no folder and no file behind.
+    const template = await fetchProjectTemplate(version);
+    if (!template.ok) {
+      return { kind: 'template-unavailable', error: template.error };
+    }
     const files: InitFile[] = [];
     // One at a time, so a failed write never stops the others.
-    for (const { path, text } of template) {
-      files.push({ path, ...(await createFile(inFolder(folder, path), text)) });
+    for (const { path, text } of [...template.value].sort((a, b) => a.path.localeCompare(b.path))) {
+      files.push(initFile(path, await createFile(inFolder(folder.path, path), text)));
     }
-    return files;
+    return { kind: 'written', files };
   },
-  render: (files, { format, prepared }) => renderInit(files, prepared, format),
+  render: (output, { format, prepared }) => renderInit(output, prepared, format),
 });
 
 /** `path` of the project, relative to the current folder. */
 function inFolder(folder: string, path: string): string {
   return folder === '.' ? path : `${folder.replace(/\/+$/, '')}/${path}`;
+}
+
+/** The folder was empty, so a file already there means something else wrote it meanwhile: init did not write it. */
+function initFile(path: string, creation: FileCreation): InitFile {
+  switch (creation.status) {
+  case 'created':
+    return { path, status: 'created' };
+  case 'exists':
+    return { path, status: 'failed', reason: 'a file is already there' };
+  case 'failed':
+    return { path, status: 'failed', reason: creation.reason };
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode, statusExitCode, syncErrorExitCode, syncExitCode } from '#src/cli/exit-codes';
+import { checkFailureExitCode, connectionExitCode, deployErrorExitCode, outcomeExitCode, readErrorExitCode, runEndExitCode, statusExitCode, syncErrorExitCode, syncExitCode, templateFetchExitCode } from '#src/cli/exit-codes';
+import { TemplateFetchError } from '#src/core/config/config.model';
 import { SyncError, SyncReport } from '#src/core/credentials/credentials.model';
 import { Check, CheckFailure } from '#src/core/connection/connection.model';
 import { DeployError, DeployErrorKind } from '#src/core/deliver/deploy.model';
@@ -117,5 +118,17 @@ describe('syncExitCode', () => {
     const report: SyncReport = { status: 'failed', error: { kind: 'write-failed', path: 'credentials/dev.ts', detail: 'EACCES', hint: 'fix it' } };
 
     expect(syncExitCode(report)).toBe(10);
+  });
+});
+
+describe('templateFetchExitCode', () => {
+  const url = 'https://github.com/laurentvandelle/boilerlift-template.git';
+
+  test.each<[TemplateFetchError['kind'], TemplateFetchError]>([
+    ['git-not-found', { kind: 'git-not-found', url }],
+    ['tag-not-found', { kind: 'tag-not-found', url, tag: 'v1.4.2' }],
+    ['fetch-failed', { kind: 'fetch-failed', url, tag: 'v1.4.2', reason: 'Could not resolve host: github.com' }],
+  ])('Should exit 13 when init cannot fetch the Project template on %s', (_kind, error) => {
+    expect(templateFetchExitCode(error)).toBe(13);
   });
 });

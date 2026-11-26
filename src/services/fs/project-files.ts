@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 import { parseEnv } from 'node:util';
@@ -9,7 +9,7 @@ import { isWorkflowFilePath } from '#src/core/compile/load-workflows';
 import { WorkflowFile } from '#src/core/compile/workflow.model';
 import { isRecord } from '#src/core/common/is-record';
 import { Result, err, ok } from '#src/core/common/result';
-import { FileCreation, ProjectConfigFile, TemplateFile } from '#src/core/config/config.model';
+import { FileCreation, PathContents, ProjectConfigFile } from '#src/core/config/config.model';
 
 /** The environment variables `loadProjectConfig` fills from `.env`: `process.env` for the real process. */
 export type Environment = Record<string, string | undefined>;
@@ -80,23 +80,19 @@ export async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
-/**
- * The project template: `dist/templates/project/`, where the build copies it, when this file runs from
- * `dist/services/fs/`; `templates/project/` at the root of the repository when it runs from `src/services/fs/` (the tests).
- */
-export async function loadProjectTemplate(): Promise<TemplateFile[]> {
-  const candidates = [join(__dirname, '..', '..', 'templates', 'project'), join(__dirname, '..', '..', '..', 'templates', 'project')];
-  for (const root of candidates) {
-    if (await isDirectory(root)) {
-      const entries = await readdir(root, { recursive: true, withFileTypes: true });
-      const paths = entries
-        .filter((entry) => entry.isFile())
-        .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/'))
-        .sort();
-      return Promise.all(paths.map(async (path) => ({ path, text: await readFile(join(root, path), 'utf8') })));
+/** `CommandContext.readPath`: nothing at `path`, a file, or a folder with the names of its entries, sorted. */
+export async function readPath(path: string): Promise<PathContents> {
+  try {
+    if (!(await stat(path)).isDirectory()) {
+      return { kind: 'file' };
     }
+  } catch (error) {
+    if (isMissingFile(error) || (isRecord(error) && error.code === 'ENOTDIR')) {
+      return { kind: 'missing' };
+    }
+    throw error;
   }
-  throw new Error(`The project template is missing: none of ${candidates.join(', ')} exists`);
+  return { kind: 'folder', entries: (await readdir(path)).sort() };
 }
 
 /** Creates the file with the `wx` flag, so anything already at `path` is never overwritten. */
